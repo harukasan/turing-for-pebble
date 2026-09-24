@@ -1,0 +1,48 @@
+import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import assert from 'node:assert/strict';
+const {
+  instance: { exports: e },
+} = await WebAssembly.instantiate(readFileSync('public/wasm/rd.wasm'), {
+  wasi_snapshot_preview1: {
+    proc_exit() {
+      throw Error('exit');
+    },
+  },
+});
+for (let mode = 0; mode < 3; mode++)
+  for (const count of [0, 1, 100]) {
+    const n = e.rd_bytes(mode),
+      p = e.malloc(n),
+      s = e.rd_init(p, n, mode, 42);
+    assert(s);
+    e.rd_step(s, count);
+    const native = Number(
+      execFileSync('build/core-test', [String(mode), String(count)], {
+        encoding: 'utf8',
+      }).trim(),
+    );
+    assert.equal(e.rd_hash(s) >>> 0, native);
+    e.free(p);
+    console.log(`mode ${mode}, steps ${count}: native/Wasm ${native}`);
+  }
+
+// Repeated mode resets reuse the allocator and remain within fixed linear memory.
+const linear = e.memory.buffer.byteLength;
+for (let i = 0; i < 300; i++) {
+  const mode = i % 3,
+    n = e.rd_bytes(mode),
+    p = e.malloc(n);
+  assert(p);
+  const s = e.rd_init(p, n, mode, i);
+  assert(s);
+  assert.equal(e.rd_params(s, 0, 0, 0, 0, 0), 0);
+  assert.equal(e.rd_step(s, 1), 0);
+  const row = e.rd_row(s, 227, 2, 1);
+  assert(row);
+  const pixels = new Uint8Array(e.memory.buffer, row, 800);
+  for (let x = 0; x < 200; x++) assert.equal(pixels[x * 4 + 3], 255);
+  e.free(p);
+  assert.equal(e.memory.buffer.byteLength, linear);
+}
+console.log('300 mode resets, output rows, fixed Wasm memory: OK');

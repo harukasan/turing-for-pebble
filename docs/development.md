@@ -1,0 +1,91 @@
+# Development and builds
+
+## Project-local environment
+
+`mise.toml` pins Python 3.13.15 and Node 24.19.0. `requirements-tools.lock` pins the Python environment, including pebble-tool 5.0.40. The SDK installation task installs Pebble SDK 4.33.1, which includes Emery and BacklightService.
+
+```sh
+mise trust
+mise install
+mise run setup
+mise run sdk-install
+mise exec -- pebble sdk list
+npm ci
+```
+
+| Location | Content |
+| --- | --- |
+| `.venv/` | Python virtual environment managed through mise |
+| `.local/share/pebble-sdk/` | SDKs, emulator flash, tooling state |
+| `.local/cache/` | Project-local caches |
+| `requirements-tools.lock` | Resolved Python dependencies |
+| `.tools/` | Earlier bootstrap environment, no longer used |
+
+The project allowlists only Python and Node in mise, preventing unrelated globally configured tools from being installed for project tasks. Mise trusted-config registration remains in its user state directory. Runtime installations follow mise's data directory, including the active XDG environment. Existing runtime installations can be reused. This arrangement isolates Python dependencies and Pebble state. It is not a container or an operating-system sandbox. Pebble's legacy `~/.pebble-sdk` path takes precedence over `XDG_DATA_HOME` if it exists. Verify the resolved path on another machine before installing:
+
+```sh
+mise exec -- python -c 'from pebble_tool.util import get_persist_dir; print(get_persist_dir())'
+```
+
+The installed SDK also creates its own Python build environment and downloads an ARM toolchain. The SDK version is fixed, but its independently installed dependency environment is not fully locked by `requirements-tools.lock`.
+
+## WebAssembly and Web
+
+The build uses the existing Emscripten installation on `PATH`. Its cache must be writable. The generated Wasm has 1 MiB of fixed linear memory and a 64 KiB stack. It is served as a static asset and does not use Emscripten's generated JavaScript glue.
+
+```sh
+mise run build-wasm
+npm run typecheck
+npm test
+mise run test-core
+npm run build
+npm run dev -- --host 127.0.0.1
+```
+
+The local URL is normally `http://localhost:3000/`. No deployment is required. The development server is not an on-watch performance benchmark.
+
+## Emery builds
+
+```sh
+mise run build-pebble
+```
+
+This builds both modes and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. The shared UUID means installing the second mode replaces the first in an emulator or watch.
+
+```sh
+mise exec -- pebble install --emulator emery --vnc build/pebble/mode-0.pbw
+mise exec -- pebble screenshot --emulator emery --vnc --no-open build/emery.png
+```
+
+Keep `--vnc` consistent across emulator commands. Changing emulator launch options can restart it and interrupt the current log connection.
+
+Mode 0 is 200 × 228 with 8-bit storage. Mode 1 is 100 × 114 with 16-bit storage. The build script sets `RD_BUILD_MODE` explicitly. To build the mode selected in an exported `config.h`, copy it to `pebble/src/c/config.h` and run `mise exec -- pebble build --sdk 4.33.1` from `pebble/` after setting the corresponding `RD_BUILD_MODE`. The mode override used for the two-mode comparison takes precedence over the header's default.
+
+## Regenerating comparison artifacts
+
+```sh
+mise exec -- python scripts/compare.py
+mise exec -- python scripts/build-report.py
+```
+
+`compare.py` runs 10,000 steps for all four presets, two seeds, and three modes. It creates PNGs and JSON under `public/reports/`. The third mode is a diagnostic 100 × 114 / 8-bit configuration. It is not exposed as a production choice in the Web UI.
+
+The report builder reads ARM ELF section sizes and `.su` stack reports. Runtime measurements must retain their measured build and observation scope. Do not substitute theoretical remaining RAM for measured minimum free heap.
+
+## Font provenance
+
+The glyphs in `public/fonts/leco.json` were extracted from official PebbleOS revision `119cb96e3f47be0f61191c0b90a502bb01f2d9bc`, from:
+
+- `resources/normal/base/pbf/LECO_42_NUMBERS.pbf`
+- `resources/normal/base/pbf/LECO_20_BOLD_NUMBERS.pbf`
+
+Source: [coredevices/PebbleOS](https://github.com/coredevices/PebbleOS/tree/119cb96e3f47be0f61191c0b90a502bb01f2d9bc). License: Apache-2.0, copied to `public/fonts/LICENSE`. Per-file SHA-256 values and the source revision are embedded in the JSON. Glyph dimensions, bearings, advances, and monochrome pixels are preserved. The extractor requires a local checkout of that revision and its official `pbf_extract.py`:
+
+```sh
+mise exec -- python scripts/extract-fonts.py /path/to/PebbleOS
+mise exec -- python scripts/verify-fonts.py build/emery-mode-0.png 14:50 2026.09.24
+```
+
+The second command is specific to the recorded screenshot and its displayed timestamp.
+
+Mise tool allowlisting follows the official [enable_tools setting](https://mise.jdx.dev/configuration/settings.html#enable_tools). The project does not change the global tool configuration.

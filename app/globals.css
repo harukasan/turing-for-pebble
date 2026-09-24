@@ -1,0 +1,50 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+@theme inline {
+  --color-background: var(--background); --color-foreground: var(--foreground);
+  --color-primary: var(--primary); --color-primary-foreground: #09110b;
+  --color-muted: #344139; --color-input: #47544b; --color-ring: #b6f078;
+  --font-sans: Arial, 'Noto Sans JP', sans-serif;
+}
+:root, .dark { --background: #101612; --foreground: #e8eee8; --primary: #b6f078; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: Arial, 'Noto Sans JP', sans-serif; font-size: 16px; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:disabled { opacity: .45; cursor: default; }
+button:focus-visible, a:focus-visible, input:focus-visible, canvas:focus-visible { outline: 2px solid #b6f078; outline-offset: 5px; }
+button.action { border: 1px solid #4a584d; background: #222e25; border-radius: 6px; padding: 10px 16px; font-size: 14px; }
+button.action:hover { background: #334335; }
+button.primary { background: #b6f078; color: #101612; border-color: #b6f078; }
+header { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 26px 0; border-bottom: 1px solid #344139; }
+main { max-width: 1280px; padding: 0 40px 32px; margin: auto; }
+h1 { font-size: 24px; letter-spacing: -.04em; margin: 0; } h1 span { font-weight: normal; color: #8da18e; }
+h2 { font-size: 16px; font-weight: 500; margin: 0 0 20px; }
+p { line-height: 1.8; }
+.eyebrow { font: 12px monospace; letter-spacing: .14em; color: #a3b5a5; }
+.workspace { display: grid; grid-template-columns: minmax(300px,1fr) minmax(340px,440px); gap: 48px; padding-top: 30px; }
+.stage { background: #1b251e; border: 1px solid #344139; border-radius: 8px; min-height: 580px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 24px; }
+.stage-top { display: flex; justify-content: space-between; width: 100%; gap: 15px; font: 12px monospace; color: #b2c0b3; }
+canvas { display: block; width: 300px; max-width: 100%; height: auto; aspect-ratio: 200 / 228; image-rendering: pixelated; touch-action: none; background: #000; border: 1px solid #6a7e6c; }
+.stage.actual canvas { width: 200px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.hint { font-size: 13px; color: #aab8ac; margin: 10px 0 0; }
+.stats { display: grid; grid-template-columns: repeat(3,1fr); border-bottom: 1px solid #344139; padding: 20px 0; gap: 16px; }
+.stats strong { display: block; font: 20px monospace; margin-bottom: 6px; } .stats span { color: #aab8ac; font-size: 12px; }
+section.controls { padding: 0 0 22px; margin-bottom: 22px; border-bottom: 1px solid #344139; }
+.presets { display: grid; grid-template-columns: repeat(4,1fr); gap: 6px; }
+.presets .action { padding: 10px 4px; }
+.control { margin-top: 18px; }
+.control-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px; }
+.control label { font-size: 14px; color: #d0dcd2; }
+input[type=number] { width: 90px; padding: 4px 6px; border: 1px solid #47544b; background: #1b251e; border-radius: 4px; font: 14px monospace; }
+.choices { display: flex; flex-wrap: wrap; gap: 16px; font-size: 14px; } .choices label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.toggle { display: flex; justify-content: space-between; align-items: center; margin: 18px 0; font-size: 14px; gap: 20px; }
+summary { cursor: pointer; font-size: 14px; color: #c8d6ca; padding: 8px 0; }
+.notes { color: #aab8ac; font-size: 14px; line-height: 1.8; }
+a { color: #b6f078; text-underline-offset: 3px; }
+pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; background: #1b251e; padding: 16px; border-radius: 6px; }
+footer { margin-top: 30px; color: #91a194; font-size: 13px; }
+@media (max-width: 850px) { main { padding: 0 20px 24px; } .workspace { grid-template-columns: 1fr; gap: 30px; } .stage { min-height: 530px; } header { align-items: flex-start; } header .eyebrow { max-width: 100px; line-height: 1.8; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

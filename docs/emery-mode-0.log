@@ -1,0 +1,221 @@
+Launching VNC...
+Installing app...
+App install succeeded.
+[00:03:14] main.c:51> RD init mode=0 heap_min=32888
+[00:03:16] main.c:38> RD mode=0 step=16 heap_min=32888 compute_max_ms=1000 draw_max_ms=11 clock_invalid=1
+[00:03:18] main.c:38> RD mode=0 step=32 heap_min=32888 compute_max_ms=1000 draw_max_ms=11 clock_invalid=1
+[00:03:21] main.c:38> RD mode=0 step=48 heap_min=32888 compute_max_ms=1000 draw_max_ms=11 clock_invalid=1
+[00:03:23] main.c:38> RD mode=0 step=64 heap_min=32888 compute_max_ms=1000 draw_max_ms=11 clock_invalid=1
+[00:03:25] main.c:38> RD mode=0 step=80 heap_min=32888 compute_max_ms=1000 draw_max_ms=11 clock_invalid=1
+[00:03:27] main.c:38> RD mode=0 step=96 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:29] main.c:38> RD mode=0 step=112 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:31] main.c:38> RD mode=0 step=128 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:34] main.c:38> RD mode=0 step=144 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:36] main.c:38> RD mode=0 step=160 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:38] main.c:38> RD mode=0 step=176 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:40] main.c:38> RD mode=0 step=192 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:42] main.c:38> RD mode=0 step=208 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:44] main.c:38> RD mode=0 step=224 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:46] main.c:38> RD mode=0 step=240 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:49] main.c:38> RD mode=0 step=256 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:51] main.c:38> RD mode=0 step=272 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:53] main.c:38> RD mode=0 step=288 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:55] main.c:38> RD mode=0 step=304 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:57] main.c:38> RD mode=0 step=320 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:03:59] main.c:38> RD mode=0 step=336 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:01] main.c:38> RD mode=0 step=352 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:04] main.c:38> RD mode=0 step=368 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:06] main.c:38> RD mode=0 step=384 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:08] main.c:38> RD mode=0 step=400 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:10] main.c:38> RD mode=0 step=416 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:12] main.c:38> RD mode=0 step=432 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:14] main.c:38> RD mode=0 step=448 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:17] main.c:38> RD mode=0 step=464 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:19] main.c:38> RD mode=0 step=480 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:21] main.c:38> RD mode=0 step=496 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:23] main.c:38> RD mode=0 step=512 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:25] main.c:38> RD mode=0 step=528 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:27] main.c:38> RD mode=0 step=544 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:29] main.c:38> RD mode=0 step=560 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:32] main.c:38> RD mode=0 step=576 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:34] main.c:38> RD mode=0 step=592 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:36] main.c:38> RD mode=0 step=608 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:38] main.c:38> RD mode=0 step=624 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:40] main.c:38> RD mode=0 step=640 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:42] main.c:38> RD mode=0 step=656 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:45] main.c:38> RD mode=0 step=672 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:47] main.c:38> RD mode=0 step=688 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:49] main.c:38> RD mode=0 step=704 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:51] main.c:38> RD mode=0 step=720 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:53] main.c:38> RD mode=0 step=736 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:56] main.c:38> RD mode=0 step=752 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:04:58] main.c:38> RD mode=0 step=768 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:00] main.c:38> RD mode=0 step=784 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:02] main.c:38> RD mode=0 step=800 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:04] main.c:38> RD mode=0 step=816 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:07] main.c:38> RD mode=0 step=832 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:09] main.c:38> RD mode=0 step=848 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:11] main.c:38> RD mode=0 step=864 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:13] main.c:38> RD mode=0 step=880 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:15] main.c:38> RD mode=0 step=896 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:18] main.c:38> RD mode=0 step=912 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:20] main.c:38> RD mode=0 step=928 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:22] main.c:38> RD mode=0 step=944 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:24] main.c:38> RD mode=0 step=960 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:27] main.c:38> RD mode=0 step=976 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:29] main.c:38> RD mode=0 step=992 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:31] main.c:38> RD mode=0 step=1008 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:34] main.c:38> RD mode=0 step=1024 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:36] main.c:38> RD mode=0 step=1040 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:38] main.c:38> RD mode=0 step=1056 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:40] main.c:38> RD mode=0 step=1072 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:42] main.c:38> RD mode=0 step=1088 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:45] main.c:38> RD mode=0 step=1104 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:47] main.c:38> RD mode=0 step=1120 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:49] main.c:38> RD mode=0 step=1136 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:51] main.c:38> RD mode=0 step=1152 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:54] main.c:38> RD mode=0 step=1168 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:56] main.c:38> RD mode=0 step=1184 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:05:58] main.c:38> RD mode=0 step=1200 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:00] main.c:38> RD mode=0 step=1216 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:03] main.c:38> RD mode=0 step=1232 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:05] main.c:38> RD mode=0 step=1248 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:07] main.c:38> RD mode=0 step=1264 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:09] main.c:38> RD mode=0 step=1280 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:12] main.c:38> RD mode=0 step=1296 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:14] main.c:38> RD mode=0 step=1312 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:16] main.c:38> RD mode=0 step=1328 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:18] main.c:38> RD mode=0 step=1344 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:20] main.c:38> RD mode=0 step=1360 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:23] main.c:38> RD mode=0 step=1376 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:25] main.c:38> RD mode=0 step=1392 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:27] main.c:38> RD mode=0 step=1408 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:29] main.c:38> RD mode=0 step=1424 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:31] main.c:38> RD mode=0 step=1440 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:33] main.c:38> RD mode=0 step=1456 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:35] main.c:38> RD mode=0 step=1472 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:38] main.c:38> RD mode=0 step=1488 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:40] main.c:38> RD mode=0 step=1504 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:42] main.c:38> RD mode=0 step=1520 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:44] main.c:38> RD mode=0 step=1536 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:46] main.c:38> RD mode=0 step=1552 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:48] main.c:38> RD mode=0 step=1568 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:50] main.c:38> RD mode=0 step=1584 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:52] main.c:38> RD mode=0 step=1600 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:55] main.c:38> RD mode=0 step=1616 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:57] main.c:38> RD mode=0 step=1632 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:06:59] main.c:38> RD mode=0 step=1648 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:01] main.c:38> RD mode=0 step=1664 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:03] main.c:38> RD mode=0 step=1680 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:05] main.c:38> RD mode=0 step=1696 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:07] main.c:38> RD mode=0 step=1712 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:09] main.c:38> RD mode=0 step=1728 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:12] main.c:38> RD mode=0 step=1744 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:14] main.c:38> RD mode=0 step=1760 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:16] main.c:38> RD mode=0 step=1776 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:18] main.c:38> RD mode=0 step=1792 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:20] main.c:38> RD mode=0 step=1808 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:22] main.c:38> RD mode=0 step=1824 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:24] main.c:38> RD mode=0 step=1840 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:26] main.c:38> RD mode=0 step=1856 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:28] main.c:38> RD mode=0 step=1872 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:31] main.c:38> RD mode=0 step=1888 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:33] main.c:38> RD mode=0 step=1904 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:35] main.c:38> RD mode=0 step=1920 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:37] main.c:38> RD mode=0 step=1936 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:39] main.c:38> RD mode=0 step=1952 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:41] main.c:38> RD mode=0 step=1968 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:43] main.c:38> RD mode=0 step=1984 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:45] main.c:38> RD mode=0 step=2000 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:48] main.c:38> RD mode=0 step=2016 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:50] main.c:38> RD mode=0 step=2032 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:52] main.c:38> RD mode=0 step=2048 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:54] main.c:38> RD mode=0 step=2064 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:07:56] main.c:38> RD mode=0 step=2080 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:08:03] main.c:38> RD mode=0 step=2096 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:09:03] main.c:38> RD mode=0 step=2112 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:03] main.c:38> RD mode=0 step=2128 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:07] pkjs> [PHONESIM] [WARNING] Exception decoding QemuInboundPacket.footer
+[00:10:07] pkjs> [PHONESIM] [WARNING] Exception decoding QemuInboundPacket.footer
+[00:10:07] pkjs> [PHONESIM] [WARNING] Exception decoding QemuInboundPacket.footer
+[00:10:07] pkjs> [PHONESIM] [WARNING] Exception decoding QemuInboundPacket.footer
+[00:10:07] pkjs> [PHONESIM] [WARNING] Exception decoding QemuInboundPacket.footer
+[00:10:07] pkjs> [PHONESIM] [WARNING] Exception decoding QemuInboundPacket.footer
+[00:10:07] pkjs> [PHONESIM] [WARNING] Exception decoding QemuInboundPacket.footer
+[00:10:07] pkjs> [PHONESIM] [WARNING] Exception decoding QemuInboundPacket.footer
+[00:10:07] pkjs> [PHONESIM] [WARNING] Exception decoding QemuInboundPacket.footer
+[00:10:07] pkjs> [PHONESIM] [WARNING] Exception decoding QemuInboundPacket.footer
+[00:10:07] pkjs> [PHONESIM] [WARNING] Exception decoding QemuInboundPacket.footer
+[00:10:08] main.c:38> RD mode=0 step=2129 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:09] main.c:38> RD mode=0 step=2130 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:09] main.c:38> RD mode=0 step=2131 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:09] main.c:38> RD mode=0 step=2132 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:09] main.c:38> RD mode=0 step=2133 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:09] main.c:38> RD mode=0 step=2134 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:09] main.c:38> RD mode=0 step=2135 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:09] main.c:38> RD mode=0 step=2136 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:10] main.c:38> RD mode=0 step=2137 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:10] main.c:38> RD mode=0 step=2138 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:10] main.c:38> RD mode=0 step=2139 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:10] main.c:38> RD mode=0 step=2140 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:10] main.c:38> RD mode=0 step=2141 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:10] main.c:38> RD mode=0 step=2142 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:10] main.c:38> RD mode=0 step=2143 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:10] main.c:38> RD mode=0 step=2144 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:11] main.c:38> RD mode=0 step=2145 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:11] main.c:38> RD mode=0 step=2146 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:11] main.c:38> RD mode=0 step=2147 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:11] main.c:38> RD mode=0 step=2148 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:11] main.c:38> RD mode=0 step=2149 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:11] main.c:38> RD mode=0 step=2150 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:11] main.c:38> RD mode=0 step=2151 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:12] main.c:38> RD mode=0 step=2152 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:12] main.c:38> RD mode=0 step=2153 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:10:12] main.c:38> RD mode=0 step=2154 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:11:01] main.c:38> RD mode=0 step=2160 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:11:02] main.c:38> RD mode=0 step=2170 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:12:01] main.c:38> RD mode=0 step=2176 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:12:02] main.c:38> RD mode=0 step=2186 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:13:01] main.c:38> RD mode=0 step=2192 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:13:02] main.c:38> RD mode=0 step=2202 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:14:01] main.c:38> RD mode=0 step=2208 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:14:02] main.c:38> RD mode=0 step=2218 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+[00:15:01] main.c:38> RD mode=0 step=2224 heap_min=32888 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
+Exception in thread PebbleConnection:
+Traceback (most recent call last):
+  File "/home/harukasan/.local/share/mise/installs/python/3.13.15/lib/python3.13/threading.py", line 1044, in _bootstrap_inner
+    self.run()
+    ~~~~~~~~^^
+  File "/home/harukasan/.local/share/mise/installs/python/3.13.15/lib/python3.13/threading.py", line 995, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/harukasan/works/src/github.com/harukasan/pebble-turing-lab/.venv/lib/python3.13/site-packages/libpebble2/communication/__init__.py", line 88, in run_sync
+    self.pump_reader()
+    ~~~~~~~~~~~~~~~~^^
+  File "/home/harukasan/works/src/github.com/harukasan/pebble-turing-lab/.venv/lib/python3.13/site-packages/libpebble2/communication/__init__.py", line 73, in pump_reader
+    origin, message = self.transport.read_packet()
+                      ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/harukasan/works/src/github.com/harukasan/pebble-turing-lab/.venv/lib/python3.13/site-packages/libpebble2/communication/transports/websocket/__init__.py", line 63, in read_packet
+    opcode, message = self.ws.recv_data()
+                      ~~~~~~~~~~~~~~~~~^^
+  File "/home/harukasan/works/src/github.com/harukasan/pebble-turing-lab/.venv/lib/python3.13/site-packages/websocket/_core.py", line 457, in recv_data
+    opcode, frame = self.recv_data_frame(control_frame)
+                    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/home/harukasan/works/src/github.com/harukasan/pebble-turing-lab/.venv/lib/python3.13/site-packages/websocket/_core.py", line 478, in recv_data_frame
+    frame = self.recv_frame()
+  File "/home/harukasan/works/src/github.com/harukasan/pebble-turing-lab/.venv/lib/python3.13/site-packages/websocket/_core.py", line 515, in recv_frame
+    return self.frame_buffer.recv_frame()
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/harukasan/works/src/github.com/harukasan/pebble-turing-lab/.venv/lib/python3.13/site-packages/websocket/_abnf.py", line 377, in recv_frame
+    self.recv_header()
+    ~~~~~~~~~~~~~~~~^^
+  File "/home/harukasan/works/src/github.com/harukasan/pebble-turing-lab/.venv/lib/python3.13/site-packages/websocket/_abnf.py", line 331, in recv_header
+    header = self.recv_strict(2)
+  File "/home/harukasan/works/src/github.com/harukasan/pebble-turing-lab/.venv/lib/python3.13/site-packages/websocket/_abnf.py", line 420, in recv_strict
+    bytes_ = self.recv(min(16384, shortage))
+  File "/home/harukasan/works/src/github.com/harukasan/pebble-turing-lab/.venv/lib/python3.13/site-packages/websocket/_core.py", line 645, in _recv
+    return recv(self.sock, bufsize)
+  File "/home/harukasan/works/src/github.com/harukasan/pebble-turing-lab/.venv/lib/python3.13/site-packages/websocket/_socket.py", line 143, in recv
+    raise WebSocketConnectionClosedException("Connection to remote host was lost.")
+websocket._exceptions.WebSocketConnectionClosedException: Connection to remote host was lost.
+Disconnected.

@@ -1,0 +1,32 @@
+[settings]
+enable_tools = ["python", "node"]
+
+[tools]
+python = "3.13.15"
+node = "24.19.0"
+
+[env]
+_.python.venv = { path = ".venv", create = true }
+XDG_DATA_HOME = "{{ config_root }}/.local/share"
+XDG_CACHE_HOME = "{{ config_root }}/.local/cache"
+
+[tasks.setup]
+description = "Install pinned Pebble tooling into the project virtualenv"
+run = "python -m pip install -r requirements-tools.lock"
+
+[tasks.pebble]
+description = "Run Pebble with project-local SDK storage"
+run = "pebble"
+
+[tasks.sdk-install]
+description = "Install pinned Emery SDK into project-local storage"
+run = "pebble sdk install 4.33.1"
+
+[tasks.test-core]
+run = "sh scripts/test-core.sh"
+
+[tasks.build-wasm]
+run = "sh scripts/build-wasm.sh"
+
+[tasks.build-pebble]
+run = "sh scripts/build-pebble.sh"

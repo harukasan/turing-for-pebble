@@ -1,0 +1,26 @@
+{
+  "sdk": "4.33.1",
+  "physicalDevice": false,
+  "measurements": [
+    {
+      "mode": 0,
+      "minimumFreeHeapBytes": 32888,
+      "lastObservedStep": 2176,
+      "observation": "Startup completion, several subsequent minute updates, and a back-button backlight animation that ended by 00:10:12 on 2026-09-25. Heap remained 32888 B through 00:12:01.",
+      "source": "docs/emery-mode-0.log",
+      "measuredLoadBytes": 4221,
+      "clockInvalid": true,
+      "normalOperationGate": "observed pass, hardware confirmation pending"
+    },
+    {
+      "mode": 1,
+      "minimumFreeHeapBytes": 78688,
+      "lastObservedStep": 2064,
+      "observation": "Startup completion and a subsequent minute update, emulator timestamps 23:57:26 through 23:58:01 on 2026-09-24",
+      "source": "docs/emery-mode-1-observations.log",
+      "measuredLoadBytes": 4015,
+      "clockInvalid": true,
+      "normalOperationGate": "observed pass, hardware confirmation pending"
+    }
+  ]
+}
