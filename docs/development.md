@@ -91,7 +91,7 @@ mise exec -- python scripts/compare.py
 mise exec -- python scripts/build-report.py
 ```
 
-`compare.py` runs 10,000 steps for all four presets, two seeds, and three modes. It creates PNGs and JSON under `public/reports/`. The third mode is a diagnostic 100 × 114 / 8-bit configuration. It is not exposed as a production choice in the Web UI.
+`compare.py` runs 10,000 steps for the original four baseline presets, two seeds, and three modes. It creates PNGs and JSON under `public/reports/`. The newer thin-line preset is documented separately in `docs/behavior.md` and `public/reports/thin-lines.png`. The third mode is a diagnostic 100 × 114 / 8-bit configuration. It is not exposed as a production choice in the Web UI.
 
 The report builder reads ARM ELF section sizes and `.su` stack reports. Runtime measurements must retain their measured build and observation scope. Do not substitute theoretical remaining RAM for measured minimum free heap.
 

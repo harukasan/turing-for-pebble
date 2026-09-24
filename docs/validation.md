@@ -21,6 +21,10 @@ Machine-readable results and comparison images are in `public/reports/`. These a
 
 For the cell-by-cell comparison with the original Float32 implementation, see [Float32 precision comparison](float-precision.md). The optimized fixed-point implementation is not numerically identical to the Float32 reference.
 
+The Web now exposes Float32 reference runs at both grid resolutions alongside the two production Wasm modes. The adapter test checks that its initial disk occupancy matches the C core in both grids and that Q15 initial values match exactly on the 100 × 114 grid. Its step, seed, and RGB2 rendering paths are also exercised. The UI switches by resetting to the same seed and preserves the original controls.
+
+The [thin-line comparison image](../public/reports/thin-lines.png) records seed 42, Feed 0.023, Kill 0.052, Da 1, Db 0.5, dt 1, and 10,000 steps. The left half is 200 × 228 / 8-bit and the right half is 100 × 114 / Q15, both displayed at 200 × 228. The high-resolution result has narrow curved bands while the low-resolution result has wider bands. The separate [Float32 precision report](float-precision.md) quantifies this preset at 1,000 steps.
+
 Each of four presets was run for 10,000 steps with seeds 42 and 1234 in modes 0, 1, and 2. All 24 runs retain spatial variance and changing concentration cells at the end of the run. None was fully frozen or uniform at that checkpoint. This is a bounded observation, not a guarantee for every setting or an arbitrarily long run.
 
 The 200 × 228 / 8-bit version has finer pattern geometry. The 100 × 114 / 16-bit version has larger visible structures due to its grid scale. The diagnostic 100 × 114 / 8-bit images isolate storage precision at the same resolution. Their structure resembles the 16-bit comparison while retaining stochastic temporal noise.

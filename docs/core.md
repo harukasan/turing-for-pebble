@@ -52,4 +52,4 @@ Palettes are 0 lime, 1 cyan, 2 monochrome (`RD_PALETTE_*`). Quantize is 0 or 1. 
 
 Validation occurs before mutations. Invalid coefficients, seed coordinates, step counts, output parameters, unsupported modes, and undersized initialization blocks leave state unchanged. Callers must supply live owned memory and a valid state pointer. Arbitrary dangling pointers are outside the C API contract. The API is not thread-safe for simultaneous use of one state.
 
-The existing Float32 implementation remains in `lib/simulation.ts` as a reference with its original tests. It is no longer used for production Web computation.
+The existing Float32 implementation remains in `lib/simulation.ts` as a reference with its original tests. The Web can explicitly select it through `lib/float-simulation.ts` for same-resolution visual comparisons. Pebble builds use only the C implementation.

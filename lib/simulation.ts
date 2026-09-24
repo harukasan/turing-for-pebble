@@ -10,6 +10,7 @@ export const presets = [
   { name: '珊瑚', feed: 0.0545, kill: 0.062 },
   { name: '細胞分裂', feed: 0.0367, kill: 0.0649 },
   { name: '斑点', feed: 0.035, kill: 0.065 },
+  { name: '細線', feed: 0.023, kill: 0.052 },
 ];
 export class Simulation {
   a: Float32Array;

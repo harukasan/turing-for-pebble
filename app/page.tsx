@@ -6,6 +6,7 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { presets, type Parameters } from '@/lib/simulation';
+import { FloatSimulation } from '@/lib/float-simulation';
 import { WasmSimulation, loadCore, effective } from '@/lib/wasm-simulation';
 import { drawClock, loadFonts } from '@/lib/leco';
 import { PebbleMemory } from '@/lib/pebble-memory';
@@ -17,6 +18,11 @@ const defaults: Parameters = {
   db: 0.5,
   dt: 1,
 };
+type Engine = 'u8-200' | 'q15-100' | 'float-200' | 'float-100';
+type ActiveSimulation = WasmSimulation | FloatSimulation;
+const engineWidth = (engine: Engine): 100 | 200 =>
+  engine.endsWith('200') ? 200 : 100;
+const isFloat = (engine: Engine) => engine.startsWith('float');
 function Range({
   title,
   value,
@@ -92,9 +98,9 @@ function Choices({
 }
 export default function Home() {
   const canvas = useRef<HTMLCanvasElement>(null),
-    sim = useRef<WasmSimulation | null>(null);
+    sim = useRef<ActiveSimulation | null>(null);
   const [params, setParams] = useState(defaults);
-  const [resolution, setResolution] = useState('200'),
+  const [engine, setEngine] = useState<Engine>('u8-200'),
     [seed, setSeed] = useState(42),
     [revision, setRevision] = useState(0);
   const [running, setRunning] = useState(false),
@@ -108,6 +114,8 @@ export default function Home() {
     [advance, setAdvance] = useState(0);
   const [deviceMode, setDeviceMode] = useState(false),
     [memory, setMemory] = useState<number[]>([]);
+  const width = engineWidth(engine);
+  const floatMode = isFloat(engine);
   const lightUntil = useRef(0);
   const config = useRef({
     params,
@@ -208,17 +216,20 @@ export default function Home() {
     let cancelled = false;
     sim.current?.dispose();
     sim.current = null;
-    Promise.all([loadCore(), loadFonts()])
+    Promise.all([
+      isFloat(engine) ? Promise.resolve(null) : loadCore(),
+      loadFonts(),
+    ])
       .then(([api]) => {
         if (cancelled) return;
-        const next = new WasmSimulation(
-          api,
-          resolution === '200' ? 0 : 1,
-          seed,
-        );
+        const next = api
+          ? new WasmSimulation(api, engine === 'u8-200' ? 0 : 1, seed)
+          : new FloatSimulation(engineWidth(engine), seed);
         sim.current = next;
         setStats({ steps: 0, ms: 0 });
-        setMemory([...next.components, next.bytes, next.linearBytes]);
+        if (next instanceof WasmSimulation)
+          setMemory([...next.components, next.bytes, next.linearBytes]);
+        else setMemory([]);
       })
       .catch((e) => {
         if (!cancelled) {
@@ -234,7 +245,7 @@ export default function Home() {
       sim.current?.dispose();
       sim.current = null;
     };
-  }, [resolution, seed, revision]);
+  }, [engine, seed, revision]);
   useEffect(() => {
     const startFrame = requestAnimationFrame(() =>
       setRunning(
@@ -334,12 +345,16 @@ export default function Home() {
   const settings = {
     model: 'Gray-Scott',
     version: 1,
-    method: resolution === '200' ? 'u8-200' : 'q15-100',
-    rounding: resolution === '200' ? 'stochastic' : 'nearest-away',
-    effective: effective(params),
+    method: engine,
+    rounding: floatMode
+      ? 'float32-storage'
+      : engine === 'u8-200'
+        ? 'stochastic'
+        : 'nearest-away',
+    effective: floatMode ? params : effective(params),
     ...params,
-    width: Number(resolution),
-    height: (Number(resolution) * 228) / 200,
+    width,
+    height: (width * 228) / 200,
     seed,
     boundary: 'periodic',
     laplacian: { center: -1, axial: 0.2, diagonal: 0.05 },
@@ -354,11 +369,12 @@ export default function Home() {
     setNotice('同じシードで初期化しました。');
   };
   function save(kind: 'json' | 'png' | 'h') {
+    if (kind === 'h' && floatMode) return;
     const a = document.createElement('a');
     a.download = `turing-${seed}-${stats.steps}.${kind}`;
     if (kind === 'h') {
       const q = effective(params);
-      const text = `/* Generated configuration, core v1 */\n#ifndef RD_MODE\n#define RD_MODE ${resolution === '200' ? 0 : 1}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === 'green' ? 0 : palette === 'blue' ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n`;
+      const text = `/* Generated configuration, core v1 */\n#ifndef RD_MODE\n#define RD_MODE ${engine === 'u8-200' ? 0 : 1}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === 'green' ? 0 : palette === 'blue' ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n`;
       const url = URL.createObjectURL(new Blob([text]));
       a.href = url;
       a.download = 'config.h';
@@ -423,19 +439,17 @@ export default function Home() {
                   Math.max(
                     0,
                     Math.min(
-                      Number(resolution) - 1,
-                      Math.floor(
-                        ((e.clientX - r.left) / r.width) * Number(resolution),
-                      ),
+                      width - 1,
+                      Math.floor(((e.clientX - r.left) / r.width) * width),
                     ),
                   ),
                   Math.max(
                     0,
                     Math.min(
-                      (Number(resolution) * 228) / 200 - 1,
+                      (width * 228) / 200 - 1,
                       Math.floor(
                         ((e.clientY - r.top) / r.height) *
-                          ((Number(resolution) * 228) / 200),
+                          ((width * 228) / 200),
                       ),
                     ),
                   ),
@@ -452,12 +466,9 @@ export default function Home() {
                 )
                   return;
                 sim.current?.seedAt(
+                  Math.floor(((e.clientX - r.left) / r.width) * width),
                   Math.floor(
-                    ((e.clientX - r.left) / r.width) * Number(resolution),
-                  ),
-                  Math.floor(
-                    ((e.clientY - r.top) / r.height) *
-                      ((Number(resolution) * 228) / 200),
+                    ((e.clientY - r.top) / r.height) * ((width * 228) / 200),
                   ),
                 );
               }}
@@ -489,8 +500,8 @@ export default function Home() {
                 style={{ marginTop: 10 }}
                 onClick={() => {
                   sim.current?.seedAt(
-                    Math.floor(Number(resolution) / 2),
-                    Math.floor((Number(resolution) * 228) / 200 / 2),
+                    Math.floor(width / 2),
+                    Math.floor((width * 228) / 200 / 2),
                   );
                 }}
               >
@@ -508,30 +519,51 @@ export default function Home() {
               <span>1ステップ / このブラウザ</span>
             </div>
             <div>
-              <strong>{((memory[5] ?? 0) / 1024).toFixed(1)} KiB</strong>
-              <span>共通Cの必要量</span>
+              <strong>
+                {floatMode
+                  ? ((width * ((width * 228) / 200) * 16) / 1024).toFixed(1)
+                  : ((memory[5] ?? 0) / 1024).toFixed(1)}{' '}
+                KiB
+              </strong>
+              <span>{floatMode ? 'Float32の計算配列' : '共通Cの必要量'}</span>
             </div>
           </div>
           <p className="notes">
-            パラメータの変更は現在の模様に反映します。同じ条件で比較するには「初期化」を押してください。解像度とシードの変更は自動で初期化します。
+            パラメータの変更は現在の模様に反映します。方式を変えると同じシードで初期化します。同じ条件で比べるには同じステップ数まで進めてください。
           </p>
           <details open>
             <summary>メモリ内訳</summary>
             <div className="notes">
-              <p>
-                共通C: 濃度場 {memory[0]} B / 行バッファ {memory[1]} B / 制御{' '}
-                {memory[2]} B / 描画行 {memory[3]} B / アラインメント余裕{' '}
-                {memory[4]} B
-              </p>
-              <p>
-                Web固有: Wasm linear memory {memory[6]} B（共通Cを内包） /
-                ImageData 182400 B / Canvas 2面の画素相当 364800
-                B。ブラウザ全体の使用量ではありません。
-              </p>
-              <PebbleMemory mode={resolution === '200' ? 0 : 1} />
-              <p>
-                最小空きヒープは実測値、OS追加確保前の空きは見積もりです。両者は加算しません。採用判定は実機検証待ちです。
-              </p>
+              {floatMode ? (
+                <>
+                  <p>
+                    Float32参照実装: A・Bの現在と次の配列で{' '}
+                    {width * ((width * 228) / 200) * 16}{' '}
+                    B。Pebble向けの共通C必要量とヒープ測定値は対象外です。
+                  </p>
+                  <p>
+                    Web固有: ImageData 182400 B / Canvas 2面の画素相当 364800
+                    B。ブラウザ全体の使用量ではありません。
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    共通C: 濃度場 {memory[0]} B / 行バッファ {memory[1]} B /
+                    制御 {memory[2]} B / 描画行 {memory[3]} B /
+                    アラインメント余裕 {memory[4]} B
+                  </p>
+                  <p>
+                    Web固有: Wasm linear memory {memory[6]}
+                    B（共通Cを内包） / ImageData 182400 B / Canvas 2面の画素相当
+                    364800 B。ブラウザ全体の使用量ではありません。
+                  </p>
+                  <PebbleMemory mode={engine === 'u8-200' ? 0 : 1} />
+                  <p>
+                    最小空きヒープは実測値、OS追加確保前の空きは見積もりです。両者は加算しません。採用判定は実機検証待ちです。
+                  </p>
+                </>
+              )}
               <Link
                 href="/reports/comparison.json"
                 target="_blank"
@@ -546,6 +578,14 @@ export default function Home() {
                 prefetch={false}
               >
                 全プリセットの比較画像（10,000ステップ）
+              </Link>
+              <br />
+              <Link
+                href="/reports/thin-lines.png"
+                target="_blank"
+                prefetch={false}
+              >
+                細線プリセットの比較画像（10,000ステップ）
               </Link>
             </div>
           </details>
@@ -652,14 +692,19 @@ export default function Home() {
               <span className="eyebrow">02 / </span> 計算
             </h2>
             <Choices
-              label="計算解像度"
-              value={resolution}
+              label="計算実装"
+              value={engine}
               options={[
-                ['200', '200 × 228 / 8bit'],
-                ['100', '100 × 114 / 16bit'],
+                ['u8-200', 'Wasm 8bit / 200 × 228'],
+                ['float-200', 'Float32 / 200 × 228'],
+                ['q15-100', 'Wasm 16bit / 100 × 114'],
+                ['float-100', 'Float32 / 100 × 114'],
               ]}
-              onChange={setResolution}
+              onChange={(value) => setEngine(value as Engine)}
             />
+            <p className="hint">
+              同じ解像度の組で保存精度を比較できます。方式を切り替えると初期化します。
+            </p>
             <label className="toggle" htmlFor="device-mode">
               実機動作モード
               <Switch
@@ -754,7 +799,14 @@ export default function Home() {
             <button className="action" onClick={() => save('json')}>
               設定JSONを保存 ↓
             </button>
-            <button className="action" onClick={() => save('h')}>
+            <button
+              className="action"
+              disabled={floatMode}
+              title={
+                floatMode ? 'Pebble用設定はWasm方式で出力できます' : undefined
+              }
+              onClick={() => save('h')}
+            >
               Pebble config.h ↓
             </button>
             <button className="action" onClick={() => save('png')}>
