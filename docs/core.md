@@ -2,11 +2,11 @@
 
 ## Modes and memory contract
 
-| Mode | Grid | Storage per species | Fields | Row buffers | Total caller allocation |
-| --- | --- | --- | ---: | ---: | ---: |
-| 0 | 200 × 228 | unsigned 8-bit | 91,200 B | 1,600 B | 93,647 B |
-| 1 | 100 × 114 | unsigned 16-bit Q15 | 45,600 B | 1,600 B | 48,047 B |
-| 2, diagnostic | 100 × 114 | unsigned 8-bit | 22,800 B | 800 B | 24,447 B |
+| Mode          | Grid      | Storage per species |   Fields | Row buffers | Total caller allocation |
+| ------------- | --------- | ------------------- | -------: | ----------: | ----------------------: |
+| 0             | 200 × 228 | unsigned 8-bit      | 91,200 B |     1,600 B |                93,647 B |
+| 1             | 100 × 114 | unsigned 16-bit Q15 | 45,600 B |     1,600 B |                48,047 B |
+| 2, diagnostic | 100 × 114 | unsigned 8-bit      | 22,800 B |       800 B |                24,447 B |
 
 Totals include a 44-byte control structure, an 800-byte RGBA output row, and up to 3 bytes of alignment padding. Consumers must query `rd_bytes` and `rd_memory` instead of relying on these recorded values. The core performs no allocation. The caller owns a single contiguous block and frees the original pointer, not the potentially aligned state pointer returned by `rd_init`.
 
@@ -35,18 +35,18 @@ The initial equilibrium is A=1 and B=0. A 32-bit LCG places 24 disks in a common
 
 All functions are declared in `core/rd.h`.
 
-| Function | Contract |
-| --- | --- |
-| `rd_bytes(mode)` | Caller allocation size including alignment, zero for unsupported mode |
-| `rd_memory(mode, component)` | 0 fields, 1 row buffers, 2 control, 3 rendering, 4 alignment |
-| `rd_init(memory, bytes, mode, seed)` | Initialize and seed, returning aligned state or null |
-| `rd_params(state, feed, kill, da, db, dt)` | Integer Q15 coefficients, each in [0,32768] |
-| `rd_seed(state, x, y, radius)` | Display coordinates x∈[0,199], y∈[0,227], radius∈[1,100] |
-| `rd_step(state, count)` | Advance count∈[0,1000000] synchronously |
-| `rd_get(state, x, y, species)` | Grid coordinates, species 0=A or 1=B, return Q15 or −1 |
-| `rd_steps(state)` | Unsigned step counter |
-| `rd_hash(state)` | FNV-1a over canonical little-endian two-byte stored values |
-| `rd_row(state, y, palette, quantize)` | Shared 800-byte RGBA output for display row y∈[0,227] |
+| Function                                   | Contract                                                              |
+| ------------------------------------------ | --------------------------------------------------------------------- |
+| `rd_bytes(mode)`                           | Caller allocation size including alignment, zero for unsupported mode |
+| `rd_memory(mode, component)`               | 0 fields, 1 row buffers, 2 control, 3 rendering, 4 alignment          |
+| `rd_init(memory, bytes, mode, seed)`       | Initialize and seed, returning aligned state or null                  |
+| `rd_params(state, feed, kill, da, db, dt)` | Integer Q15 coefficients, each in [0,32768]                           |
+| `rd_seed(state, x, y, radius)`             | Display coordinates x∈[0,199], y∈[0,227], radius∈[1,100]              |
+| `rd_step(state, count)`                    | Advance count∈[0,1000000] synchronously                               |
+| `rd_get(state, x, y, species)`             | Grid coordinates, species 0=A or 1=B, return Q15 or −1                |
+| `rd_steps(state)`                          | Unsigned step counter                                                 |
+| `rd_hash(state)`                           | FNV-1a over canonical little-endian two-byte stored values            |
+| `rd_row(state, y, palette, quantize)`      | Shared 800-byte RGBA output for display row y∈[0,227]                 |
 
 Palettes are 0 lime, 1 cyan, 2 monochrome. Quantize is 0 or 1. A returned rendering row is overwritten by the next row call. The Web adapter copies each row into a persistent ImageData. The watch adapter writes RGB2 values directly into the OS framebuffer and owns no full-screen image.
 

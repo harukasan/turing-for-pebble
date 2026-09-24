@@ -8,6 +8,9 @@
     "pnpm-lock.yaml",
     "yarn.lock",
     "bun.lock",
-    "bun.lockb"
+    "bun.lockb",
+    "public/reports/**",
+    "public/fonts/leco.json",
+    "docs/emulator-measurements.json"
   ]
 }

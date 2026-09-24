@@ -10,7 +10,7 @@ The implementation is available for local Web use and Emery builds. Production a
 - AddressSanitizer, UndefinedBehaviorSanitizer, and LeakSanitizer passed. LeakSanitizer requires execution outside this environment's ptrace-based sandbox.
 - 300 allocation/reset cycles retain fixed Wasm linear memory. The TypeScript adapter is tested with real Wasm for loading, mode recreation, parameter conversion, stepping, seeding, RGBA output, and disposal.
 - The original Float32 reference tests passed.
-- TypeScript checking and the production Web build passed. Changed Web files pass scoped lint. The repository-wide lint command still reports pre-existing errors in the vendored UI components, `hooks/use-mobile.ts`, and original Float32 tests. Those unrelated files were not modified.
+- TypeScript checking and the production Web build passed. The repository-wide `mise run lint` passes. Vendored `components/ui/` is excluded from oxlint, as described in `docs/development.md`.
 - Wasm was served with HTTP 200 and `application/wasm`.
 - Both Emery `.pbw` variants were built and installed in the emulator. Mode 0 was also observed after a back-button backlight animation and subsequent minute updates without a lower minimum free heap.
 - The Emery screenshot's 2,427 white clock/date pixels exactly match the extracted PBF glyph positions and bitmap pixels. There are zero missing or extra white pixels. This verifies font geometry against the emulator, not browser Canvas interaction.

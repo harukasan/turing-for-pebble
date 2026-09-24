@@ -13,15 +13,15 @@ mise exec -- pebble sdk list
 npm ci
 ```
 
-| Location | Content |
-| --- | --- |
-| `.venv/` | Python virtual environment managed through mise |
-| `.local/share/pebble-sdk/` | SDKs, emulator flash, tooling state |
-| `.local/cache/` | Project-local caches |
-| `requirements-tools.lock` | Resolved Python dependencies |
-| `.tools/` | Earlier bootstrap environment, no longer used |
+| Location                   | Content                                         |
+| -------------------------- | ----------------------------------------------- |
+| `.venv/`                   | Python virtual environment managed through mise |
+| `.local/share/pebble-sdk/` | SDKs, emulator flash, tooling state             |
+| `.local/cache/`            | Project-local caches                            |
+| `requirements-tools.lock`  | Resolved Python dependencies                    |
+| `.tools/`                  | Earlier bootstrap environment, no longer used   |
 
-The project allowlists only Python and Node in mise, preventing unrelated globally configured tools from being installed for project tasks. Mise trusted-config registration remains in its user state directory. Runtime installations follow mise's data directory, including the active XDG environment. Existing runtime installations can be reused. This arrangement isolates Python dependencies and Pebble state. It is not a container or an operating-system sandbox. Pebble's legacy `~/.pebble-sdk` path takes precedence over `XDG_DATA_HOME` if it exists. Verify the resolved path on another machine before installing:
+The project allowlists only Python, Node, ruff, shellcheck, and shfmt in mise, preventing unrelated globally configured tools from being installed for project tasks. Mise trusted-config registration remains in its user state directory. Runtime installations follow mise's data directory, including the active XDG environment. Existing runtime installations can be reused. This arrangement isolates Python dependencies and Pebble state. It is not a container or an operating-system sandbox. Pebble's legacy `~/.pebble-sdk` path takes precedence over `XDG_DATA_HOME` if it exists. Verify the resolved path on another machine before installing:
 
 ```sh
 mise exec -- python -c 'from pebble_tool.util import get_persist_dir; print(get_persist_dir())'
@@ -43,6 +43,27 @@ npm run dev -- --host 127.0.0.1
 ```
 
 The local URL is normally `http://localhost:3000/`. No deployment is required. The development server is not an on-watch performance benchmark.
+
+## Lint and format
+
+`mise run lint` runs every check and fails on any lint error or unformatted file. `mise run format` rewrites all sources with the project formatters. Both aggregate the per-language tasks below, which can also be run alone.
+
+| Task                    | Tool                                      | Scope                                       |
+| ----------------------- | ----------------------------------------- | ------------------------------------------- |
+| `lint-js` / `format-js` | oxlint 1.76 and oxfmt 0.61 (npm)          | TypeScript, JavaScript, CSS, JSON, Markdown |
+| `lint-c` / `format-c`   | clang-format (system)                     | `core/`, `pebble/src/c/`, `tests/*.c`       |
+| `lint-py` / `format-py` | ruff 0.16.8 (mise)                        | `scripts/*.py`                              |
+| `lint-sh` / `format-sh` | shellcheck 0.11.0 and shfmt 3.14.1 (mise) | `scripts/*.sh`                              |
+
+ruff, shellcheck, and shfmt are installed by `mise install`. clang-format is not managed by mise. Install it from the system package manager. The `.clang-format` configuration needs clang-format 15 or newer for `InsertBraces`, and the sources were formatted with 22.1.8. Other major versions may place braces or blank lines slightly differently.
+
+Style settings live in `.editorconfig`, `.clang-format`, `ruff.toml`, `.oxlintrc.json`, and `.oxfmtrc.json`. The shfmt tasks pass `-i 2 -ci` explicitly, so keep `.editorconfig` in sync with those flags. C sources keep the LLVM base style with blank lines between definitions and braces on every control statement. Include order is never sorted, because `pebble/src/c/core.c` relies on `config.h` preceding its textual include of `core/rd.c`.
+
+Exclusions:
+
+- `components/ui/` is vendored shadcn output. oxlint skips it, oxfmt still formats it.
+- `public/reports/`, `public/fonts/leco.json`, and `docs/emulator-measurements.json` are generated. oxfmt skips them.
+- `pebble/wscript` is the SDK build template. ruff skips it.
 
 ## Emery builds
 

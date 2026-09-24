@@ -1,9 +1,12 @@
 [settings]
-enable_tools = ["python", "node"]
+enable_tools = ["python", "node", "ruff", "shellcheck", "shfmt"]
 
 [tools]
 python = "3.13.15"
 node = "24.19.0"
+ruff = "0.16.8"
+shellcheck = "0.11.0"
+shfmt = "3.14.1"
 
 [env]
 _.python.venv = { path = ".venv", create = true }
@@ -30,3 +33,43 @@ run = "sh scripts/build-wasm.sh"
 
 [tasks.build-pebble]
 run = "sh scripts/build-pebble.sh"
+
+[tasks.lint-js]
+description = "oxlint (type-aware) and oxfmt --check"
+run = ["npm run lint", "npm run format:check"]
+
+[tasks.lint-c]
+description = "Check C formatting with system clang-format (22.x)"
+run = "clang-format --dry-run --Werror core/*.c core/*.h pebble/src/c/*.c pebble/src/c/*.h tests/*.c"
+
+[tasks.lint-py]
+description = "ruff check and ruff format --check on scripts/"
+run = ["ruff check scripts", "ruff format --check scripts"]
+
+[tasks.lint-sh]
+description = "shellcheck and shfmt -d on scripts/"
+run = ["shellcheck scripts/*.sh", "shfmt -i 2 -ci -d scripts/*.sh"]
+
+[tasks.lint]
+description = "All lint and format checks"
+depends = ["lint-js", "lint-c", "lint-py", "lint-sh"]
+
+[tasks.format-js]
+description = "Format JS/TS/CSS/JSON/Markdown with oxfmt"
+run = "npm run format"
+
+[tasks.format-c]
+description = "Format C sources with clang-format"
+run = "clang-format -i core/*.c core/*.h pebble/src/c/*.c pebble/src/c/*.h tests/*.c"
+
+[tasks.format-py]
+description = "Sort imports and format Python scripts with ruff"
+run = ["ruff check --select I --fix scripts", "ruff format scripts"]
+
+[tasks.format-sh]
+description = "Format shell scripts with shfmt"
+run = "shfmt -i 2 -ci -w scripts/*.sh"
+
+[tasks.format]
+description = "Rewrite all sources with the project formatters"
+depends = ["format-js", "format-c", "format-py", "format-sh"]

@@ -1,0 +1,9 @@
+target-version = "py313"
+line-length = 88
+extend-exclude = [".tools", ".local", "build", "pebble/build", "pebble/wscript"]
+
+[lint]
+extend-select = ["I"]
+
+[format]
+quote-style = "single"
