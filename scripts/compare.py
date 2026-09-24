@@ -8,7 +8,18 @@ from PIL import Image, ImageDraw
 out = Path('public/reports')
 out.mkdir(parents=True, exist_ok=True)
 subprocess.run(
-    ['cc', '-O3', 'core/rd.c', 'tests/compare.c', '-o', 'build/compare'], check=True
+    [
+        'cc',
+        '-O3',
+        '-std=c11',
+        '-Wall',
+        '-Wextra',
+        'core/rd.c',
+        'tests/compare.c',
+        '-o',
+        'build/compare',
+    ],
+    check=True,
 )
 
 

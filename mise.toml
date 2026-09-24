@@ -39,8 +39,8 @@ description = "oxlint (type-aware) and oxfmt --check"
 run = ["npm run lint", "npm run format:check"]
 
 [tasks.lint-c]
-description = "Check C formatting with system clang-format (22.x)"
-run = "clang-format --dry-run --Werror core/*.c core/*.h pebble/src/c/*.c pebble/src/c/*.h tests/*.c"
+description = "clang-format check and cc -Wall -Wextra -Werror syntax check"
+run = "sh scripts/lint-c.sh"
 
 [tasks.lint-py]
 description = "ruff check and ruff format --check on scripts/"

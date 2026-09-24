@@ -48,12 +48,14 @@ The local URL is normally `http://localhost:3000/`. No deployment is required. T
 
 `mise run lint` runs every check and fails on any lint error or unformatted file. `mise run format` rewrites all sources with the project formatters. Both aggregate the per-language tasks below, which can also be run alone.
 
-| Task                    | Tool                                      | Scope                                       |
-| ----------------------- | ----------------------------------------- | ------------------------------------------- |
-| `lint-js` / `format-js` | oxlint 1.76 and oxfmt 0.61 (npm)          | TypeScript, JavaScript, CSS, JSON, Markdown |
-| `lint-c` / `format-c`   | clang-format (system)                     | `core/`, `pebble/src/c/`, `tests/*.c`       |
-| `lint-py` / `format-py` | ruff 0.16.8 (mise)                        | `scripts/*.py`                              |
-| `lint-sh` / `format-sh` | shellcheck 0.11.0 and shfmt 3.14.1 (mise) | `scripts/*.sh`                              |
+| Task                    | Tool                                                 | Scope                                       |
+| ----------------------- | ---------------------------------------------------- | ------------------------------------------- |
+| `lint-js` / `format-js` | oxlint 1.76 and oxfmt 0.61 (npm)                     | TypeScript, JavaScript, CSS, JSON, Markdown |
+| `lint-c` / `format-c`   | clang-format (system) and `cc -Wall -Wextra -Werror` | `core/`, `pebble/src/c/`, `tests/*.c`       |
+| `lint-py` / `format-py` | ruff 0.16.8 (mise)                                   | `scripts/*.py`                              |
+| `lint-sh` / `format-sh` | shellcheck 0.11.0 and shfmt 3.14.1 (mise)            | `scripts/*.sh`                              |
+
+`lint-c` runs `scripts/lint-c.sh`: a clang-format check, then `cc -fsyntax-only -Wall -Wextra -Werror` over `tests/core.c`, `core/rd.c` with `tests/compare.c`, and `pebble/src/c/core.c` with `RD_MODE` 0, 1, and 2 under C99 to mirror the watch build. `main.c` needs the SDK include tree, so it is only checked by `mise run build-pebble`, which compiles with the SDK's `-Werror`. Every other C build (`test-core`, `build-wasm`, `scripts/compare.py`) also passes `-Wall -Wextra`.
 
 ruff, shellcheck, and shfmt are installed by `mise install`. clang-format is not managed by mise. Install it from the system package manager. The `.clang-format` configuration needs clang-format 15 or newer for `InsertBraces`, and the sources were formatted with 22.1.8. Other major versions may place braces or blank lines slightly differently.
 
