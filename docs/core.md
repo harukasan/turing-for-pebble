@@ -21,9 +21,9 @@ A' = clamp(A + dt × (Da × lap(A) − A × B² + feed × (1 − A)))
 B' = clamp(B + dt × (Db × lap(B) + A × B² − (feed + kill) × B))
 ```
 
-Concentrations and coefficients are calculated in Q15, where 32768 means 1. Products use signed 64-bit intermediates. Every Q15 multiplication is rounded to nearest, with halfway values rounded away from zero. The reaction is evaluated as `mul(mul(A, B), B)`.
+Concentrations and coefficients are calculated in Q15, where 32768 means 1. Products use signed 64-bit intermediates. Every Q15 multiplication is rounded to nearest, with halfway values rounded away from zero. The reaction is evaluated as `mul_q15(mul_q15(A, B), B)`.
 
-The nine-point Laplacian is evaluated as `(4 × axial_sum + diagonal_sum − 20 × center) / 20`, rounded to nearest with ties away from zero. These exact rational weights preserve uniform fields exactly, avoiding the equilibrium drift that independently rounded 0.2 and 0.05 Q15 coefficients would introduce.
+The nine-point Laplacian (`laplacian` in `core/rd.c`) is evaluated as `(4 × axial_sum + diagonal_sum − 20 × center) / 20`, rounded to nearest with ties away from zero. These exact rational weights preserve uniform fields exactly, avoiding the equilibrium drift that independently rounded 0.2 and 0.05 Q15 coefficients would introduce.
 
 16-bit storage preserves the Q15 value directly. For 8-bit storage, reading expands a byte to Q15 with `(value × 32768 + 127) / 255`. Writing clamps to [0,32768], scales by 255, and stochastically rounds the remaining fraction. A fixed unsigned 32-bit mixing function combines the seed, linear cell coordinate, step counter, and species. The lower 15 random bits are compared with the Q15 remainder. There is no per-cell random state or traversal-order dependency. Step counters wrap modulo 2³².
 
@@ -35,20 +35,20 @@ The initial equilibrium is A=1 and B=0. A 32-bit LCG places 24 disks in a common
 
 All functions are declared in `core/rd.h`.
 
-| Function                                   | Contract                                                              |
-| ------------------------------------------ | --------------------------------------------------------------------- |
-| `rd_bytes(mode)`                           | Caller allocation size including alignment, zero for unsupported mode |
-| `rd_memory(mode, component)`               | 0 fields, 1 row buffers, 2 control, 3 rendering, 4 alignment          |
-| `rd_init(memory, bytes, mode, seed)`       | Initialize and seed, returning aligned state or null                  |
-| `rd_params(state, feed, kill, da, db, dt)` | Integer Q15 coefficients, each in [0,32768]                           |
-| `rd_seed(state, x, y, radius)`             | Display coordinates x∈[0,199], y∈[0,227], radius∈[1,100]              |
-| `rd_step(state, count)`                    | Advance count∈[0,1000000] synchronously                               |
-| `rd_get(state, x, y, species)`             | Grid coordinates, species 0=A or 1=B, return Q15 or −1                |
-| `rd_steps(state)`                          | Unsigned step counter                                                 |
-| `rd_hash(state)`                           | FNV-1a over canonical little-endian two-byte stored values            |
-| `rd_row(state, y, palette, quantize)`      | Shared 800-byte RGBA output for display row y∈[0,227]                 |
+| Function                                   | Contract                                                                       |
+| ------------------------------------------ | ------------------------------------------------------------------------------ |
+| `rd_bytes(mode)`                           | Caller allocation size including alignment, zero for unsupported mode          |
+| `rd_memory(mode, component)`               | `RD_COMPONENT_*`: 0 fields, 1 row buffers, 2 control, 3 rendering, 4 alignment |
+| `rd_init(memory, bytes, mode, seed)`       | Initialize and seed, returning aligned state or null                           |
+| `rd_params(state, feed, kill, da, db, dt)` | Integer Q15 coefficients, each in [0,32768]                                    |
+| `rd_seed(state, x, y, radius)`             | Display coordinates x∈[0,199], y∈[0,227], radius∈[1,100]                       |
+| `rd_step(state, count)`                    | Advance count∈[0,1000000] synchronously                                        |
+| `rd_get(state, x, y, species)`             | Grid coordinates, species 0=A or 1=B, return Q15 or −1                         |
+| `rd_steps(state)`                          | Unsigned step counter                                                          |
+| `rd_hash(state)`                           | FNV-1a over canonical little-endian two-byte stored values                     |
+| `rd_row(state, y, palette, quantize)`      | Shared 800-byte RGBA output for display row y∈[0,227]                          |
 
-Palettes are 0 lime, 1 cyan, 2 monochrome. Quantize is 0 or 1. A returned rendering row is overwritten by the next row call. The Web adapter copies each row into a persistent ImageData. The watch adapter writes RGB2 values directly into the OS framebuffer and owns no full-screen image.
+Palettes are 0 lime, 1 cyan, 2 monochrome (`RD_PALETTE_*`). Quantize is 0 or 1. `core/rd.h` also defines `RD_Q15_ONE`, `RD_DISPLAY_WIDTH`, `RD_DISPLAY_HEIGHT`, `RD_ROW_BYTES`, and `RD_SPECIES_A` / `RD_SPECIES_B` for C callers. A returned rendering row is overwritten by the next row call. The Web adapter copies each row into a persistent ImageData. The watch adapter writes RGB2 values directly into the OS framebuffer and owns no full-screen image.
 
 Validation occurs before mutations. Invalid coefficients, seed coordinates, step counts, output parameters, unsupported modes, and undersized initialization blocks leave state unchanged. Callers must supply live owned memory and a valid state pointer. Arbitrary dangling pointers are outside the C API contract. The API is not thread-safe for simultaneous use of one state.
 
