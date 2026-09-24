@@ -18,7 +18,12 @@
     "compare:float": "node --experimental-transform-types scripts/compare-float.mjs",
     "test:optimization": "sh scripts/check-optimization.sh",
     "test:core": "sh scripts/test-core.sh",
-    "build:pebble": "sh scripts/build-pebble.sh"
+    "build:pebble": "sh scripts/build-pebble.sh",
+    "emulator": "sh scripts/emulator.sh install 0",
+    "emulator:mode1": "sh scripts/emulator.sh install 1",
+    "emulator:screenshot": "sh scripts/emulator.sh screenshot",
+    "emulator:logs": "sh scripts/emulator.sh logs",
+    "emulator:kill": "sh scripts/emulator.sh kill"
   },
   "dependencies": {
     "react": "19.2.6",

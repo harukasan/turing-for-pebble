@@ -76,6 +76,16 @@ mise run build-pebble
 This builds both modes and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. The shared UUID means installing the second mode replaces the first in an emulator or watch.
 
 ```sh
+npm run emulator              # build if needed, then install mode 0
+npm run emulator:mode1        # the same for mode 1
+npm run emulator:screenshot   # build/emery.png
+npm run emulator:logs         # stream the watchface logs, Ctrl-C to stop
+npm run emulator:kill         # stop the emulator
+```
+
+These run `scripts/emulator.sh`, which re-executes itself under `mise exec` when `pebble` is not on `PATH`. The underlying commands are:
+
+```sh
 mise exec -- pebble install --emulator emery --vnc build/pebble/mode-0.pbw
 mise exec -- pebble screenshot --emulator emery --vnc --no-open build/emery.png
 ```
