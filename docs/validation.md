@@ -19,6 +19,8 @@ Machine-readable results and comparison images are in `public/reports/`. These a
 
 ## Pattern comparison
 
+For the cell-by-cell comparison with the original Float32 implementation, see [Float32 precision comparison](float-precision.md). The optimized fixed-point implementation is not numerically identical to the Float32 reference.
+
 Each of four presets was run for 10,000 steps with seeds 42 and 1234 in modes 0, 1, and 2. All 24 runs retain spatial variance and changing concentration cells at the end of the run. None was fully frozen or uniform at that checkpoint. This is a bounded observation, not a guarantee for every setting or an arbitrarily long run.
 
 The 200 × 228 / 8-bit version has finer pattern geometry. The 100 × 114 / 16-bit version has larger visible structures due to its grid scale. The diagnostic 100 × 114 / 8-bit images isolate storage precision at the same resolution. Their structure resembles the 16-bit comparison while retaining stochastic temporal noise.
@@ -34,6 +36,8 @@ Core allocation is 93,647 B for mode 0 and 48,047 B for mode 1. These include sc
 The current `public/reports/comparison.json` records measured ELF text/data/BSS and compiler stack reports. Application RAM estimates use the 128 KiB app region and subtract both the load footprint and the core allocation. They do not include additional OS allocations.
 
 Observed emulator heap results are recorded with their build/observation scope. Mode 0 showed 32,888 B after startup and two subsequent minute updates. Mode 1 showed 78,688 B after startup and a subsequent minute update. The observation metadata is retained in `docs/emulator-measurements.json`. These exceed 16 KiB in the observed emulator intervals, but they are not a substitute for a sustained normal-operation and backlight workload on hardware. Use the current report for subsequent measurements.
+
+The Float32 precision check prompted a validation guard in `rd_init`. The two `.pbw` files were rebuilt after it. Their current ELF section sizes are refreshed in `public/reports/comparison.json`. The heap observations above belong to the earlier binaries listed in `docs/emulator-measurements.json` and should be remeasured on the final binaries before an acceptance decision.
 
 Compiler `.su` files report bounded, static frames and no application recursion. The report includes their sum as a deliberately conservative application-only stack bound. This is not a full stack high-water measurement. The OS and library call paths contribute additional stack usage.
 

@@ -294,14 +294,15 @@ static int random_below(uint32_t random, int range) {
 /* Initialize the block to the equilibrium A = 1, B = 0, then seed
  * INITIAL_DISKS disks at LCG-chosen display positions and radii. */
 void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
-  if (!memory || !mode_supported(mode) || bytes < rd_bytes(mode)) {
+  size_t required = rd_bytes(mode);
+  if (!memory || required == 0 || bytes < required) {
     return NULL;
   }
   /* Align up: the State starts at most STATE_ALIGNMENT - 1 bytes into the
    * block, and everything after it is exactly the other components. */
   State *state = (State *)(((uintptr_t)memory + STATE_ALIGNMENT - 1) &
                            ~(uintptr_t)(STATE_ALIGNMENT - 1));
-  memset(state, 0, rd_bytes(mode) - rd_memory(mode, RD_COMPONENT_ALIGNMENT));
+  memset(state, 0, required - (STATE_ALIGNMENT - 1));
   state->magic = STATE_MAGIC;
   state->seed = seed;
   state->width = grid_width(mode);

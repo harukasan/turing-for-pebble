@@ -16,3 +16,4 @@ npm run dev -- --host 127.0.0.1
 - [Core architecture and numerical contract](docs/core.md)
 - [Web and watchface behavior](docs/behavior.md)
 - [Validation results and remaining work](docs/validation.md)
+- [Float32 precision comparison](docs/float-precision.md)

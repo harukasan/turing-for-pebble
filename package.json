@@ -15,6 +15,8 @@
     "test": "node --experimental-transform-types --test lib/simulation.test.ts",
     "typecheck": "tsc --noEmit",
     "build:wasm": "sh scripts/build-wasm.sh",
+    "compare:float": "node --experimental-transform-types scripts/compare-float.mjs",
+    "test:optimization": "sh scripts/check-optimization.sh",
     "test:core": "sh scripts/test-core.sh",
     "build:pebble": "sh scripts/build-pebble.sh"
   },
