@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define PRESET_COUNT 4
+#define PRESET_COUNT 5
 
 int main(int argc, char **argv) {
   if (argc != 6) {
@@ -15,8 +15,8 @@ int main(int argc, char **argv) {
   }
   int mode = atoi(argv[1]), preset = atoi(argv[2]), count = atoi(argv[4]);
   uint32_t seed = (uint32_t)strtoul(argv[3], NULL, 10);
-  const int feeds[PRESET_COUNT] = {950, 1786, 1203, 1147};
-  const int kills[PRESET_COUNT] = {1868, 2032, 2127, 2130};
+  const int feeds[PRESET_COUNT] = {950, 1786, 1203, 1147, 754};
+  const int kills[PRESET_COUNT] = {1868, 2032, 2127, 2130, 1704};
   if (mode < 0 || mode > 2 || preset < 0 || preset >= PRESET_COUNT ||
       count < 1) {
     return 1;
@@ -56,9 +56,9 @@ int main(int argc, char **argv) {
     for (int x = 0; x < width; x++) {
       int value = rd_get(state, x, y, RD_SPECIES_B);
       previous[y * width + x] = value;
-      sum += value / (double)RD_Q15_ONE;
+      sum += value / (double)RD_VALUE_ONE;
       sum_squares +=
-          (value / (double)RD_Q15_ONE) * (value / (double)RD_Q15_ONE);
+          (value / (double)RD_VALUE_ONE) * (value / (double)RD_VALUE_ONE);
     }
   }
   uint32_t hash = rd_hash(state);

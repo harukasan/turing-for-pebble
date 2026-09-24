@@ -11,6 +11,7 @@ measurements = json.loads(Path('docs/emulator-measurements.json').read_text())[
     'measurements'
 ]
 for mode in [0, 1]:
+    core_bytes = next(c['coreBytes'] for c in r['comparisons'] if c['mode'] == mode)
     values = (
         subprocess.check_output(
             ['arm-none-eabi-size', f'build/pebble/mode-{mode}.elf'], text=True
@@ -33,12 +34,12 @@ for mode in [0, 1]:
             'dataBytes': data,
             'bssBytes': bss,
             'loadBytes': text + data + bss,
-            'coreDynamicBytes': 93647 if mode == 0 else 48047,
+            'coreDynamicBytes': core_bytes,
             'remainingBeforeOsAllocationsBytes': 131072
             - text
             - data
             - bss
-            - (93647 if mode == 0 else 48047),
+            - core_bytes,
             'stackFramesBytes': stack,
             'conservativeAppStackSumBytes': sum(stack.values()),
             'stackLimit': 'Nonrecursive app frames only. OS callbacks and library stack are additional, not measured.',

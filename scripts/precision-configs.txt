@@ -1,0 +1,55 @@
+# Candidates for scripts/precision-sweep.sh; see tests/precision.c for the
+# config syntax. Lines starting with # are skipped.
+
+# Version 1 baselines: 8-bit linear storage, stochastic rounding, Q15 arithmetic
+g=200,a=lin8,b=lin8,r=sto,i=q15
+g=100,a=lin8,b=lin8,r=sto,i=q15
+g=100,a=q15,b=q15,r=near,i=q15
+
+# Single techniques on the 200x228 8-bit baseline
+g=200,a=lin8,b=lin8,r=near,i=q15
+g=200,a=lin8,b=lin8,r=sto,i=exact
+g=200,a=lin8,b=lin8,r=ed1,i=q15
+g=200,a=lin8,b=lin8,r=fs,i=q15
+g=200,a=lin8,b=pow8:1.5,r=sto,i=q15
+g=200,a=lin8,b=pow8:2,r=sto,i=q15
+g=200,a=lin8,b=lin8@0.5,r=sto,i=q15
+
+# Bit reallocation inside 16 bits per cell
+g=200,a=lin7,b=lin9,r=sto,i=q15
+g=200,a=lin6,b=lin10,r=sto,i=q15
+g=200,a=lin7,b=pow9:2,r=sto,i=q15
+g=200,a=lin6,b=pow10:2,r=sto,i=q15
+
+# Combinations with error diffusion
+g=200,a=lin8,b=pow8:2,r=fs,i=q15
+g=200,a=lin7,b=lin9,r=fs,i=q15
+g=200,a=lin7,b=pow9:2,r=fs,i=q15
+g=200,a=lin6,b=pow10:2,r=fs,i=q15
+
+# Version 2 arithmetic with the core's closed-form codecs
+g=200,a=lin7,b=sqr9,r=fs,i=q20
+g=200,a=lin7,b=sqr9,r=fs,i=q24
+g=200,a=lin7,b=sqr9,r=fs,i=exact
+g=200,a=lin7,b=sqr9,r=ed1,i=q24
+g=200,a=lin7,b=sqr9,r=sto,i=q24
+g=200,a=lin7,b=lin9,r=fs,i=q24
+g=200,a=lin8,b=sqr8,r=fs,i=q24
+g=200,a=lin6,b=sqr10,r=fs,i=q24
+g=200,a=lin8,b=sqr10,r=fs,i=q24
+g=100,a=lin7,b=sqr9,r=fs,i=q24
+
+# Q15 storage with version 2 arithmetic
+g=100,a=q15,b=q15,r=near,i=q24
+g=100,a=q15,b=q15,r=sto,i=q24
+g=100,a=q15,b=q15,r=fs,i=q24
+g=200,a=q15,b=q15,r=near,i=q15
+g=200,a=q15,b=q15,r=fs,i=q24
+
+# Dithered rounding threshold of the error diffusion (d=8 is the core)
+g=200,a=lin7,b=sqr9,r=fs,i=q24,d=4
+g=200,a=lin7,b=sqr9,r=fs,i=q24,d=8
+g=200,a=lin7,b=sqr9,r=fs,i=q24,d=16
+g=100,a=lin7,b=sqr9,r=fs,i=q24,d=8
+g=100,a=q15,b=q15,r=fs,i=q24,d=8
+g=200,a=lin8,b=sqr10,r=fs,i=q24,d=8

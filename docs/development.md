@@ -55,7 +55,7 @@ The local URL is normally `http://localhost:3000/`. No deployment is required. T
 | `lint-py` / `format-py` | ruff 0.16.8 (mise)                                   | `scripts/*.py`                              |
 | `lint-sh` / `format-sh` | shellcheck 0.11.0 and shfmt 3.14.1 (mise)            | `scripts/*.sh`                              |
 
-`lint-c` runs `scripts/lint-c.sh`: a clang-format check, then `cc -fsyntax-only -Wall -Wextra -Werror` over `tests/core.c`, `core/rd.c` with `tests/compare.c`, and `pebble/src/c/core.c` with `RD_MODE` 0, 1, and 2 under C99 to mirror the watch build. `main.c` needs the SDK include tree, so it is only checked by `mise run build-pebble`, which compiles with the SDK's `-Werror`. Every other C build (`test-core`, `build-wasm`, `scripts/compare.py`) also passes `-Wall -Wextra`.
+`lint-c` runs `scripts/lint-c.sh`: a clang-format check, then `cc -fsyntax-only -Wall -Wextra -Werror` over `tests/core.c`, `tests/precision.c`, `core/rd.c` with `tests/compare.c`, and `pebble/src/c/core.c` with `RD_MODE` 0, 1, and 2 under C99 to mirror the watch build. `main.c` needs the SDK include tree, so it is only checked by `mise run build-pebble`, which compiles with the SDK's `-Werror`. Every other C build (`test-core`, `build-wasm`, `scripts/compare.py`) also passes `-Wall -Wextra`.
 
 ruff, shellcheck, and shfmt are installed by `mise install`. clang-format is not managed by mise. Install it from the system package manager. The `.clang-format` configuration needs clang-format 15 or newer for `InsertBraces`, and the sources were formatted with 22.1.8. Other major versions may place braces or blank lines slightly differently.
 
@@ -91,9 +91,18 @@ mise exec -- python scripts/compare.py
 mise exec -- python scripts/build-report.py
 ```
 
-`compare.py` runs 10,000 steps for the original four baseline presets, two seeds, and three modes. It creates PNGs and JSON under `public/reports/`. The newer thin-line preset is documented separately in `docs/behavior.md` and `public/reports/thin-lines.png`. The third mode is a diagnostic 100 × 114 / 8-bit configuration. It is not exposed as a production choice in the Web UI.
+`compare.py` runs 10,000 steps for the five presets, two seeds, and three modes. It creates PNGs and JSON under `public/reports/`, including `thin-lines.png` for the thin-line preset described in `docs/behavior.md`. The third mode is a diagnostic 100 × 114 / 8-bit configuration. It is not exposed as a production choice in the Web UI.
 
-The report builder reads ARM ELF section sizes and `.su` stack reports. Runtime measurements must retain their measured build and observation scope. Do not substitute theoretical remaining RAM for measured minimum free heap.
+The report builder reads ARM ELF section sizes and `.su` stack reports, so run `mise run build-pebble` first with `arm-none-eabi-size` from the SDK toolchain on `PATH`. Runtime measurements must retain their measured build and observation scope. Do not substitute theoretical remaining RAM for measured minimum free heap.
+
+## Storage precision experiment
+
+```sh
+sh scripts/precision-sweep.sh
+sh scripts/precision-sweep.sh 100 1000 3000
+```
+
+`tests/precision.c` is a self-contained candidate simulator that compares storage codes, rounding schemes, and arithmetic precision against the Float32 reference. `scripts/precision-configs.txt` lists the candidates and `scripts/precision-aggregate.mjs` prints the Markdown summary. The sweep uses every core and takes a few minutes. [Storage precision study](precision-optimization.md) records its results.
 
 ## Font provenance
 

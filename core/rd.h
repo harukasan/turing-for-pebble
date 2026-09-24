@@ -3,10 +3,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define RD_VERSION 1
+#define RD_VERSION 2
 
-/* Q15 fixed point: RD_Q15_ONE represents 1.0. */
+/* Coefficients (rd_params) are Q15 fixed point: RD_Q15_ONE represents 1.0. */
 #define RD_Q15_ONE 32768
+
+/* Concentrations (rd_get) are Q24 fixed point: RD_VALUE_ONE represents 1.0. */
+#define RD_VALUE_BITS 24
+#define RD_VALUE_ONE (1 << RD_VALUE_BITS)
 
 /* Display coordinate system shared by every mode. */
 #define RD_DISPLAY_WIDTH 200
@@ -31,7 +35,9 @@ enum {
 /* Palettes for rd_row. */
 enum { RD_PALETTE_LIME, RD_PALETTE_CYAN, RD_PALETTE_MONO };
 
-/* mode 0: 200x228/u8, mode 1: 100x114/u16, mode 2: diagnostic 100x114/u8 */
+/* mode 0: 200x228, one 16-bit word per cell (A 7-bit linear, B 9-bit
+ * square-root companded); mode 1: 100x114, one Q15 word per species;
+ * mode 2: diagnostic 100x114 with the packed 16-bit cells of mode 0. */
 size_t rd_bytes(int mode);
 size_t rd_memory(int mode, int component);
 void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed);

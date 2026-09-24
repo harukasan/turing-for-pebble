@@ -5,6 +5,7 @@ import { FloatSimulation } from '../lib/float-simulation.ts';
 globalThis.fetch = async () =>
   new Response(readFileSync('public/wasm/rd.wasm'));
 const api = await loadCore();
+const VALUE_ONE = 2 ** 24;
 const pixels = { data: new Uint8ClampedArray(200 * 228 * 4) };
 const params = { feed: 0.029, kill: 0.057, da: 1, db: 0.5, dt: 1 };
 assert.equal(effective(params).feed, 950 / 32768);
@@ -41,11 +42,11 @@ for (const [mode, width] of [
       if (mode === 1) {
         assert.equal(
           reference.field.a[index],
-          api.rd_get(state, x, y, 0) / 32768,
+          api.rd_get(state, x, y, 0) / VALUE_ONE,
         );
         assert.equal(
           reference.field.b[index],
-          api.rd_get(state, x, y, 1) / 32768,
+          api.rd_get(state, x, y, 1) / VALUE_ONE,
         );
       }
     }
@@ -57,7 +58,7 @@ for (const [mode, width] of [
         const index = y * width + x;
         assert.equal(
           reference.field.b[index],
-          api.rd_get(state, x, y, 1) / 32768,
+          api.rd_get(state, x, y, 1) / VALUE_ONE,
         );
       }
   reference.step(params);

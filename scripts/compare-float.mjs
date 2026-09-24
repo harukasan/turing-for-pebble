@@ -16,6 +16,7 @@ const api = instance.exports;
 const seeds = [42, 1234];
 const checkpoints = [0, 1, 10, 100, 1000];
 const requestedBase = { da: 1, db: 0.5, dt: 1 };
+const VALUE_ONE = 2 ** 24;
 const q15 = (value) => Math.round(value * 32768);
 const effective = (value) => q15(value) / 32768;
 
@@ -37,7 +38,7 @@ function metrics(reference, state, width, height) {
       for (let x = 0; x < width; x++) {
         const index = y * width + x;
         const float = values[index];
-        const fixed = api.rd_get(state, x, y, kind) / 32768;
+        const fixed = api.rd_get(state, x, y, kind) / VALUE_ONE;
         assert(Number.isFinite(float) && Number.isFinite(fixed));
         const difference = Math.abs(float - fixed);
         absolute += difference;
@@ -105,8 +106,8 @@ for (const mode of [0, 1, 2]) {
       for (let y = 0; y < height; y++)
         for (let x = 0; x < width; x++) {
           const index = y * width + x;
-          reference.a[index] = api.rd_get(state, x, y, 0) / 32768;
-          reference.b[index] = api.rd_get(state, x, y, 1) / 32768;
+          reference.a[index] = api.rd_get(state, x, y, 0) / VALUE_ONE;
+          reference.b[index] = api.rd_get(state, x, y, 1) / VALUE_ONE;
         }
       let previous = 0;
       const samples = [];
@@ -143,7 +144,7 @@ for (const mode of [0, 1, 2]) {
 }
 const report = {
   source: 'public/wasm/rd.wasm versus lib/simulation.ts',
-  coreVersion: 1,
+  coreVersion: 2,
   checkpoints,
   method:
     'Float32 fields start from rd_get Q15 values, use the same grid and Q15-effective parameters, and run the existing Float32 Euler step. Each concentration is compared cell by cell. Mode 2 isolates storage precision at 100x114.',

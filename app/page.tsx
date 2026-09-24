@@ -344,13 +344,14 @@ export default function Home() {
   }, []);
   const settings = {
     model: 'Gray-Scott',
-    version: 1,
+    version: 2,
     method: engine,
-    rounding: floatMode
-      ? 'float32-storage'
+    rounding: floatMode ? 'float32-storage' : 'floyd-steinberg-dithered',
+    storage: floatMode
+      ? 'float32'
       : engine === 'u8-200'
-        ? 'stochastic'
-        : 'nearest-away',
+        ? 'packed-a7-linear-b9-sqrt'
+        : 'q15',
     effective: floatMode ? params : effective(params),
     ...params,
     width,
@@ -374,7 +375,7 @@ export default function Home() {
     a.download = `turing-${seed}-${stats.steps}.${kind}`;
     if (kind === 'h') {
       const q = effective(params);
-      const text = `/* Generated configuration, core v1 */\n#ifndef RD_MODE\n#define RD_MODE ${engine === 'u8-200' ? 0 : 1}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === 'green' ? 0 : palette === 'blue' ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n`;
+      const text = `/* Generated configuration, core v2 */\n#ifndef RD_MODE\n#define RD_MODE ${engine === 'u8-200' ? 0 : 1}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === 'green' ? 0 : palette === 'blue' ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n`;
       const url = URL.createObjectURL(new Blob([text]));
       a.href = url;
       a.download = 'config.h';
@@ -695,9 +696,9 @@ export default function Home() {
               label="計算実装"
               value={engine}
               options={[
-                ['u8-200', 'Wasm 8bit / 200 × 228'],
+                ['u8-200', 'Wasm A7+B9 / 200 × 228'],
                 ['float-200', 'Float32 / 200 × 228'],
-                ['q15-100', 'Wasm 16bit / 100 × 114'],
+                ['q15-100', 'Wasm Q15 / 100 × 114'],
                 ['float-100', 'Float32 / 100 × 114'],
               ]}
               onChange={(value) => setEngine(value as Engine)}

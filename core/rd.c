@@ -1,24 +1,29 @@
 /*
- * Shared Gray-Scott reaction-diffusion core.
+ * Shared Gray-Scott reaction-diffusion core, numerical definition version 2.
  *
- * Concentrations and coefficients are Q15 fixed point (RD_Q15_ONE is 1.0).
- * Mode 1 stores Q15 values directly as 16-bit. Modes 0 and 2 store 8-bit
- * values with stochastic rounding. docs/core.md is the numerical contract.
+ * Concentrations are computed in Q24 fixed point (RD_VALUE_ONE is 1.0) and
+ * coefficients are Q15 (RD_Q15_ONE is 1.0). Modes 0 and 2 pack both species
+ * into one 16-bit word per cell: A as a 7-bit linear code and B as a 9-bit
+ * square-root companded code. Mode 1 stores each species as a Q15 word.
+ * Every mode writes with Floyd-Steinberg error diffusion, so the rounding
+ * error of each cell is carried into its unwritten neighbors instead of being
+ * discarded, and a dithered rounding threshold keeps slow fronts from being
+ * pinned by the codes. docs/core.md is the numerical contract.
  */
 #include "rd.h"
 #include <string.h>
 
-/* Bits per stored value for each mode. */
-#define MODE_BITS(mode) ((mode) == 1 ? 16 : 8)
+/* 16-bit planes per cell: one packed word, or one Q15 word per species. */
+#define MODE_PLANES(mode) ((mode) == 1 ? 2 : 1)
 
-/* 'R', 'D', '1', 0x01: marks an initialized State. */
-#define STATE_MAGIC 0x52443101u
+/* 'R', 'D', '1', 0x02: marks an initialized State. */
+#define STATE_MAGIC 0x52443102u
 /* The State is placed on the first 4-byte boundary inside the caller block. */
 #define STATE_ALIGNMENT 4
 
 #define SPECIES_COUNT 2
-/* Saved rows per species: previous, current, next, and original first row. */
-#define ROW_BUFFERS_PER_SPECIES 4
+/* Decoded rows per species: previous, current, next, and original first row. */
+#define SAVED_ROWS 4
 #define BYTES_PER_PIXEL 4
 
 /* Coefficients applied by rd_init until rd_params is called (Q15). */
@@ -33,19 +38,56 @@
 #define LCG_MULTIPLIER 1664525u
 #define LCG_INCREMENT 1013904223u
 
-/* Stored values written by rd_init and rd_seed. These are exact constants and
- * never go through the stochastic rounding of q15_to_stored. */
-#define FULL_BYTE 255
-#define SEED_A_BYTE 128
-#define SEED_B_BYTE 64
-#define SEED_A_Q15 (RD_Q15_ONE / 2)
-#define SEED_B_Q15 (RD_Q15_ONE / 4)
+/* Packed cell: A occupies the high A_BITS of the word, B the low B_BITS. */
+#define A_BITS 7
+#define B_BITS 9
+/* Linear A: value = code * RD_VALUE_ONE / A_CODE_MAX, code A_CODE_MAX is 1. */
+#define A_CODE_MAX ((1 << A_BITS) - 1)
+/* Companded B: value = code * code << B_SHIFT, so B_CODE_MAX is just below 1
+ * and the code spacing grows with the square root of the concentration. */
+#define B_CODE_MAX ((1 << B_BITS) - 1)
+#define B_SHIFT (RD_VALUE_BITS - 2 * B_BITS)
+#define B_VALUE_MAX ((B_CODE_MAX * B_CODE_MAX) << B_SHIFT)
+
+/* Q15 storage: value = code << Q15_SHIFT. */
+#define Q15_SHIFT (RD_VALUE_BITS - 15)
+#define Q15_CODE_MAX RD_Q15_ONE
+
+/* Seed concentrations A = 0.5 and B = 0.25, as codes of each storage. Codes
+ * are written directly, without error diffusion. */
+#define PACKED_FULL_A A_CODE_MAX
+#define PACKED_SEED_A 64  /* nearest 7-bit code to 0.5 */
+#define PACKED_SEED_B 256 /* (256 / 512)^2 is exactly 0.25 */
+#define Q15_FULL_A RD_Q15_ONE
+#define Q15_SEED_A (RD_Q15_ONE / 2)
+#define Q15_SEED_B (RD_Q15_ONE / 4)
 
 #define MAX_STEPS_PER_CALL 1000000
 
 /* Nine-point Laplacian: (4 * axial_sum + diagonal_sum - 20 * center) / 20. */
 #define LAPLACIAN_AXIAL_WEIGHT 4
 #define LAPLACIAN_SCALE 20
+
+/* Floyd-Steinberg error diffusion weights, in sixteenths: right, below left,
+ * below, and the remainder below right. */
+#define DIFFUSION_RIGHT 7
+#define DIFFUSION_BELOW_LEFT 3
+#define DIFFUSION_BELOW 5
+#define DIFFUSION_DENOMINATOR 16
+
+/* Rounding threshold dither: a cell rounds up to the next code when its
+ * fraction of the code step is at least (DITHER_BASE + random) /
+ * DITHER_SCALE, with random in [0, 2^DITHER_BITS), so the threshold is
+ * spread uniformly over [1/4, 3/4). */
+#define DITHER_BITS 15
+#define DITHER_BASE (1 << (DITHER_BITS - 1))
+#define DITHER_SCALE (1 << (DITHER_BITS + 1))
+#define DITHER_MASK ((1u << DITHER_BITS) - 1)
+/* The B random value is taken from the upper half of the 32-bit hash. */
+#define DITHER_B_SHIFT 16
+
+/* Bits dropped from a Q54 product to reach Q24: dt (Q15) times a Q39 rate. */
+#define RATE_SHIFT (2 * 15)
 
 /* FNV-1a parameters for rd_hash. */
 #define FNV_OFFSET_BASIS 2166136261u
@@ -59,9 +101,6 @@
 #define MONO_THRESHOLD_PERCENT 45
 #define RGB2_STEP 85
 
-/* Salt mixed into the stochastic rounding, indexed by species. */
-static const uint32_t SPECIES_SALT[SPECIES_COUNT] = {0x63d83595u, 0xa511e9b3u};
-
 /* Palette endpoints, RGB per palette, at intensity 0 and intensity 1.0. */
 static const int PALETTE_LOW[3][3] = {{0, 30, 18}, {0, 0, 45}, {0, 0, 0}};
 static const int PALETTE_HIGH[3][3] = {
@@ -71,16 +110,25 @@ static const int PALETTE_HIGH[3][3] = {
  * Control structure at the start of the aligned block. The caller block is
  * laid out as:
  *
- *   [<= 3 bytes padding][State][plane A][plane B]
- *   [row buffers A: prev, cur, next, first][row buffers B: same]
+ *   [<= 3 bytes padding][State][plane 0][plane 1, mode 1 only]
+ *   [saved rows: SAVED_ROWS x SPECIES_COUNT x width int32]
+ *   [residual rows: SPECIES_COUNT x width int32]
  *   [output row, RD_ROW_BYTES]
  *
  * rd_memory reports the same bytes as an accounting breakdown by component,
- * which is not the physical order.
+ * which is not the physical order. Row buffers cover the saved rows and the
+ * residual rows.
  */
 typedef struct {
   uint32_t magic, seed, step;
-  int width, height, bits, feed, kill, da, db, dt;
+  /* Hash of seed and step, mixed into every cell's dither during a step. */
+  uint32_t step_salt;
+  int width, height, packed, feed, kill, da, db, dt;
+  /* Error diffusion shares held between cells of the row being written:
+   * the right share of the previous cell, the below-right share pending for
+   * the next column, and the below-left share of column 0 that wraps to the
+   * last column. */
+  int32_t carry[SPECIES_COUNT], pending[SPECIES_COUNT], wrap[SPECIES_COUNT];
 } State;
 
 static int mode_supported(int mode) {
@@ -99,15 +147,19 @@ static int grid_height(int width) {
   return width * RD_DISPLAY_HEIGHT / RD_DISPLAY_WIDTH;
 }
 
-/* Bits per stored value. A Pebble build fixes the mode at compile time, so
- * this folds to a constant there. */
-static inline int storage_bits(const State *state) {
+/* Whether both species share one packed word. A Pebble build fixes the mode
+ * at compile time, so this folds to a constant there. */
+static inline int is_packed(const State *state) {
 #ifdef RD_MODE
   (void)state;
-  return MODE_BITS(RD_MODE);
+  return MODE_PLANES(RD_MODE) == 1;
 #else
-  return state->bits;
+  return state->packed;
 #endif
+}
+
+static inline int planes(const State *state) {
+  return is_packed(state) ? 1 : SPECIES_COUNT;
 }
 
 size_t rd_memory(int mode, int component) {
@@ -116,13 +168,11 @@ size_t rd_memory(int mode, int component) {
   }
   int width = grid_width(mode);
   int height = grid_height(width);
-  size_t bytes_per_value = MODE_BITS(mode) / 8;
   switch (component) {
   case RD_COMPONENT_FIELDS:
-    return (size_t)width * height * SPECIES_COUNT * bytes_per_value;
+    return (size_t)width * height * MODE_PLANES(mode) * sizeof(uint16_t);
   case RD_COMPONENT_ROW_BUFFERS:
-    return (size_t)width * SPECIES_COUNT * ROW_BUFFERS_PER_SPECIES *
-           bytes_per_value;
+    return (size_t)width * SPECIES_COUNT * (SAVED_ROWS + 1) * sizeof(int32_t);
   case RD_COMPONENT_CONTROL:
     return sizeof(State);
   case RD_COMPONENT_OUTPUT_ROW:
@@ -142,57 +192,53 @@ size_t rd_bytes(int mode) {
   return total;
 }
 
-/* Concentration plane of one species, immediately after the State. */
-static uint8_t *species_field(State *state, int species) {
-  return (uint8_t *)(state + 1) + (size_t)species * state->width *
-                                      state->height * (storage_bits(state) / 8);
+/* Stored plane: the packed plane, or plane `species` in mode 1. */
+static uint16_t *plane(State *state, int index) {
+  return (uint16_t *)(state + 1) + (size_t)index * state->width * state->height;
 }
 
-/* Saved rows for both species, after the two planes. */
-static uint8_t *row_buffers(State *state) {
-  return species_field(state, SPECIES_COUNT);
+/* Decoded Q24 rows, after the planes: SAVED_ROWS rows per species. */
+static int32_t *saved_rows(State *state) {
+  return (int32_t *)plane(state, planes(state));
 }
 
-/* RGBA output row, after the row buffers. */
+/* Error diffusion residual row of one species, after the saved rows. */
+static int32_t *residual_row(State *state, int species) {
+  return saved_rows(state) +
+         (SAVED_ROWS * SPECIES_COUNT + species) * state->width;
+}
+
+/* RGBA output row, after the residual rows. */
 static uint8_t *output_row(State *state) {
-  return row_buffers(state) + SPECIES_COUNT * ROW_BUFFERS_PER_SPECIES *
-                                  state->width * (storage_bits(state) / 8);
+  return (uint8_t *)residual_row(state, SPECIES_COUNT);
 }
 
-static int load_stored(State *state, const uint8_t *plane, int cell_index) {
-  return storage_bits(state) == 8 ? plane[cell_index]
-                                  : ((const uint16_t *)plane)[cell_index];
+/* Round a value to the nearest multiple of 2^bits, halfway values away from
+ * zero, and drop those bits. */
+static int64_t round_shift(int64_t value, int bits) {
+  int64_t half = (int64_t)1 << (bits - 1);
+  return value < 0 ? -((-value + half) >> bits) : (value + half) >> bits;
 }
 
-static void store(State *state, uint8_t *plane, int cell_index, int value) {
-  if (storage_bits(state) == 8) {
-    plane[cell_index] = (uint8_t)value;
-  } else {
-    ((uint16_t *)plane)[cell_index] = (uint16_t)value;
+/* Integer square root of a value below 2^18, rounded down. */
+static uint32_t isqrt(uint32_t value) {
+  uint32_t result = 0, bit = 1u << 16;
+  while (bit > value) {
+    bit >>= 2;
   }
+  while (bit) {
+    if (value >= result + bit) {
+      value -= result + bit;
+      result = (result >> 1) + bit;
+    } else {
+      result >>= 1;
+    }
+    bit >>= 2;
+  }
+  return result;
 }
 
-/* Reading expands 8-bit storage to Q15. */
-static int stored_to_q15(State *state, int value) {
-  return storage_bits(state) == 8
-             ? (value * RD_Q15_ONE + FULL_BYTE / 2) / FULL_BYTE
-             : value;
-}
-
-/* Read one cell of a plane as Q15. */
-static int load_q15(State *state, const uint8_t *plane, int cell_index) {
-  return stored_to_q15(state, load_stored(state, plane, cell_index));
-}
-
-/* Round a Q15 product to nearest, with halfway values away from zero. */
-static int round_q15(int64_t value) {
-  return value < 0 ? -(int)((-value + RD_Q15_ONE / 2) / RD_Q15_ONE)
-                   : (int)((value + RD_Q15_ONE / 2) / RD_Q15_ONE);
-}
-
-static int mul_q15(int a, int b) { return round_q15((int64_t)a * b); }
-
-/* 32-bit integer mixing function (lowbias32) for stochastic rounding. */
+/* 32-bit integer mixing function (lowbias32) for the rounding dither. */
 static uint32_t mix32(uint32_t value) {
   value ^= value >> 16;
   value *= 0x7feb352du;
@@ -201,25 +247,97 @@ static uint32_t mix32(uint32_t value) {
   return value ^ (value >> 16);
 }
 
-/* Writing clamps to [0, 1.0]. For 8-bit storage the value is scaled by 255
- * and the remaining fraction is rounded stochastically, using a hash of the
- * seed, the linear cell coordinate, the step counter, and the species. */
-static int q15_to_stored(State *state, int value, int cell_index, int species) {
-  if (value < 0) {
-    value = 0;
+/* Decoding a code of each storage to Q24. */
+static int32_t decode_a(unsigned code) {
+  return (int32_t)((((uint32_t)code << RD_VALUE_BITS) + A_CODE_MAX / 2) /
+                   A_CODE_MAX);
+}
+
+static int32_t decode_b(unsigned code) {
+  return (int32_t)(code * code) << B_SHIFT;
+}
+
+static int32_t decode_q15(unsigned code) { return (int32_t)code << Q15_SHIFT; }
+
+/* The largest code whose decoded value is at most the Q24 value, which must
+ * be within [0, largest decoded value]. */
+static unsigned floor_a(int32_t value) {
+  unsigned code = ((uint32_t)value * A_CODE_MAX) >> RD_VALUE_BITS;
+  /* The product truncates before the decode rounds, so the next code can
+   * still decode within value. */
+  if (code < A_CODE_MAX && decode_a(code + 1) <= value) {
+    code++;
   }
-  if (value > RD_Q15_ONE) {
-    value = RD_Q15_ONE;
+  return code;
+}
+
+static unsigned floor_b(int32_t value) {
+  return isqrt((uint32_t)value >> B_SHIFT);
+}
+
+static unsigned floor_q15(int32_t value) {
+  return (unsigned)value >> Q15_SHIFT;
+}
+
+/* Largest code and value of one species. */
+static unsigned code_limit(const State *state, int species) {
+  if (!is_packed(state)) {
+    return Q15_CODE_MAX;
   }
-  if (storage_bits(state) == 16) {
-    return value;
+  return species == RD_SPECIES_A ? A_CODE_MAX : B_CODE_MAX;
+}
+
+static int32_t value_limit(const State *state, int species) {
+  return is_packed(state) && species == RD_SPECIES_B ? B_VALUE_MAX
+                                                     : RD_VALUE_ONE;
+}
+
+static int32_t decode(const State *state, int species, unsigned code) {
+  if (!is_packed(state)) {
+    return decode_q15(code);
   }
-  uint32_t scaled = (uint32_t)value * FULL_BYTE;
-  uint32_t random_bits = mix32(state->seed ^ mix32((uint32_t)cell_index) ^
-                               mix32(state->step) ^ SPECIES_SALT[species]);
-  uint32_t fraction = scaled % RD_Q15_ONE;
-  return (int)(scaled / RD_Q15_ONE) +
-         ((random_bits & (RD_Q15_ONE - 1)) < fraction);
+  return species == RD_SPECIES_A ? decode_a(code) : decode_b(code);
+}
+
+static unsigned floor_code(const State *state, int species, int32_t value) {
+  if (!is_packed(state)) {
+    return floor_q15(value);
+  }
+  return species == RD_SPECIES_A ? floor_a(value) : floor_b(value);
+}
+
+/* Read the codes of one cell. */
+static void load_codes(State *state, int cell_index, unsigned *code_a,
+                       unsigned *code_b) {
+  if (is_packed(state)) {
+    unsigned word = plane(state, 0)[cell_index];
+    *code_a = word >> B_BITS;
+    *code_b = word & B_CODE_MAX;
+  } else {
+    *code_a = plane(state, RD_SPECIES_A)[cell_index];
+    *code_b = plane(state, RD_SPECIES_B)[cell_index];
+  }
+}
+
+/* Write the codes of one cell. */
+static void store_codes(State *state, int cell_index, unsigned code_a,
+                        unsigned code_b) {
+  if (is_packed(state)) {
+    plane(state, 0)[cell_index] = (uint16_t)((code_a << B_BITS) | code_b);
+  } else {
+    plane(state, RD_SPECIES_A)[cell_index] = (uint16_t)code_a;
+    plane(state, RD_SPECIES_B)[cell_index] = (uint16_t)code_b;
+  }
+}
+
+/* Decode a stored row into Q24 rows of both species. */
+static void decode_row(State *state, int y, int32_t *row_a, int32_t *row_b) {
+  for (int x = 0; x < state->width; x++) {
+    unsigned code_a, code_b;
+    load_codes(state, y * state->width + x, &code_a, &code_b);
+    row_a[x] = decode(state, RD_SPECIES_A, code_a);
+    row_b[x] = decode(state, RD_SPECIES_B, code_b);
+  }
 }
 
 /* The State behind a public handle, or NULL if it is not initialized. */
@@ -262,7 +380,7 @@ int rd_seed(void *handle, int x, int y, int radius) {
       y >= RD_DISPLAY_HEIGHT || radius < 1 || radius > MAX_SEED_RADIUS) {
     return -1;
   }
-  int eight_bit = storage_bits(state) == 8;
+  int packed = is_packed(state);
   for (int grid_y = 0; grid_y < state->height; grid_y++) {
     for (int grid_x = 0; grid_x < state->width; grid_x++) {
       int display_x = grid_x * RD_DISPLAY_WIDTH / state->width;
@@ -270,11 +388,9 @@ int rd_seed(void *handle, int x, int y, int radius) {
       int dx = wrap_delta(display_x - x, RD_DISPLAY_WIDTH);
       int dy = wrap_delta(display_y - y, RD_DISPLAY_HEIGHT);
       if (dx * dx + dy * dy <= radius * radius) {
-        int cell_index = grid_y * state->width + grid_x;
-        store(state, species_field(state, RD_SPECIES_A), cell_index,
-              eight_bit ? SEED_A_BYTE : SEED_A_Q15);
-        store(state, species_field(state, RD_SPECIES_B), cell_index,
-              eight_bit ? SEED_B_BYTE : SEED_B_Q15);
+        store_codes(state, grid_y * state->width + grid_x,
+                    packed ? PACKED_SEED_A : Q15_SEED_A,
+                    packed ? PACKED_SEED_B : Q15_SEED_B);
       }
     }
   }
@@ -307,13 +423,11 @@ void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
   state->seed = seed;
   state->width = grid_width(mode);
   state->height = grid_height(state->width);
-  state->bits = MODE_BITS(mode);
+  state->packed = MODE_PLANES(mode) == 1;
   rd_params(state, DEFAULT_FEED, DEFAULT_KILL, RD_Q15_ONE, RD_Q15_ONE / 2,
             RD_Q15_ONE);
-  int eight_bit = storage_bits(state) == 8;
   for (int i = 0; i < state->width * state->height; i++) {
-    store(state, species_field(state, RD_SPECIES_A), i,
-          eight_bit ? FULL_BYTE : RD_Q15_ONE);
+    store_codes(state, i, is_packed(state) ? PACKED_FULL_A : Q15_FULL_A, 0);
   }
   uint32_t lcg = seed;
   for (int i = 0; i < INITIAL_DISKS; i++) {
@@ -326,89 +440,160 @@ void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
   return state;
 }
 
-/* Nine-point Laplacian of one species at column x, from the saved rows above,
- * at, and below the current row. The exact rational weights keep a uniform
- * field (including A = 1) exactly uniform. */
-static int laplacian(State *state, const uint8_t *up, const uint8_t *cur,
-                     const uint8_t *down, int x) {
-  int left = (x + state->width - 1) % state->width;
-  int right = (x + 1) % state->width;
-  int axial_sum = load_q15(state, cur, left) + load_q15(state, cur, right) +
-                  load_q15(state, up, x) + load_q15(state, down, x);
-  int diagonal_sum = load_q15(state, up, left) + load_q15(state, up, right) +
-                     load_q15(state, down, left) + load_q15(state, down, right);
-  int value = LAPLACIAN_AXIAL_WEIGHT * axial_sum + diagonal_sum -
-              LAPLACIAN_SCALE * load_q15(state, cur, x);
+/* Nine-point Laplacian of one species at column x from the decoded rows
+ * above, at, and below the current row. The exact rational weights keep a
+ * uniform field (including A = 1) exactly uniform. */
+static int32_t laplacian(const int32_t *up, const int32_t *cur,
+                         const int32_t *down, int x, int width) {
+  int left = (x + width - 1) % width;
+  int right = (x + 1) % width;
+  int32_t axial_sum = cur[left] + cur[right] + up[x] + down[x];
+  int32_t diagonal_sum = up[left] + up[right] + down[left] + down[right];
+  int32_t value = LAPLACIAN_AXIAL_WEIGHT * axial_sum + diagonal_sum -
+                  LAPLACIAN_SCALE * cur[x];
   return value < 0 ? -((-value + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE)
                    : (value + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE;
 }
 
-/* One explicit Euler step of the Gray-Scott update for a single cell:
- *   A' = clamp(A + dt * (Da * lap(A) - A * B^2 + feed * (1 - A)))
- *   B' = clamp(B + dt * (Db * lap(B) + A * B^2 - (feed + kill) * B))
- * The results are written in stored form to *next_a and *next_b. */
-static void react_cell(State *state, int cell_index, int a, int b, int lap_a,
-                       int lap_b, int *next_a, int *next_b) {
-  int reaction = mul_q15(mul_q15(a, b), b);
-  *next_a = q15_to_stored(state,
-                          a + mul_q15(mul_q15(state->da, lap_a) - reaction +
-                                          mul_q15(state->feed, RD_Q15_ONE - a),
-                                      state->dt),
-                          cell_index, RD_SPECIES_A);
-  *next_b = q15_to_stored(state,
-                          b + mul_q15(mul_q15(state->db, lap_b) + reaction -
-                                          mul_q15(state->kill + state->feed, b),
-                                      state->dt),
-                          cell_index, RD_SPECIES_B);
+/* One explicit Euler step of the Gray-Scott update for a single cell, from
+ * and to Q24 concentrations, before clamping:
+ *   A' = A + dt * (Da * lap(A) - A * B^2 + feed * (1 - A))
+ *   B' = B + dt * (Db * lap(B) + A * B^2 - (feed + kill) * B)
+ * Rates are accumulated as Q39 (Q15 coefficient times Q24 concentration)
+ * and rounded once after the dt product. */
+static void react_cell(const State *state, int32_t a, int32_t b, int32_t lap_a,
+                       int32_t lap_b, int32_t *next_a, int32_t *next_b) {
+  int64_t ab = round_shift((int64_t)a * b, RD_VALUE_BITS);
+  int64_t reaction = round_shift(ab * b, RD_VALUE_BITS) << 15;
+  int64_t rate_a = (int64_t)state->da * lap_a - reaction +
+                   (int64_t)state->feed * (RD_VALUE_ONE - a);
+  int64_t rate_b = (int64_t)state->db * lap_b + reaction -
+                   (int64_t)(state->kill + state->feed) * b;
+  *next_a = a + (int32_t)round_shift(rate_a * state->dt, RATE_SHIFT);
+  *next_b = b + (int32_t)round_shift(rate_b * state->dt, RATE_SHIFT);
 }
 
-/* Advance the field in place. Each species keeps four saved rows so that
+/* Reset the shares held between cells and derive the dither salt before a
+ * step. The residual rows themselves persist: after the last row they hold
+ * the shares for row 0 of the next step. */
+static void begin_step(State *state) {
+  for (int species = 0; species < SPECIES_COUNT; species++) {
+    state->carry[species] = state->pending[species] = state->wrap[species] = 0;
+  }
+  state->step_salt = mix32(state->seed ^ mix32(state->step));
+}
+
+/* Dither bits of one cell: the low DITHER_BITS are for A and the bits from
+ * DITHER_B_SHIFT for B. */
+static uint32_t cell_dither(const State *state, int cell_index) {
+  return mix32((uint32_t)cell_index ^ state->step_salt);
+}
+
+/* Encode the value of one species at column x of the row being written,
+ * with Floyd-Steinberg error diffusion and a dithered rounding threshold
+ * from random, in [0, 2^DITHER_BITS). The residual row holds the shares
+ * this row received from the row above; each column is consumed and then
+ * reused for the shares given to the row below. Cells are encoded in row
+ * order, each row from column 0 up, with finish_row after each row. */
+static unsigned encode_cell(State *state, int species, int x, int32_t value,
+                            uint32_t random) {
+  int32_t *residual = residual_row(state, species);
+  value += residual[x] + state->carry[species];
+  int32_t limit = value_limit(state, species);
+  if (value < 0) {
+    value = 0;
+  }
+  if (value > limit) {
+    value = limit;
+  }
+  unsigned code = floor_code(state, species, value);
+  if (code < code_limit(state, species)) {
+    int32_t low = decode(state, species, code);
+    int32_t high = decode(state, species, code + 1);
+    if ((int64_t)(value - low) * DITHER_SCALE >=
+        (int64_t)(high - low) * (DITHER_BASE + (int32_t)random)) {
+      code++;
+    }
+  }
+  int32_t error = value - decode(state, species, code);
+  int32_t right = error * DIFFUSION_RIGHT / DIFFUSION_DENOMINATOR;
+  int32_t below_left = error * DIFFUSION_BELOW_LEFT / DIFFUSION_DENOMINATOR;
+  int32_t below = error * DIFFUSION_BELOW / DIFFUSION_DENOMINATOR;
+  state->carry[species] = right;
+  residual[x] = state->pending[species] + below;
+  if (x > 0) {
+    residual[x - 1] += below_left;
+  } else {
+    state->wrap[species] = below_left;
+  }
+  state->pending[species] = error - right - below_left - below;
+  return code;
+}
+
+/* Deliver the shares that wrapped around the periodic row ends. The right
+ * share of the last column carries into column 0 of the next row. */
+static void finish_row(State *state) {
+  for (int species = 0; species < SPECIES_COUNT; species++) {
+    int32_t *residual = residual_row(state, species);
+    residual[state->width - 1] += state->wrap[species];
+    residual[0] += state->pending[species];
+    state->wrap[species] = state->pending[species] = 0;
+  }
+}
+
+/* Advance the field in place. Each species keeps four decoded rows so that
  * neighbors still see the old values of rows that were already rewritten. */
 int rd_step(void *handle, int count) {
   State *state = checked_state(handle);
   if (!state || count < 0 || count > MAX_STEPS_PER_CALL) {
     return -1;
   }
-  int row_bytes = state->width * (storage_bits(state) / 8);
-  uint8_t *buffers = row_buffers(state);
+  int width = state->width, height = state->height;
+  size_t row_bytes = (size_t)width * sizeof(int32_t);
+  int32_t *rows = saved_rows(state);
   for (int iteration = 0; iteration < count; iteration++) {
     /* prev, cur, and next hold the old rows above, at, and below the row
      * being updated. first keeps the original row 0, which is the periodic
      * neighbor below the last row after row 0 has been rewritten. */
-    uint8_t *prev[SPECIES_COUNT], *cur[SPECIES_COUNT], *next[SPECIES_COUNT],
+    int32_t *prev[SPECIES_COUNT], *cur[SPECIES_COUNT], *next[SPECIES_COUNT],
         *first[SPECIES_COUNT];
     for (int species = 0; species < SPECIES_COUNT; species++) {
-      prev[species] = buffers + species * ROW_BUFFERS_PER_SPECIES * row_bytes;
-      cur[species] = prev[species] + row_bytes;
-      next[species] = cur[species] + row_bytes;
-      first[species] = next[species] + row_bytes;
-      memcpy(prev[species],
-             species_field(state, species) + (state->height - 1) * row_bytes,
-             row_bytes);
-      memcpy(cur[species], species_field(state, species), row_bytes);
-      memcpy(first[species], cur[species], row_bytes);
+      prev[species] = rows + (0 * SPECIES_COUNT + species) * width;
+      cur[species] = rows + (1 * SPECIES_COUNT + species) * width;
+      next[species] = rows + (2 * SPECIES_COUNT + species) * width;
+      first[species] = rows + (3 * SPECIES_COUNT + species) * width;
     }
-    for (int y = 0; y < state->height; y++) {
-      for (int species = 0; species < SPECIES_COUNT; species++) {
-        memcpy(next[species],
-               y == state->height - 1
-                   ? first[species]
-                   : species_field(state, species) + (y + 1) * row_bytes,
-               row_bytes);
+    decode_row(state, height - 1, prev[0], prev[1]);
+    decode_row(state, 0, cur[0], cur[1]);
+    memcpy(first[0], cur[0], row_bytes);
+    memcpy(first[1], cur[1], row_bytes);
+    begin_step(state);
+    for (int y = 0; y < height; y++) {
+      if (y == height - 1) {
+        memcpy(next[0], first[0], row_bytes);
+        memcpy(next[1], first[1], row_bytes);
+      } else {
+        decode_row(state, y + 1, next[0], next[1]);
       }
-      for (int x = 0; x < state->width; x++) {
-        int a, b, cell_index = y * state->width + x;
-        react_cell(state, cell_index, load_q15(state, cur[0], x),
-                   load_q15(state, cur[1], x),
-                   laplacian(state, prev[0], cur[0], next[0], x),
-                   laplacian(state, prev[1], cur[1], next[1], x), &a, &b);
-        store(state, species_field(state, RD_SPECIES_A), cell_index, a);
-        store(state, species_field(state, RD_SPECIES_B), cell_index, b);
+      for (int x = 0; x < width; x++) {
+        int32_t next_a, next_b;
+        int cell_index = y * width + x;
+        uint32_t dither = cell_dither(state, cell_index);
+        react_cell(state, cur[0][x], cur[1][x],
+                   laplacian(prev[0], cur[0], next[0], x, width),
+                   laplacian(prev[1], cur[1], next[1], x, width), &next_a,
+                   &next_b);
+        store_codes(
+            state, cell_index,
+            encode_cell(state, RD_SPECIES_A, x, next_a, dither & DITHER_MASK),
+            encode_cell(state, RD_SPECIES_B, x, next_b,
+                        (dither >> DITHER_B_SHIFT) & DITHER_MASK));
       }
+      finish_row(state);
       /* Rotate: the row just finished becomes the row above, and the buffer
        * that held the old row above is reused for the next row below. */
       for (int species = 0; species < SPECIES_COUNT; species++) {
-        uint8_t *tmp = prev[species];
+        int32_t *tmp = prev[species];
         prev[species] = cur[species];
         cur[species] = next[species];
         next[species] = tmp;
@@ -425,7 +610,9 @@ int rd_get(void *handle, int x, int y, int species) {
       species < 0 || species >= SPECIES_COUNT) {
     return -1;
   }
-  return load_q15(state, species_field(state, species), y * state->width + x);
+  unsigned code_a, code_b;
+  load_codes(state, y * state->width + x, &code_a, &code_b);
+  return decode(state, species, species == RD_SPECIES_A ? code_a : code_b);
 }
 
 uint32_t rd_steps(void *handle) {
@@ -433,18 +620,18 @@ uint32_t rd_steps(void *handle) {
   return state ? state->step : 0;
 }
 
-/* FNV-1a over the stored values as canonical little-endian 16-bit words.
- * 8-bit modes hash a zero high byte, so native and Wasm builds of the same
- * mode produce comparable hashes. */
+/* FNV-1a over the stored words as canonical little-endian 16-bit values, so
+ * native and Wasm builds of the same mode produce comparable hashes. The
+ * residual rows are not part of the hash. */
 uint32_t rd_hash(void *handle) {
   State *state = checked_state(handle);
   if (!state) {
     return 0;
   }
   uint32_t hash = FNV_OFFSET_BASIS;
-  for (int species = 0; species < SPECIES_COUNT; species++) {
+  for (int index = 0; index < planes(state); index++) {
     for (int i = 0; i < state->width * state->height; i++) {
-      int value = load_stored(state, species_field(state, species), i);
+      unsigned value = plane(state, index)[i];
       hash = (hash ^ (value & 0xff)) * FNV_PRIME;
       hash = (hash ^ (value >> 8)) * FNV_PRIME;
     }
@@ -464,7 +651,11 @@ uint8_t *rd_row(void *handle, int y, int palette, int quantize) {
   int grid_y = y * state->height / RD_DISPLAY_HEIGHT;
   for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
     int grid_x = x * state->width / RD_DISPLAY_WIDTH;
-    int intensity = rd_get(state, grid_x, grid_y, RD_SPECIES_B) * DISPLAY_GAIN;
+    unsigned code_a, code_b;
+    load_codes(state, grid_y * state->width + grid_x, &code_a, &code_b);
+    /* Q15 intensity: B times DISPLAY_GAIN, clamped to 1.0. */
+    int intensity = (int)round_shift(
+        (int64_t)decode(state, RD_SPECIES_B, code_b) * DISPLAY_GAIN, Q15_SHIFT);
     if (intensity > RD_Q15_ONE) {
       intensity = RD_Q15_ONE;
     }
