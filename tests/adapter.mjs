@@ -167,6 +167,29 @@ for (const [engine, width] of [
   );
   s.dispose();
 }
+// Interpolated renders of the same field agree between the Wasm core and
+// the Float32 renderer, up to Q15 rounding at color boundaries.
+{
+  const wasm = new WasmSimulation(api, 3, 42);
+  assert.equal(wasm.width, 120);
+  assert.equal(wasm.height, 136);
+  wasm.step(params, 300);
+  const float = new FloatSimulation(120, 42);
+  for (let y = 0; y < 136; y++)
+    for (let x = 0; x < 120; x++) {
+      float.field.a[y * 120 + x] = wasm.get(x, y, 0);
+      float.field.b[y * 120 + x] = wasm.get(x, y, 1);
+    }
+  const a = { data: new Uint8ClampedArray(200 * 228 * 4) };
+  const b = { data: new Uint8ClampedArray(200 * 228 * 4) };
+  wasm.render(a, 'green', true, true);
+  float.render(b, 'green', true, true);
+  let differing = 0;
+  for (let i = 0; i < a.data.length; i += 4)
+    differing += a.data[i] !== b.data[i] || a.data[i + 1] !== b.data[i + 1];
+  assert(differing / (200 * 228) < 0.01, `${differing} pixels differ`);
+  wasm.dispose();
+}
 console.log(
   'Clock masks: core glyphs equal the JSON glyphs for both fonts, mask levels agree and B stays 0 in masked cells',
 );

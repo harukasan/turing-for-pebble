@@ -17,7 +17,9 @@ type API = {
   rd_seed(p: number, x: number, y: number, r: number): number;
   rd_step(p: number, n: number): number;
   rd_steps(p: number): number;
-  rd_row(p: number, y: number, c: number, q: number): number;
+  rd_row(p: number, y: number, c: number, flags: number): number;
+  rd_width(p: number): number;
+  rd_height(p: number): number;
   rd_get(p: number, x: number, y: number, s: number): number;
   rd_mask(p: number, m: number): number;
   rd_mask_level(p: number, x: number, y: number): number;
@@ -137,8 +139,6 @@ export class WasmSimulation {
     public mode: number,
     seed: number,
   ) {
-    this.width = mode === 0 ? 200 : 100;
-    this.height = (this.width * 228) / 200;
     this.bytes = api.rd_bytes(mode);
     this.components = Array.from({ length: 6 }, (_, i) =>
       api.rd_memory(mode, i),
@@ -150,6 +150,8 @@ export class WasmSimulation {
       api.free(this.allocation);
       throw new Error('Invalid simulation configuration');
     }
+    this.width = api.rd_width(this.state);
+    this.height = api.rd_height(this.state);
     this.row = new Uint8Array(
       api.memory.buffer,
       api.rd_row(this.state, 0, 0, 1),
@@ -209,13 +211,21 @@ export class WasmSimulation {
   get(x: number, y: number, species: number) {
     return this.api.rd_get(this.state, x, y, species) / 2 ** 24;
   }
-  render(pixels: ImageData, palette: string, quantize: boolean) {
+  /** Draw the display; interpolate samples B between cells at each pixel
+   * center (RD_ROW_BILINEAR) instead of showing the covering cell. */
+  render(
+    pixels: ImageData,
+    palette: string,
+    quantize: boolean,
+    interpolate = false,
+  ) {
+    const flags = Number(quantize) | (interpolate ? 2 : 0);
     for (let y = 0; y < 228; y++) {
       this.api.rd_row(
         this.state,
         y,
         palette === 'green' ? 0 : palette === 'blue' ? 1 : 2,
-        Number(quantize),
+        flags,
       );
       pixels.data.set(this.row, y * 800);
     }

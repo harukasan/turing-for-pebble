@@ -17,9 +17,9 @@ export class FloatSimulation {
   readonly height: number;
   readonly bytes: number;
 
-  constructor(width: 100 | 200, seed: number) {
+  constructor(width: number, seed: number) {
     this.width = width;
-    this.height = (width * 228) / 200;
+    this.height = Math.floor((width * 228) / 200);
     this.field = new Simulation(this.width, this.height, seed);
     this.bytes =
       this.width * this.height * 2 * 2 * Float32Array.BYTES_PER_ELEMENT;
@@ -118,14 +118,39 @@ export class FloatSimulation {
     }
   }
 
-  render(pixels: ImageData, palette: string, quantize: boolean) {
+  /** Draw the display like rd_row: each pixel shows the covering cell, or
+   * with interpolate the B value interpolated at the pixel center between
+   * the four nearest cells, periodic like the field. */
+  render(
+    pixels: ImageData,
+    palette: string,
+    quantize: boolean,
+    interpolate = false,
+  ) {
     const data = pixels.data;
     const paletteIndex = palette === 'green' ? 0 : 1;
+    const { width, height } = this;
+    const b = this.field.b;
+    const sample = (p: number, n: number, size: number) => {
+      const u = ((2 * p + 1) * n - size) / (2 * size);
+      const cell = Math.floor(u);
+      return [(cell + n) % n, u - cell];
+    };
     for (let y = 0; y < 228; y++) {
-      const gy = Math.floor((y * this.height) / 228);
+      const [gy, wy] = interpolate
+        ? sample(y, height, 228)
+        : [Math.floor((y * height) / 228), 0];
+      const gy1 = (gy + 1) % height;
       for (let x = 0; x < 200; x++) {
-        const gx = Math.floor((x * this.width) / 200);
-        const intensity = Math.min(1, this.field.b[gy * this.width + gx] * 3);
+        const [gx, wx] = interpolate
+          ? sample(x, width, 200)
+          : [Math.floor((x * width) / 200), 0];
+        const gx1 = (gx + 1) % width;
+        const value =
+          (b[gy * width + gx] * (1 - wx) + b[gy * width + gx1] * wx) *
+            (1 - wy) +
+          (b[gy1 * width + gx] * (1 - wx) + b[gy1 * width + gx1] * wx) * wy;
+        const intensity = Math.min(1, value * 3);
         const offset = (y * 200 + x) * 4;
         for (let channel = 0; channel < 3; channel++) {
           const color =

@@ -29,9 +29,17 @@ const defaults: Parameters = {
   db: 0.5,
   dt: 1,
 };
-type Engine = 'u8-200' | 'q15-100' | 'float-200' | 'float-100';
+type Engine =
+  | 'u8-200'
+  | 'q15-100'
+  | 'q15-120'
+  | 'float-200'
+  | 'float-100'
+  | 'float-120';
 // Startup steps of the watchface, mirrored by device behavior mode.
-const DEVICE_STARTUP_STEPS = 1800;
+// Mode 3 (120 x 136) runs 1,250 steps, the older 100 x 114 build 1,800.
+const deviceStartupSteps = (engine: Engine) =>
+  engine.endsWith('120') ? 1250 : 1800;
 // Pending steps after a minute change, as RD_MINUTE_STEPS of the watch:
 // with digit avoidance at least 300 steps refill the strokes freed by the
 // previous digits, otherwise 16 steps are added.
@@ -40,8 +48,11 @@ const DEVICE_MINUTE_STEPS_PLAIN = 16;
 // Halo around the digits held at the equilibrium, in display pixels.
 const HALO = 1;
 type ActiveSimulation = WasmSimulation | FloatSimulation;
-const engineWidth = (engine: Engine): 100 | 200 =>
-  engine.endsWith('200') ? 200 : 100;
+const engineWidth = (engine: Engine) => Number(engine.split('-')[1]);
+const gridHeight = (width: number) => Math.floor((width * 228) / 200);
+// Core mode of a Wasm engine, and of the watch build it corresponds to.
+const engineMode = (engine: Engine) =>
+  engine.endsWith('200') ? 0 : engine.endsWith('120') ? 3 : 1;
 const isFloat = (engine: Engine) => engine.startsWith('float');
 function Range({
   title,
@@ -120,7 +131,7 @@ export default function Home() {
   const canvas = useRef<HTMLCanvasElement>(null),
     sim = useRef<ActiveSimulation | null>(null);
   const [params, setParams] = useState(defaults);
-  const [engine, setEngine] = useState<Engine>('q15-100'),
+  const [engine, setEngine] = useState<Engine>('q15-120'),
     [seed, setSeed] = useState(42),
     [revision, setRevision] = useState(0);
   const [running, setRunning] = useState(false),
@@ -129,6 +140,7 @@ export default function Home() {
     [avoid, setAvoid] = useState(true),
     [font, setFont] = useState<ClockFont>('leco');
   const [quantize, setQuantize] = useState(true),
+    [interpolate, setInterpolate] = useState(true),
     [palette, setPalette] = useState('green'),
     [actual, setActual] = useState(false);
   const [stats, setStats] = useState({ steps: 0, ms: 0 }),
@@ -147,6 +159,7 @@ export default function Home() {
     avoid,
     font,
     quantize,
+    interpolate,
     palette,
     deviceMode,
   });
@@ -159,6 +172,7 @@ export default function Home() {
       avoid,
       font,
       quantize,
+      interpolate,
       palette,
       deviceMode,
     };
@@ -170,6 +184,7 @@ export default function Home() {
     avoid,
     font,
     quantize,
+    interpolate,
     palette,
     deviceMode,
   ]);
@@ -260,7 +275,7 @@ export default function Home() {
         core.current = api;
         const next = isFloat(engine)
           ? new FloatSimulation(engineWidth(engine), seed)
-          : new WasmSimulation(api, engine === 'u8-200' ? 0 : 1, seed);
+          : new WasmSimulation(api, engineMode(engine), seed);
         sim.current = next;
         setStats({ steps: 0, ms: 0 });
         if (next instanceof WasmSimulation)
@@ -273,7 +288,9 @@ export default function Home() {
           setRunning(false);
         }
       });
-    pending.current = config.current.deviceMode ? DEVICE_STARTUP_STEPS : 0;
+    pending.current = config.current.deviceMode
+      ? deviceStartupSteps(engine)
+      : 0;
     manualPending.current = 0;
     lightUntil.current = 0;
     return () => {
@@ -390,7 +407,7 @@ export default function Home() {
         offscreen.height = 228;
         pixels = off.createImageData(200, 228);
       }
-      s.render(pixels, c.palette, c.quantize);
+      s.render(pixels, c.palette, c.quantize, c.interpolate);
       off.putImageData(pixels, 0, 0);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(offscreen, 0, 0);
@@ -426,13 +443,14 @@ export default function Home() {
     effective: floatMode ? params : effective(params),
     ...params,
     width,
-    height: (width * 228) / 200,
+    height: gridHeight(width),
     seed,
     boundary: 'periodic',
     laplacian: { center: -1, axial: 0.2, diagonal: 0.05 },
     initialization: '24 display-coordinate disks, radius 4–9, A=0.5 B=0.25',
     palette,
     quantize,
+    interpolate,
     clock,
     font,
     avoidDigits: clock && avoid,
@@ -451,7 +469,7 @@ export default function Home() {
     a.download = `turing-${seed}-${stats.steps}.${kind}`;
     if (kind === 'h') {
       const q = effective(params);
-      const text = `/* Generated configuration, core v3 */\n#ifndef RD_MODE\n#define RD_MODE ${engine === 'u8-200' ? 0 : 1}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === 'green' ? 0 : palette === 'blue' ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n#ifndef RD_FONT\n#define RD_FONT ${fontIndex(font)}\n#endif\n#ifndef RD_AVOID\n#define RD_AVOID ${Number(avoid)}\n#endif\n#define RD_HALO ${HALO}\n#define RD_MINUTE_STEPS (RD_AVOID ? ${DEVICE_MINUTE_STEPS} : ${DEVICE_MINUTE_STEPS_PLAIN})\n`;
+      const text = `/* Generated configuration, core v3 */\n#ifndef RD_MODE\n#define RD_MODE ${engineMode(engine)}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === 'green' ? 0 : palette === 'blue' ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n#ifndef RD_STARTUP_STEPS\n#define RD_STARTUP_STEPS ${deviceStartupSteps(engine)}\n#endif\n#ifndef RD_RENDER_FLAGS\n#define RD_RENDER_FLAGS ${interpolate ? 2 : 0}\n#endif\n#ifndef RD_FONT\n#define RD_FONT ${fontIndex(font)}\n#endif\n#ifndef RD_AVOID\n#define RD_AVOID ${Number(avoid)}\n#endif\n#define RD_HALO ${HALO}\n#define RD_MINUTE_STEPS (RD_AVOID ? ${DEVICE_MINUTE_STEPS} : ${DEVICE_MINUTE_STEPS_PLAIN})\n`;
       const url = URL.createObjectURL(new Blob([text]));
       a.href = url;
       a.download = 'config.h';
@@ -523,10 +541,9 @@ export default function Home() {
                   Math.max(
                     0,
                     Math.min(
-                      (width * 228) / 200 - 1,
+                      gridHeight(width) - 1,
                       Math.floor(
-                        ((e.clientY - r.top) / r.height) *
-                          ((width * 228) / 200),
+                        ((e.clientY - r.top) / r.height) * gridHeight(width),
                       ),
                     ),
                   ),
@@ -545,7 +562,7 @@ export default function Home() {
                 sim.current?.seedAt(
                   Math.floor(((e.clientX - r.left) / r.width) * width),
                   Math.floor(
-                    ((e.clientY - r.top) / r.height) * ((width * 228) / 200),
+                    ((e.clientY - r.top) / r.height) * gridHeight(width),
                   ),
                 );
               }}
@@ -578,7 +595,7 @@ export default function Home() {
                 onClick={() => {
                   sim.current?.seedAt(
                     Math.floor(width / 2),
-                    Math.floor((width * 228) / 200 / 2),
+                    Math.floor(gridHeight(width) / 2),
                   );
                 }}
               >
@@ -598,7 +615,7 @@ export default function Home() {
             <div>
               <strong>
                 {floatMode
-                  ? ((width * ((width * 228) / 200) * 16) / 1024).toFixed(1)
+                  ? ((width * gridHeight(width) * 16) / 1024).toFixed(1)
                   : ((memory[6] ?? 0) / 1024).toFixed(1)}{' '}
                 KiB
               </strong>
@@ -615,7 +632,7 @@ export default function Home() {
                 <>
                   <p>
                     Float32参照実装: A・Bの現在と次の配列で{' '}
-                    {width * ((width * 228) / 200) * 16}{' '}
+                    {width * gridHeight(width) * 16}{' '}
                     B。Pebble向けの共通C必要量とヒープ測定値は対象外です。
                   </p>
                   <p>
@@ -635,7 +652,7 @@ export default function Home() {
                     B（共通Cを内包） / ImageData 182400 B / Canvas 2面の画素相当
                     364800 B。ブラウザ全体の使用量ではありません。
                   </p>
-                  <PebbleMemory mode={engine === 'u8-200' ? 0 : 1} />
+                  <PebbleMemory mode={engineMode(engine)} />
                   <p>
                     最小空きヒープは実測値、OS追加確保前の空きは見積もりです。両者は加算しません。採用判定は実機検証待ちです。
                   </p>
@@ -774,6 +791,8 @@ export default function Home() {
               options={[
                 ['u8-200', 'Wasm A7+B9 / 200 × 228'],
                 ['float-200', 'Float32 / 200 × 228'],
+                ['q15-120', 'Wasm Q15 / 120 × 136'],
+                ['float-120', 'Float32 / 120 × 136'],
                 ['q15-100', 'Wasm Q15 / 100 × 114'],
                 ['float-100', 'Float32 / 100 × 114'],
               ]}
@@ -859,6 +878,18 @@ export default function Home() {
                 onCheckedChange={setQuantize}
               />
             </label>
+            <label className="toggle" htmlFor="interpolate">
+              計算セルの間を補間
+              <Switch
+                id="interpolate"
+                checked={interpolate}
+                onCheckedChange={setInterpolate}
+              />
+            </label>
+            <p className="hint">
+              Bの濃度をセルの間で補間してから色にします。120 ×
+              136のように画面の整数分の1でない計算でも、縞の輪郭が画素単位で滑らかになります。
+            </p>
             <label className="toggle" htmlFor="clock">
               時刻・日付を表示
               <Switch id="clock" checked={clock} onCheckedChange={setClock} />
