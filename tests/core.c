@@ -1,4 +1,5 @@
 #include "../core/rd.c"
+#include "../core/clock_mask.c"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,7 +8,12 @@
  * with independent neighbor indexing, so the row-buffer scheme in rd_step is
  * checked against a straightforward implementation. The Laplacian rounding is
  * written out on purpose instead of calling laplacian_row(). Cells are
- * encoded in row order through the shared error diffusion functions. */
+ * encoded in row order through the shared error diffusion functions, and
+ * the masked cell rule is written out as docs/core.md states it. */
+/* Mask levels of the cells for the oracle, from level_reference, or NULL
+ * for no mask. */
+static const int *oracle_levels;
+
 static void reference(State *state) {
   int cells = state->width * state->height;
   size_t plane_bytes = (size_t)cells * sizeof(uint16_t);
@@ -18,6 +24,11 @@ static void reference(State *state) {
   begin_step(state, &ctx);
   for (int y = 0; y < state->height; y++) {
     for (int x = 0; x < state->width; x++) {
+      int cell_index = y * state->width + x;
+      int level = oracle_levels ? oracle_levels[cell_index] : RD_MASK_RAMP;
+      int32_t decay =
+          state->feed + state->kill +
+          (RD_MASK_KILL - state->kill) * (RD_MASK_RAMP - level) / RD_MASK_RAMP;
       int32_t laps[SPECIES_COUNT];
       for (int species = 0; species < SPECIES_COUNT; species++) {
         int32_t sum = 0;
@@ -34,17 +45,22 @@ static void reference(State *state) {
       int32_t next_a, next_b;
       react_cell(rd_get(state, x, y, RD_SPECIES_A),
                  rd_get(state, x, y, RD_SPECIES_B), laps[0], laps[1], ctx.feed,
-                 ctx.decay, ctx.da, ctx.db, ctx.dt, ctx.unit_dt, &next_a,
-                 &next_b);
-      int cell_index = y * state->width + x;
+                 decay, ctx.da, ctx.db, ctx.dt, ctx.unit_dt, &next_a, &next_b);
       uint32_t dither =
           is_packed(state) ? cell_dither(ctx.step_salt, cell_index) : 0;
       unsigned code_a =
           encode_cell(is_packed(state), RD_SPECIES_A, ctx.residual[0],
                       &ctx.shares[0], x, next_a, dither & DITHER_MASK);
-      unsigned code_b = encode_cell(is_packed(state), RD_SPECIES_B,
-                                    ctx.residual[1], &ctx.shares[1], x, next_b,
-                                    (dither >> DITHER_B_SHIFT) & DITHER_MASK);
+      unsigned code_b = 0;
+      if (level == 0) {
+        /* Masked: B is held at 0, and only the pending share passes. */
+        ctx.residual[1][x] = ctx.shares[1].pending;
+        ctx.shares[1].carry = ctx.shares[1].pending = 0;
+      } else {
+        code_b = encode_cell(is_packed(state), RD_SPECIES_B, ctx.residual[1],
+                             &ctx.shares[1], x, next_b,
+                             (dither >> DITHER_B_SHIFT) & DITHER_MASK);
+      }
       if (is_packed(state)) {
         next_planes[cell_index] = (uint16_t)((code_a << B_BITS) | code_b);
       } else {
@@ -296,12 +312,175 @@ static void check_rgb2(State *state) {
   assert(!rd_row_rgb2(state, 0, RD_PALETTE_MONO + 1));
 }
 
+/* Mask levels by definition: 0 in a masked cell, else the chessboard
+ * distance to the nearest masked cell without wrapping, capped at
+ * RD_MASK_RAMP. */
+static int *level_reference(int width, int height, const uint8_t *mask) {
+  int stride = (width + 7) / 8;
+  int *levels = malloc((size_t)width * height * sizeof(int));
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      int level = RD_MASK_RAMP;
+      for (int dy = -RD_MASK_RAMP; dy <= RD_MASK_RAMP; dy++) {
+        for (int dx = -RD_MASK_RAMP; dx <= RD_MASK_RAMP; dx++) {
+          int xx = x + dx, yy = y + dy;
+          int d = abs(dx) > abs(dy) ? abs(dx) : abs(dy);
+          if (xx >= 0 && xx < width && yy >= 0 && yy < height &&
+              mask[yy * stride + xx / 8] >> (xx % 8) & 1 && d < level) {
+            level = d;
+          }
+        }
+      }
+      levels[y * width + x] = level;
+    }
+  }
+  return levels;
+}
+
+/* rd_mask_level reports the defined levels and B is 0 in masked cells. */
+static void check_masked_cells(State *state, const int *levels) {
+  for (int y = 0; y < state->height; y++) {
+    for (int x = 0; x < state->width; x++) {
+      int level = levels ? levels[y * state->width + x] : RD_MASK_RAMP;
+      assert(rd_mask_level(state, x, y) == level);
+      if (level == 0) {
+        assert(rd_get(state, x, y, RD_SPECIES_B) == 0);
+      }
+    }
+  }
+}
+
+/* A developed field under a rectangle plus scattered cells matches the
+ * oracle with the mask levels by definition, keeps B at 0 in the mask, and
+ * continues as an unmasked field once the mask is cleared. */
+static void check_mask(int mode) {
+  size_t size = rd_bytes(mode);
+  uint8_t *memory = malloc(size), *reference_memory = malloc(size);
+  State *state = rd_init(memory, size, mode, 7);
+  State *reference_state = rd_init(reference_memory, size, mode, 7);
+  rd_step(state, 60);
+  rd_step(reference_state, 60);
+  assert(rd_memory(mode, RD_COMPONENT_MASK) ==
+         (size_t)state->width * state->height);
+  size_t bytes = cm_bytes(state->width, state->height);
+  uint8_t *mask = calloc(bytes, 1);
+  int stride = (state->width + 7) / 8;
+  for (int y = 0; y < state->height; y++) {
+    for (int x = 0; x < state->width; x++) {
+      int rectangle = x >= state->width / 4 && x < state->width / 2 &&
+                      y >= state->height / 3 && y < state->height / 2;
+      /* Column 0, the last column, and the last row exercise the wrapped
+       * shares and the unwrapped distances. */
+      if (rectangle || mix32((uint32_t)(y * state->width + x)) % 97 == 0 ||
+          (y == 5 && (x == 0 || x == state->width - 1)) ||
+          (y == state->height - 1 && x == 3)) {
+        mask[y * stride + x / 8] |= (uint8_t)(1 << (x % 8));
+      }
+    }
+  }
+  int *levels = level_reference(state->width, state->height, mask);
+  assert(rd_mask(state, mask) == 0 && rd_mask(reference_state, mask) == 0);
+  assert(rd_hash(state) == rd_hash(reference_state));
+  check_masked_cells(state, levels);
+  /* Seeds skip masked cells. */
+  rd_seed(state, RD_DISPLAY_WIDTH * 3 / 8, RD_DISPLAY_HEIGHT * 5 / 12, 30);
+  rd_seed(reference_state, RD_DISPLAY_WIDTH * 3 / 8, RD_DISPLAY_HEIGHT * 5 / 12,
+          30);
+  check_masked_cells(state, levels);
+  oracle_levels = levels;
+  for (int i = 0; i < 25; i++) {
+    rd_step(state, 1);
+    reference(reference_state);
+    assert(rd_hash(state) == rd_hash(reference_state));
+    check_masked_cells(state, levels);
+  }
+  oracle_levels = NULL;
+  assert(rd_mask(state, NULL) == 0 && rd_mask(reference_state, NULL) == 0);
+  check_masked_cells(state, NULL);
+  for (int i = 0; i < 5; i++) {
+    rd_step(state, 1);
+    reference(reference_state);
+    assert(rd_hash(state) == rd_hash(reference_state));
+  }
+  free(levels);
+  free(mask);
+  free(memory);
+  free(reference_memory);
+}
+
+/* The masked share rule on one cell. */
+static void check_encode_masked(void) {
+  int32_t residual[2] = {17, 99};
+  Shares shares = {7, 5, 3};
+  encode_masked(residual, &shares, 1);
+  assert(residual[0] == 17 && residual[1] == 5);
+  assert(shares.carry == 0 && shares.pending == 0 && shares.wrap == 3);
+}
+
+/* Clock masks: sizes, argument checks, and the pixel count of the LECO
+ * clock verified against the emulator. */
+static void check_clock_mask(void) {
+  assert(cm_bytes(100, 114) == 1482 && cm_bytes(200, 228) == 5700);
+  assert(cm_bytes(0, 114) == 0);
+  static uint8_t mask[5700];
+  memset(mask, 0xa5, sizeof mask);
+  const int bad[][10] = {{150, 171, 0, 14, 50, 2026, 9, 24, 0},
+                         {100, 100, 0, 14, 50, 2026, 9, 24, 0},
+                         {100, 114, CM_FONT_COUNT, 14, 50, 2026, 9, 24, 0},
+                         {100, 114, -1, 14, 50, 2026, 9, 24, 0},
+                         {100, 114, 0, 24, 50, 2026, 9, 24, 0},
+                         {100, 114, 0, 14, 60, 2026, 9, 24, 0},
+                         {100, 114, 0, 14, 50, 10000, 9, 24, 0},
+                         {100, 114, 0, 14, 50, 2026, 0, 24, 0},
+                         {100, 114, 0, 14, 50, 2026, 13, 24, 0},
+                         {100, 114, 0, 14, 50, 2026, 9, 0, 0},
+                         {100, 114, 0, 14, 50, 2026, 9, 32, 0},
+                         {100, 114, 0, 14, 50, 2026, 9, 24, -1},
+                         {100, 114, 0, 14, 50, 2026, 9, 24, CM_MAX_HALO + 1}};
+  for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+    const int *b = bad[i];
+    assert(cm_build(mask, b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+                    b[8]) == -1);
+  }
+  assert(cm_build(NULL, 100, 114, 0, 14, 50, 2026, 9, 24, 0) == -1);
+  for (size_t i = 0; i < sizeof mask; i++) {
+    assert(mask[i] == 0xa5);
+  }
+  assert(!cm_layout(-1) && !cm_layout(CM_FONT_COUNT));
+  for (int font = 0; font < CM_FONT_COUNT; font++) {
+    assert(cm_font_available(font) && cm_layout(font));
+  }
+  assert(!cm_font_available(CM_FONT_COUNT));
+  assert(cm_build(mask, 200, 228, CM_FONT_LECO, 14, 50, 2026, 9, 24, 0) == 0);
+  int count = 0;
+  for (size_t i = 0; i < 5700; i++) {
+    count += __builtin_popcount(mask[i]);
+  }
+  assert(count == 2427);
+}
+
 int main(int argc, char **argv) {
   if (argc > 1) {
-    /* Hash mode: print the field hash after `count` steps of `mode`. */
+    /* Hash mode: print the field hash after `count` steps of `mode`,
+     * optionally with the clock mask of `font hour minute year month day
+     * halo` installed first. */
     int mode = atoi(argv[1]), count = argc > 2 ? atoi(argv[2]) : 100;
     void *memory = malloc(rd_bytes(mode));
     void *state = rd_init(memory, rd_bytes(mode), mode, 42);
+    if (argc > 9) {
+      int v[7];
+      for (int i = 0; i < 7; i++) {
+        v[i] = atoi(argv[3 + i]);
+      }
+      uint8_t *mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
+      if (cm_build(mask, rd_width(state), rd_height(state), v[0], v[1], v[2],
+                   v[3], v[4], v[5], v[6]) ||
+          rd_mask(state, mask)) {
+        fprintf(stderr, "invalid mask arguments\n");
+        return 1;
+      }
+      free(mask);
+    }
     rd_step(state, count);
     printf("%u\n", rd_hash(state));
     free(memory);
@@ -311,6 +490,8 @@ int main(int argc, char **argv) {
   assert(rd_init(NULL, 0, 0, 0) == NULL);
   check_codes();
   check_laplacian();
+  check_encode_masked();
+  check_clock_mask();
   for (int mode = 0; mode < 3; mode++) {
     size_t size = rd_bytes(mode);
     uint8_t *memory = malloc(size + 16);
@@ -361,6 +542,11 @@ int main(int argc, char **argv) {
     assert(!rd_row(state, RD_DISPLAY_HEIGHT, 0, 1));
     assert(!rd_row_rgb2(state, -1, 0));
     assert(rd_get(state, -1, 0, RD_SPECIES_A) == -1);
+    assert(rd_mask(NULL, NULL) == -1 && rd_mask_level(state, -1, 0) == -1);
+    assert(rd_mask_level(state, 0, state->height) == -1);
+    assert(rd_width(NULL) == -1);
+    assert(rd_width(state) == state->width &&
+           rd_height(state) == state->height);
     assert(memcmp(snapshot, memory, size) == 0);
     for (size_t i = size; i < size + 16; i++) {
       assert(memory[i] == 0xa5);
@@ -417,8 +603,9 @@ int main(int argc, char **argv) {
       }
       free(unaligned);
     }
+    check_mask(mode);
     printf("mode %d: %zu bytes, "
-           "oracle/laplacian/codes/rgb2/validation/dither/diffusion OK\n",
+           "oracle/laplacian/codes/rgb2/validation/dither/diffusion/mask OK\n",
            mode, size);
     free(memory);
     free(reference_memory);

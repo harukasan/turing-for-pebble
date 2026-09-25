@@ -1,6 +1,9 @@
 # Field hashes of numerical definition version 3: mode steps hash (seed 42,
 # default parameters). scripts/check-optimization.sh compares every build
 # against these; any difference means the numerical contract changed.
+# Lines with seven more numbers install the clock mask of build/core-test
+# (font hour minute year month day halo) before stepping, which also pins
+# the glyph tables and the halo rule of core/clock_mask.c.
 0 1 2679910999
 0 100 2981002916
 0 1000 4136537897
@@ -10,3 +13,7 @@
 2 1 1640301591
 2 100 2554574024
 2 1000 836491883
+0 1000 2396997372 0 13 57 2046 8 29 1
+0 1000 1603702294 1 13 57 2046 8 29 1
+1 1000 2882614667 0 13 57 2046 8 29 1
+1 1000 3785032339 1 13 57 2046 8 29 1

@@ -27,6 +27,28 @@ for (let mode = 0; mode < 3; mode++)
     console.log(`mode ${mode}, steps ${count}: native/Wasm ${native}`);
   }
 
+// Clock masks built and installed in Wasm give the native field.
+for (const mode of [0, 1, 2])
+  for (const font of [0, 1]) {
+    const args = [font, 13, 57, 2046, 8, 29, 1];
+    const n = e.rd_bytes(mode),
+      p = e.malloc(n),
+      s = e.rd_init(p, n, mode, 42);
+    const m = e.malloc(e.cm_bytes(e.rd_width(s), e.rd_height(s)));
+    assert.equal(e.cm_build(m, e.rd_width(s), e.rd_height(s), ...args), 0);
+    assert.equal(e.rd_mask(s, m), 0);
+    e.free(m);
+    e.rd_step(s, 200);
+    const native = Number(
+      execFileSync('build/core-test', [mode, 200, ...args].map(String), {
+        encoding: 'utf8',
+      }).trim(),
+    );
+    assert.equal(e.rd_hash(s) >>> 0, native);
+    e.free(p);
+    console.log(`mode ${mode}, font ${font}, masked: native/Wasm ${native}`);
+  }
+
 // Repeated mode resets reuse the allocator and remain within fixed linear memory.
 const linear = e.memory.buffer.byteLength;
 for (let i = 0; i < 300; i++) {

@@ -1,5 +1,5 @@
 /*
- * Shared Gray-Scott reaction-diffusion core, numerical definition version 2.
+ * Shared Gray-Scott reaction-diffusion core, numerical definition version 3.
  *
  * Concentrations are computed in Q24 fixed point (RD_VALUE_ONE is 1.0) and
  * coefficients are Q15 (RD_Q15_ONE is 1.0). Modes 0 and 2 pack both species
@@ -9,8 +9,9 @@
  * error of each cell is carried into its unwritten neighbors instead of being
  * discarded. The packed codes also dither the rounding threshold so that
  * slow fronts are not pinned by the coarse codes; the Q15 codes are fine
- * enough to round to the nearest code. docs/core.md is the numerical
- * contract.
+ * enough to round to the nearest code. An optional mask holds B at 0 in its
+ * cells and raises the kill rate toward the mask, so the pattern fades out
+ * around it. docs/core.md is the numerical contract.
  *
  * The step loop is written for an in-order Cortex-M without FPU: one row of
  * Laplacians is computed per pass with the vertical sums shared between
@@ -109,6 +110,21 @@
 #define FNV_OFFSET_BASIS 2166136261u
 #define FNV_PRIME 16777619u
 
+/* Mask levels: 0 in a masked cell, else the chessboard distance in cells to
+ * the nearest masked cell, capped at RD_MASK_RAMP. A watch build that
+ * defines RD_AVOID as 0 has no mask area. */
+#if defined(RD_AVOID) && !RD_AVOID
+#define MASK_SUPPORTED 0
+#else
+#define MASK_SUPPORTED 1
+#endif
+
+#if defined(__GNUC__)
+#define ALWAYS_INLINE inline __attribute__((always_inline))
+#else
+#define ALWAYS_INLINE inline
+#endif
+
 /* Rendering: the B concentration times DISPLAY_GAIN, clamped to 1.0, selects
  * a color between the palette endpoints. Monochrome switches on at
  * MONO_THRESHOLD_PERCENT. Quantized output rounds each channel to a multiple
@@ -186,6 +202,7 @@ static const uint16_t ROOT_TABLE[1 << ROOT_INDEX_BITS] = {
  *   [saved rows: SAVED_ROWS x SPECIES_COUNT x width int32]
  *   [residual rows: SPECIES_COUNT x width int32]
  *   [output row, RD_ROW_BYTES][display lookup table, LUT_BYTES]
+ *   [mask levels: one byte per cell, unless MASK_SUPPORTED is 0]
  *
  * rd_memory reports the same bytes as an accounting breakdown by component,
  * which is not the physical order. Row buffers cover the saved rows and the
@@ -197,6 +214,9 @@ typedef struct {
   int width, height, packed, feed, kill, da, db, dt;
   /* Palette the display lookup table was built for, or NO_PALETTE. */
   int lut_palette;
+  /* Rows [mask_first, mask_end) hold every cell whose mask level is below
+   * RD_MASK_RAMP; empty if equal. */
+  int mask_first, mask_end;
 } State;
 
 /* Everything the cell loop reads, copied out of the State once per step so
@@ -212,6 +232,9 @@ typedef struct {
 typedef struct {
   int packed, width, unit_dt;
   int32_t feed, decay, da, db, dt;
+  /* feed + kill for each mask level: the kill rises linearly from the
+   * State's kill at level RD_MASK_RAMP to RD_MASK_KILL at level 0. */
+  int32_t level_decay[RD_MASK_RAMP + 1];
   /* Hash of seed and step, mixed into every cell's dither. */
   uint32_t step_salt;
   int32_t *restrict residual[SPECIES_COUNT];
@@ -275,6 +298,8 @@ size_t rd_memory(int mode, int component) {
     return RD_ROW_BYTES + LUT_BYTES;
   case RD_COMPONENT_ALIGNMENT:
     return STATE_ALIGNMENT - 1;
+  case RD_COMPONENT_MASK:
+    return MASK_SUPPORTED ? (size_t)width * height : 0;
   default:
     return 0;
   }
@@ -312,6 +337,18 @@ static uint8_t *output_row(State *state) {
 /* Display lookup table, after the output row. */
 static uint8_t *lookup_table(State *state) {
   return output_row(state) + RD_ROW_BYTES;
+}
+
+/* Mask levels, after the lookup table, one byte per cell in row order. */
+static uint8_t *mask_levels(State *state) {
+  return lookup_table(state) + LUT_BYTES;
+}
+
+/* A masked cell: level 0. Without a mask no cell is masked, and no level
+ * is read outside the rows [mask_first, mask_end). */
+static int cell_masked(State *state, int x, int y) {
+  return y >= state->mask_first && y < state->mask_end &&
+         mask_levels(state)[y * state->width + x] == 0;
 }
 
 /* Round a value to the nearest multiple of 2^bits, halfway values away from
@@ -487,8 +524,9 @@ static int wrap_delta(int delta, int size) {
   return delta;
 }
 
-/* Seed a disk given in display coordinates: A = 0.5 and B = 0.25 inside it.
- * Each grid cell samples the display coordinate it covers. */
+/* Seed a disk given in display coordinates: A = 0.5 and B = 0.25 inside it,
+ * except in masked cells. Each grid cell samples the display coordinate it
+ * covers. */
 int rd_seed(void *handle, int x, int y, int radius) {
   State *state = checked_state(handle);
   if (!state || x < 0 || x >= RD_DISPLAY_WIDTH || y < 0 ||
@@ -502,7 +540,8 @@ int rd_seed(void *handle, int x, int y, int radius) {
       int display_y = grid_y * RD_DISPLAY_HEIGHT / state->height;
       int dx = wrap_delta(display_x - x, RD_DISPLAY_WIDTH);
       int dy = wrap_delta(display_y - y, RD_DISPLAY_HEIGHT);
-      if (dx * dx + dy * dy <= radius * radius) {
+      if (dx * dx + dy * dy <= radius * radius &&
+          !cell_masked(state, grid_x, grid_y)) {
         store_codes(state, grid_y * state->width + grid_x,
                     packed ? PACKED_SEED_A : Q15_SEED_A,
                     packed ? PACKED_SEED_B : Q15_SEED_B);
@@ -626,6 +665,11 @@ static void begin_step(State *state, StepContext *ctx) {
   ctx->width = state->width;
   ctx->feed = state->feed;
   ctx->decay = state->kill + state->feed;
+  for (int level = 0; level <= RD_MASK_RAMP; level++) {
+    ctx->level_decay[level] =
+        state->feed + state->kill +
+        (RD_MASK_KILL - state->kill) * (RD_MASK_RAMP - level) / RD_MASK_RAMP;
+  }
   ctx->da = state->da;
   ctx->db = state->db;
   ctx->dt = state->dt;
@@ -703,6 +747,17 @@ static inline unsigned encode_cell(int packed, int species,
   return code;
 }
 
+/* B in a masked cell: held at code 0, which the caller stores, so the cell
+ * has no rounding error of its own. The shares it received from the row
+ * above and from the cell to its left are dropped, and the below-right
+ * share of the cell to its left passes through to the row below. */
+static inline void encode_masked(int32_t *restrict residual, Shares *shares,
+                                 int x) {
+  residual[x] = shares->pending;
+  shares->carry = 0;
+  shares->pending = 0;
+}
+
 /* Deliver the shares that wrapped around the periodic row ends. The right
  * share of the last column carries into column 0 of the next row. */
 static void finish_row(StepContext *ctx) {
@@ -712,6 +767,51 @@ static void finish_row(StepContext *ctx) {
     residual[0] += ctx->shares[species].pending;
     ctx->shares[species].wrap = ctx->shares[species].pending = 0;
   }
+}
+
+/* Write row y from its old values and Laplacians: react and encode every
+ * cell with the decay of its mask level, and hold B at 0 in a masked cell.
+ * Inlined at both calls in rd_step, so a row outside the mask rows
+ * (levels NULL) runs the loop without the level lookup. */
+static ALWAYS_INLINE void
+update_row(StepContext *ctx, int y, const int32_t *restrict cur_a,
+           const int32_t *restrict cur_b, const int32_t *restrict lap_a,
+           const int32_t *restrict lap_b, uint16_t *restrict cells_a,
+           uint16_t *restrict cells_b, const uint8_t *restrict levels) {
+  int32_t *restrict res_a = ctx->residual[0], *restrict res_b =
+                                                  ctx->residual[1];
+  Shares shares_a = ctx->shares[0], shares_b = ctx->shares[1];
+  const int packed = ctx_packed(ctx);
+  const int32_t feed = ctx->feed, decay = ctx->decay, da = ctx->da,
+                db = ctx->db, dt = ctx->dt;
+  const int unit_dt = ctx->unit_dt, width = ctx->width;
+  const uint32_t step_salt = ctx->step_salt;
+  int row_index = y * width;
+  for (int x = 0; x < width; x++) {
+    int32_t next_a, next_b;
+    uint32_t dither = packed ? cell_dither(step_salt, row_index + x) : 0;
+    int level = levels ? levels[x] : RD_MASK_RAMP;
+    react_cell(cur_a[x], cur_b[x], lap_a[x], lap_b[x], feed,
+               levels ? ctx->level_decay[level] : decay, da, db, dt, unit_dt,
+               &next_a, &next_b);
+    unsigned code_a = encode_cell(packed, RD_SPECIES_A, res_a, &shares_a, x,
+                                  next_a, dither & DITHER_MASK);
+    unsigned code_b = 0;
+    if (level == 0) {
+      encode_masked(res_b, &shares_b, x);
+    } else {
+      code_b = encode_cell(packed, RD_SPECIES_B, res_b, &shares_b, x, next_b,
+                           (dither >> DITHER_B_SHIFT) & DITHER_MASK);
+    }
+    if (packed) {
+      cells_a[row_index + x] = (uint16_t)((code_a << B_BITS) | code_b);
+    } else {
+      cells_a[row_index + x] = (uint16_t)code_a;
+      cells_b[row_index + x] = (uint16_t)code_b;
+    }
+  }
+  ctx->shares[0] = shares_a;
+  ctx->shares[1] = shares_b;
 }
 
 /* Advance the field in place. Each species keeps four decoded rows so that
@@ -756,36 +856,13 @@ int rd_step(void *handle, int count) {
       /* The rows above are consumed into the Laplacians in place. */
       laplacian_row(prev[0], cur[0], next[0], width);
       laplacian_row(prev[1], cur[1], next[1], width);
-      const int32_t *restrict lap_a = prev[0], *restrict lap_b = prev[1];
-      const int32_t *restrict cur_a = cur[0], *restrict cur_b = cur[1];
-      int32_t *restrict res_a = ctx.residual[0], *restrict res_b =
-                                                     ctx.residual[1];
-      Shares shares_a = ctx.shares[0], shares_b = ctx.shares[1];
-      const int packed = ctx_packed(&ctx);
-      const int32_t feed = ctx.feed, decay = ctx.decay, da = ctx.da,
-                    db = ctx.db, dt = ctx.dt;
-      const int unit_dt = ctx.unit_dt;
-      const uint32_t step_salt = ctx.step_salt;
-      int row_index = y * width;
-      for (int x = 0; x < width; x++) {
-        int32_t next_a, next_b;
-        uint32_t dither = packed ? cell_dither(step_salt, row_index + x) : 0;
-        react_cell(cur_a[x], cur_b[x], lap_a[x], lap_b[x], feed, decay, da, db,
-                   dt, unit_dt, &next_a, &next_b);
-        unsigned code_a = encode_cell(packed, RD_SPECIES_A, res_a, &shares_a, x,
-                                      next_a, dither & DITHER_MASK);
-        unsigned code_b =
-            encode_cell(packed, RD_SPECIES_B, res_b, &shares_b, x, next_b,
-                        (dither >> DITHER_B_SHIFT) & DITHER_MASK);
-        if (packed) {
-          cells_a[row_index + x] = (uint16_t)((code_a << B_BITS) | code_b);
-        } else {
-          cells_a[row_index + x] = (uint16_t)code_a;
-          cells_b[row_index + x] = (uint16_t)code_b;
-        }
+      if (y >= state->mask_first && y < state->mask_end) {
+        update_row(&ctx, y, cur[0], cur[1], prev[0], prev[1], cells_a, cells_b,
+                   mask_levels(state) + (size_t)y * width);
+      } else {
+        update_row(&ctx, y, cur[0], cur[1], prev[0], prev[1], cells_a, cells_b,
+                   NULL);
       }
-      ctx.shares[0] = shares_a;
-      ctx.shares[1] = shares_b;
       finish_row(&ctx);
       /* Rotate: the row just finished becomes the row above, and the buffer
        * that held the old row above is reused for the next row below. */
@@ -816,6 +893,101 @@ int rd_get(void *handle, int x, int y, int species) {
 uint32_t rd_steps(void *handle) {
   State *state = checked_state(handle);
   return state ? state->step : 0;
+}
+
+int rd_width(void *handle) {
+  State *state = checked_state(handle);
+  return state ? state->width : -1;
+}
+
+int rd_height(void *handle) {
+  State *state = checked_state(handle);
+  return state ? state->height : -1;
+}
+
+/* Install a cell mask (NULL clears it): derive the mask levels with a
+ * two-pass chessboard distance transform that does not wrap, find their
+ * rows, and set B to 0 in the masked cells right away. */
+int rd_mask(void *handle, const uint8_t *mask) {
+  State *state = checked_state(handle);
+  if (!state || !MASK_SUPPORTED) {
+    return -1;
+  }
+  int width = state->width, height = state->height;
+  int stride = (width + 7) / 8;
+  uint8_t *levels = mask_levels(state);
+  state->mask_first = state->mask_end = 0;
+  if (!mask) {
+    return 0;
+  }
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      levels[y * width + x] =
+          mask[y * stride + (x >> 3)] >> (x & 7) & 1 ? 0 : RD_MASK_RAMP;
+    }
+  }
+  /* Forward pass from the upper and left neighbors, backward pass from the
+   * lower and right neighbors, each step one level. */
+  for (int y = 0; y < height; y++) {
+    for (int x = 0; x < width; x++) {
+      int level = levels[y * width + x];
+      for (int dx = -1; dx <= 1 && y > 0; dx++) {
+        if (x + dx >= 0 && x + dx < width &&
+            levels[(y - 1) * width + x + dx] + 1 < level) {
+          level = levels[(y - 1) * width + x + dx] + 1;
+        }
+      }
+      if (x > 0 && levels[y * width + x - 1] + 1 < level) {
+        level = levels[y * width + x - 1] + 1;
+      }
+      levels[y * width + x] = (uint8_t)level;
+    }
+  }
+  for (int y = height - 1; y >= 0; y--) {
+    for (int x = width - 1; x >= 0; x--) {
+      int level = levels[y * width + x];
+      for (int dx = -1; dx <= 1 && y < height - 1; dx++) {
+        if (x + dx >= 0 && x + dx < width &&
+            levels[(y + 1) * width + x + dx] + 1 < level) {
+          level = levels[(y + 1) * width + x + dx] + 1;
+        }
+      }
+      if (x < width - 1 && levels[y * width + x + 1] + 1 < level) {
+        level = levels[y * width + x + 1] + 1;
+      }
+      levels[y * width + x] = (uint8_t)level;
+    }
+  }
+  for (int y = 0; y < height; y++) {
+    int ramped = 0;
+    for (int x = 0; x < width; x++) {
+      if (levels[y * width + x] < RD_MASK_RAMP) {
+        ramped = 1;
+      }
+      if (levels[y * width + x] == 0) {
+        unsigned code_a, code_b;
+        load_codes(state, y * width + x, &code_a, &code_b);
+        store_codes(state, y * width + x, code_a, 0);
+      }
+    }
+    if (ramped) {
+      if (state->mask_end == 0) {
+        state->mask_first = y;
+      }
+      state->mask_end = y + 1;
+    }
+  }
+  return 0;
+}
+
+int rd_mask_level(void *handle, int x, int y) {
+  State *state = checked_state(handle);
+  if (!state || x < 0 || x >= state->width || y < 0 || y >= state->height) {
+    return -1;
+  }
+  return y >= state->mask_first && y < state->mask_end
+             ? mask_levels(state)[y * state->width + x]
+             : RD_MASK_RAMP;
 }
 
 /* FNV-1a over the stored words as canonical little-endian 16-bit values, so

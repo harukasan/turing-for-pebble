@@ -29,6 +29,7 @@ enum {
   RD_COMPONENT_CONTROL,
   RD_COMPONENT_OUTPUT_ROW,
   RD_COMPONENT_ALIGNMENT,
+  RD_COMPONENT_MASK,
   RD_COMPONENT_COUNT
 };
 
@@ -51,4 +52,19 @@ uint8_t *rd_row(void *handle, int y, int palette, int quantize);
 /* Display row y as RD_DISPLAY_WIDTH opaque ARGB8 bytes (2 bits per
  * channel), the quantized rd_row colors in the watch framebuffer format. */
 uint8_t *rd_row_rgb2(void *handle, int y, int palette);
+/* Grid size of the handle's mode. */
+int rd_width(void *handle);
+int rd_height(void *handle);
+/* Cell mask: one bit per grid cell, rows of (width + 7) / 8 bytes, cell x
+ * in bit x % 8 of byte x / 8 (the format of cm_build). rd_mask derives the
+ * mask level of every cell (NULL clears the mask): 0 in a masked cell, else
+ * the chessboard distance in cells to the nearest masked cell, capped at
+ * RD_MASK_RAMP. B is held at 0 in masked cells from rd_mask on, and the
+ * kill rate rises linearly from the rd_params kill at level RD_MASK_RAMP to
+ * RD_MASK_KILL at level 0, so the pattern fades out around the mask.
+ * rd_seed skips masked cells. */
+#define RD_MASK_RAMP 5
+#define RD_MASK_KILL 2458 /* 0.075 in Q15 */
+int rd_mask(void *handle, const uint8_t *mask);
+int rd_mask_level(void *handle, int x, int y);
 #endif
