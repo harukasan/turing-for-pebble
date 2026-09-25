@@ -188,6 +188,25 @@ static void check_laplacian(void) {
       for (int x = 0; x < width; x++) {
         expected[x] = laplacian_reference(up, cur, down, x, width);
       }
+      /* The Q15 code form gives the Laplacians of the decoded codes. */
+      uint16_t *codes = malloc(3 * width * sizeof(uint16_t));
+      int32_t *decoded = malloc(3 * width * sizeof(int32_t));
+      int32_t *from_codes = malloc(width * sizeof(int32_t));
+      for (int x = 0; x < 3 * width; x++) {
+        const int32_t *source = x < width ? up : x < 2 * width ? cur : down;
+        codes[x] = (uint16_t)((uint32_t)source[x % width] >> Q15_SHIFT);
+        decoded[x] = decode_q15(codes[x]);
+      }
+      laplacian_codes(codes, codes + width, codes + 2 * width, from_codes,
+                      width);
+      for (int x = 0; x < width; x++) {
+        assert(from_codes[x] == laplacian_reference(decoded, decoded + width,
+                                                    decoded + 2 * width, x,
+                                                    width));
+      }
+      free(codes);
+      free(decoded);
+      free(from_codes);
       laplacian_row(up, cur, down, width);
       for (int x = 0; x < width; x++) {
         assert(up[x] == expected[x]);

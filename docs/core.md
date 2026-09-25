@@ -100,6 +100,8 @@ These choices change no result. `tests/golden-hashes.txt` records the field hash
 - With `dt` = 1 the rate is rounded by 15 bits directly, which equals rounding the `dt` product by 30 bits.
 - A B rounded to Q24 is at most 1.0, so the reaction's second product is a single 32 × 32 → 64 bit multiply.
 - The nearest Q15 code, halfway upward, is computed directly as `(value + 256) >> 9` instead of from the floor code and a comparison.
+- The Q15 modes step on the codes themselves (`step_codes`). The stored rows below the row being written are still old and are read in place, only the old row being rewritten is copied as 16-bit codes, and the Laplacian is summed on the codes and scaled to Q24 before the same rounding. The packed modes keep the decoded-row loop.
+- A Q15 rounding error lies in [−256, 255], so its right, lower-left, and lower shares come from a 512-entry table (`Q15_SHARES`, 2 KB) instead of three divisions.
 - `core/rd_bench.c` times the phases of a step on the watch (`RD_BUILD_DEFINES=RD_BENCH`) and on the host (`tests/bench.c`). Only the watch numbers decide, because the host ranks the phases differently.
 
 The existing Float32 implementation remains in `lib/simulation.ts` as a reference with its original tests. The Web can explicitly select it through `lib/float-simulation.ts` for same-resolution visual comparisons. Pebble builds use only the C implementation.

@@ -76,6 +76,8 @@ The 134 × 152 and 150 × 171 rows used levels derived during the step, whose co
 
 A watch build with `RD_BUILD_DEFINES=RD_BENCH` logs the time of each phase of a step (`core/rd_bench.c`). In mode 3 the first build spent 1.2 ms decoding rows, 3.85 ms on the Laplacians, 8.45 ms on the reaction, and 7.6 ms encoding and storing, 21.1 ms in total. Three rewrites that change no result brought the step to 18.55 ms: the second product of the reaction as one 32 × 32 → 64 bit multiply, the nearest Q15 code computed directly, and keeping the branching form of the 64-bit rounding, which measured faster than a branch-free form. Compiling for `-mcpu=cortex-m33` gave no gain. The production startup then measured 25.9 s.
 
+Two further rewrites that change no result were measured only in the emulator while the watch was unavailable: stepping the Q15 modes on 16-bit codes, and a table for the error diffusion shares of Q15 codes. With `RD_BENCH` in the emulator, a mode 3 step took 1.70–1.75 ms before them, 1.30 ms with the code rows, and 1.10–1.25 ms with both. The emulator runs faster than the watch and in different proportions, so the watch gain still has to be measured. The table adds 2 KB of load size, and the emulator's minimum free heap for mode 3 became 19,912 B.
+
 After a minute change the 300 burst steps took about 7.5 s in mode 3, against about 4.7 s in mode 1. On the host the old digits left no trace after 100 steps, so a shorter burst is possible. The battery effect of the bursts is not measured.
 
 ## Timing limitation

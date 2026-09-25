@@ -836,6 +836,85 @@ static inline int rounds_up(int packed, int species, int32_t value, int32_t low,
          (uint32_t)(high - low) * (DITHER_BASE + random);
 }
 
+/* Error diffusion shares of a Q15 rounding error e in [-256, 255]: the
+ * right, below-left, and below shares as signed bytes 0, 1, 2 of entry
+ * e + 256. */
+static const uint32_t Q15_SHARES[512] = {
+    0xb0d090, 0xb1d191, 0xb1d191, 0xb1d192, 0xb2d192, 0xb2d193, 0xb2d293,
+    0xb3d294, 0xb3d294, 0xb3d294, 0xb4d295, 0xb4d395, 0xb4d396, 0xb5d396,
+    0xb5d397, 0xb5d397, 0xb5d397, 0xb6d498, 0xb6d498, 0xb6d499, 0xb7d499,
+    0xb7d49a, 0xb7d59a, 0xb8d59b, 0xb8d59b, 0xb8d59b, 0xb9d59c, 0xb9d69c,
+    0xb9d69d, 0xbad69d, 0xbad69e, 0xbad69e, 0xbad69e, 0xbbd79f, 0xbbd79f,
+    0xbbd7a0, 0xbcd7a0, 0xbcd7a1, 0xbcd8a1, 0xbdd8a2, 0xbdd8a2, 0xbdd8a2,
+    0xbed8a3, 0xbed9a3, 0xbed9a4, 0xbfd9a4, 0xbfd9a5, 0xbfd9a5, 0xbfd9a5,
+    0xc0daa6, 0xc0daa6, 0xc0daa7, 0xc1daa7, 0xc1daa8, 0xc1dba8, 0xc2dba9,
+    0xc2dba9, 0xc2dba9, 0xc3dbaa, 0xc3dcaa, 0xc3dcab, 0xc4dcab, 0xc4dcac,
+    0xc4dcac, 0xc4dcac, 0xc5ddad, 0xc5ddad, 0xc5ddae, 0xc6ddae, 0xc6ddaf,
+    0xc6deaf, 0xc7deb0, 0xc7deb0, 0xc7deb0, 0xc8deb1, 0xc8dfb1, 0xc8dfb2,
+    0xc9dfb2, 0xc9dfb3, 0xc9dfb3, 0xc9dfb3, 0xcae0b4, 0xcae0b4, 0xcae0b5,
+    0xcbe0b5, 0xcbe0b6, 0xcbe1b6, 0xcce1b7, 0xcce1b7, 0xcce1b7, 0xcde1b8,
+    0xcde2b8, 0xcde2b9, 0xcee2b9, 0xcee2ba, 0xcee2ba, 0xcee2ba, 0xcfe3bb,
+    0xcfe3bb, 0xcfe3bc, 0xd0e3bc, 0xd0e3bd, 0xd0e4bd, 0xd1e4be, 0xd1e4be,
+    0xd1e4be, 0xd2e4bf, 0xd2e5bf, 0xd2e5c0, 0xd3e5c0, 0xd3e5c1, 0xd3e5c1,
+    0xd3e5c1, 0xd4e6c2, 0xd4e6c2, 0xd4e6c3, 0xd5e6c3, 0xd5e6c4, 0xd5e7c4,
+    0xd6e7c5, 0xd6e7c5, 0xd6e7c5, 0xd7e7c6, 0xd7e8c6, 0xd7e8c7, 0xd8e8c7,
+    0xd8e8c8, 0xd8e8c8, 0xd8e8c8, 0xd9e9c9, 0xd9e9c9, 0xd9e9ca, 0xdae9ca,
+    0xdae9cb, 0xdaeacb, 0xdbeacc, 0xdbeacc, 0xdbeacc, 0xdceacd, 0xdcebcd,
+    0xdcebce, 0xddebce, 0xddebcf, 0xddebcf, 0xddebcf, 0xdeecd0, 0xdeecd0,
+    0xdeecd1, 0xdfecd1, 0xdfecd2, 0xdfedd2, 0xe0edd3, 0xe0edd3, 0xe0edd3,
+    0xe1edd4, 0xe1eed4, 0xe1eed5, 0xe2eed5, 0xe2eed6, 0xe2eed6, 0xe2eed6,
+    0xe3efd7, 0xe3efd7, 0xe3efd8, 0xe4efd8, 0xe4efd9, 0xe4f0d9, 0xe5f0da,
+    0xe5f0da, 0xe5f0da, 0xe6f0db, 0xe6f1db, 0xe6f1dc, 0xe7f1dc, 0xe7f1dd,
+    0xe7f1dd, 0xe7f1dd, 0xe8f2de, 0xe8f2de, 0xe8f2df, 0xe9f2df, 0xe9f2e0,
+    0xe9f3e0, 0xeaf3e1, 0xeaf3e1, 0xeaf3e1, 0xebf3e2, 0xebf4e2, 0xebf4e3,
+    0xecf4e3, 0xecf4e4, 0xecf4e4, 0xecf4e4, 0xedf5e5, 0xedf5e5, 0xedf5e6,
+    0xeef5e6, 0xeef5e7, 0xeef6e7, 0xeff6e8, 0xeff6e8, 0xeff6e8, 0xf0f6e9,
+    0xf0f7e9, 0xf0f7ea, 0xf1f7ea, 0xf1f7eb, 0xf1f7eb, 0xf1f7eb, 0xf2f8ec,
+    0xf2f8ec, 0xf2f8ed, 0xf3f8ed, 0xf3f8ee, 0xf3f9ee, 0xf4f9ef, 0xf4f9ef,
+    0xf4f9ef, 0xf5f9f0, 0xf5faf0, 0xf5faf1, 0xf6faf1, 0xf6faf2, 0xf6faf2,
+    0xf6faf2, 0xf7fbf3, 0xf7fbf3, 0xf7fbf4, 0xf8fbf4, 0xf8fbf5, 0xf8fcf5,
+    0xf9fcf6, 0xf9fcf6, 0xf9fcf6, 0xfafcf7, 0xfafdf7, 0xfafdf8, 0xfbfdf8,
+    0xfbfdf9, 0xfbfdf9, 0xfbfdf9, 0xfcfefa, 0xfcfefa, 0xfcfefb, 0xfdfefb,
+    0xfdfefc, 0xfdfffc, 0xfefffd, 0xfefffd, 0xfefffd, 0xfffffe, 0xff00fe,
+    0xff00ff, 0x0000ff, 0x000000, 0x000000, 0x000000, 0x000000, 0x000000,
+    0x000001, 0x010001, 0x010002, 0x010102, 0x020103, 0x020103, 0x020103,
+    0x030104, 0x030204, 0x030205, 0x040205, 0x040206, 0x040206, 0x050307,
+    0x050307, 0x050307, 0x050308, 0x060308, 0x060309, 0x060409, 0x07040a,
+    0x07040a, 0x07040a, 0x08040b, 0x08050b, 0x08050c, 0x09050c, 0x09050d,
+    0x09050d, 0x0a060e, 0x0a060e, 0x0a060e, 0x0a060f, 0x0b060f, 0x0b0610,
+    0x0b0710, 0x0c0711, 0x0c0711, 0x0c0711, 0x0d0712, 0x0d0812, 0x0d0813,
+    0x0e0813, 0x0e0814, 0x0e0814, 0x0f0915, 0x0f0915, 0x0f0915, 0x0f0916,
+    0x100916, 0x100917, 0x100a17, 0x110a18, 0x110a18, 0x110a18, 0x120a19,
+    0x120b19, 0x120b1a, 0x130b1a, 0x130b1b, 0x130b1b, 0x140c1c, 0x140c1c,
+    0x140c1c, 0x140c1d, 0x150c1d, 0x150c1e, 0x150d1e, 0x160d1f, 0x160d1f,
+    0x160d1f, 0x170d20, 0x170e20, 0x170e21, 0x180e21, 0x180e22, 0x180e22,
+    0x190f23, 0x190f23, 0x190f23, 0x190f24, 0x1a0f24, 0x1a0f25, 0x1a1025,
+    0x1b1026, 0x1b1026, 0x1b1026, 0x1c1027, 0x1c1127, 0x1c1128, 0x1d1128,
+    0x1d1129, 0x1d1129, 0x1e122a, 0x1e122a, 0x1e122a, 0x1e122b, 0x1f122b,
+    0x1f122c, 0x1f132c, 0x20132d, 0x20132d, 0x20132d, 0x21132e, 0x21142e,
+    0x21142f, 0x22142f, 0x221430, 0x221430, 0x231531, 0x231531, 0x231531,
+    0x231532, 0x241532, 0x241533, 0x241633, 0x251634, 0x251634, 0x251634,
+    0x261635, 0x261735, 0x261736, 0x271736, 0x271737, 0x271737, 0x281838,
+    0x281838, 0x281838, 0x281839, 0x291839, 0x29183a, 0x29193a, 0x2a193b,
+    0x2a193b, 0x2a193b, 0x2b193c, 0x2b1a3c, 0x2b1a3d, 0x2c1a3d, 0x2c1a3e,
+    0x2c1a3e, 0x2d1b3f, 0x2d1b3f, 0x2d1b3f, 0x2d1b40, 0x2e1b40, 0x2e1b41,
+    0x2e1c41, 0x2f1c42, 0x2f1c42, 0x2f1c42, 0x301c43, 0x301d43, 0x301d44,
+    0x311d44, 0x311d45, 0x311d45, 0x321e46, 0x321e46, 0x321e46, 0x321e47,
+    0x331e47, 0x331e48, 0x331f48, 0x341f49, 0x341f49, 0x341f49, 0x351f4a,
+    0x35204a, 0x35204b, 0x36204b, 0x36204c, 0x36204c, 0x37214d, 0x37214d,
+    0x37214d, 0x37214e, 0x38214e, 0x38214f, 0x38224f, 0x392250, 0x392250,
+    0x392250, 0x3a2251, 0x3a2351, 0x3a2352, 0x3b2352, 0x3b2353, 0x3b2353,
+    0x3c2454, 0x3c2454, 0x3c2454, 0x3c2455, 0x3d2455, 0x3d2456, 0x3d2556,
+    0x3e2557, 0x3e2557, 0x3e2557, 0x3f2558, 0x3f2658, 0x3f2659, 0x402659,
+    0x40265a, 0x40265a, 0x41275b, 0x41275b, 0x41275b, 0x41275c, 0x42275c,
+    0x42275d, 0x42285d, 0x43285e, 0x43285e, 0x43285e, 0x44285f, 0x44295f,
+    0x442960, 0x452960, 0x452961, 0x452961, 0x462a62, 0x462a62, 0x462a62,
+    0x462a63, 0x472a63, 0x472a64, 0x472b64, 0x482b65, 0x482b65, 0x482b65,
+    0x492b66, 0x492c66, 0x492c67, 0x4a2c67, 0x4a2c68, 0x4a2c68, 0x4b2d69,
+    0x4b2d69, 0x4b2d69, 0x4b2d6a, 0x4c2d6a, 0x4c2d6b, 0x4c2e6b, 0x4d2e6c,
+    0x4d2e6c, 0x4d2e6c, 0x4e2e6d, 0x4e2f6d, 0x4e2f6e, 0x4f2f6e, 0x4f2f6f,
+    0x4f2f6f};
+
 /* Encode the value of one species at column x of the row being written,
  * with Floyd-Steinberg error diffusion and, for packed codes, a dithered
  * rounding threshold from random, in [0, 2^DITHER_BITS). The residual row
@@ -875,9 +954,17 @@ static inline unsigned encode_cell(int packed, int species,
     }
   }
   int32_t error = value - low;
-  int32_t right = error * DIFFUSION_RIGHT / DIFFUSION_DENOMINATOR;
-  int32_t below_left = error * DIFFUSION_BELOW_LEFT / DIFFUSION_DENOMINATOR;
-  int32_t below = error * DIFFUSION_BELOW / DIFFUSION_DENOMINATOR;
+  int32_t right, below_left, below;
+  if (!packed) {
+    uint32_t split = Q15_SHARES[error + 256];
+    right = (int8_t)split;
+    below_left = (int8_t)(split >> 8);
+    below = (int8_t)(split >> 16);
+  } else {
+    right = error * DIFFUSION_RIGHT / DIFFUSION_DENOMINATOR;
+    below_left = error * DIFFUSION_BELOW_LEFT / DIFFUSION_DENOMINATOR;
+    below = error * DIFFUSION_BELOW / DIFFUSION_DENOMINATOR;
+  }
   shares->carry = right;
   residual[x] = shares->pending + below;
   if (x > 0) {
@@ -911,13 +998,43 @@ static void finish_row(StepContext *ctx) {
   }
 }
 
+/* Nine-point Laplacian of one species for a whole row of Q15 codes, into a
+ * row of Q24 Laplacians. The weighted sum is linear, so the sum of the
+ * codes shifted to Q24 equals the sum of the decoded values, and the
+ * rounding is the same as in laplacian_row. */
+static void laplacian_codes(const uint16_t *restrict up,
+                            const uint16_t *restrict cur,
+                            const uint16_t *restrict down,
+                            int32_t *restrict out, int width) {
+  int last = width - 1;
+  int32_t s_first = up[0] + down[0], c_first = cur[0];
+  int32_t s_prev = up[last] + down[last], c_prev = cur[last];
+  int32_t s_cur = s_first, c_cur = c_first;
+  for (int x = 0; x < last; x++) {
+    int32_t s_next = up[x + 1] + down[x + 1], c_next = cur[x + 1];
+    out[x] =
+        round_laplacian((LAPLACIAN_AXIAL_WEIGHT * (s_cur + c_prev + c_next) +
+                         s_prev + s_next - LAPLACIAN_SCALE * c_cur) *
+                        (1 << Q15_SHIFT));
+    s_prev = s_cur;
+    c_prev = c_cur;
+    s_cur = s_next;
+    c_cur = c_next;
+  }
+  out[last] =
+      round_laplacian((LAPLACIAN_AXIAL_WEIGHT * (s_cur + c_prev + c_first) +
+                       s_prev + s_first - LAPLACIAN_SCALE * c_cur) *
+                      (1 << Q15_SHIFT));
+}
+
 /* Write row y from its old values and Laplacians: react and encode every
  * cell with the decay of its mask level, and hold B at 0 in a masked cell.
  * Inlined at both calls in rd_step, so a row outside the mask rows
  * (levels NULL) runs the loop without the level lookup. */
 static ALWAYS_INLINE void
 update_row(StepContext *ctx, int y, const int32_t *restrict cur_a,
-           const int32_t *restrict cur_b, const int32_t *restrict lap_a,
+           const int32_t *restrict cur_b, const uint16_t *restrict codes_a,
+           const uint16_t *restrict codes_b, const int32_t *restrict lap_a,
            const int32_t *restrict lap_b, uint16_t *restrict cells_a,
            uint16_t *restrict cells_b, const uint8_t *restrict levels) {
   int32_t *restrict res_a = ctx->residual[0], *restrict res_b =
@@ -933,7 +1050,10 @@ update_row(StepContext *ctx, int y, const int32_t *restrict cur_a,
     int32_t next_a, next_b;
     uint32_t dither = packed ? cell_dither(step_salt, row_index + x) : 0;
     int level = levels ? levels[x] : RD_MASK_RAMP;
-    react_cell(cur_a[x], cur_b[x], lap_a[x], lap_b[x], feed,
+    /* The old row is Q24 values, or Q15 codes in the Q15 row loop. */
+    int32_t a = codes_a ? decode_q15(codes_a[x]) : cur_a[x];
+    int32_t b = codes_b ? decode_q15(codes_b[x]) : cur_b[x];
+    react_cell(a, b, lap_a[x], lap_b[x], feed,
                levels ? ctx->level_decay[level] : decay, da, db, dt, unit_dt,
                &next_a, &next_b);
     unsigned code_a = encode_cell(packed, RD_SPECIES_A, res_a, &shares_a, x,
@@ -956,6 +1076,57 @@ update_row(StepContext *ctx, int y, const int32_t *restrict cur_a,
   ctx->shares[1] = shares_b;
 }
 
+/* The row loop of the Q15 modes, on the codes themselves: the stored rows
+ * below are still unwritten and are read in place, and only the old row
+ * being rewritten is copied, to serve as the row above of the next row.
+ * The saved-row buffers hold the old rows above and at the row, the
+ * original first row, and the two rows of Laplacians. */
+static void step_codes(State *state, int count) {
+  int width = state->width, height = state->height;
+  size_t row_bytes = (size_t)width * sizeof(uint16_t);
+  uint16_t *restrict cells_a = plane(state, RD_SPECIES_A);
+  uint16_t *restrict cells_b = plane(state, RD_SPECIES_B);
+  int32_t *lap_a = saved_rows(state), *lap_b = lap_a + width;
+  uint16_t *codes = (uint16_t *)(lap_b + width);
+  StepContext ctx;
+  for (int iteration = 0; iteration < count; iteration++) {
+    uint16_t *up[SPECIES_COUNT] = {codes, codes + width};
+    uint16_t *cur[SPECIES_COUNT] = {codes + 2 * width, codes + 3 * width};
+    uint16_t *first[SPECIES_COUNT] = {codes + 4 * width, codes + 5 * width};
+    memcpy(up[0], cells_a + (size_t)(height - 1) * width, row_bytes);
+    memcpy(up[1], cells_b + (size_t)(height - 1) * width, row_bytes);
+    memcpy(first[0], cells_a, row_bytes);
+    memcpy(first[1], cells_b, row_bytes);
+    begin_step(state, &ctx);
+    for (int y = 0; y < height; y++) {
+      size_t row = (size_t)y * width;
+      memcpy(cur[0], cells_a + row, row_bytes);
+      memcpy(cur[1], cells_b + row, row_bytes);
+      const uint16_t *down_a =
+          y == height - 1 ? first[0] : cells_a + row + width;
+      const uint16_t *down_b =
+          y == height - 1 ? first[1] : cells_b + row + width;
+      laplacian_codes(up[0], cur[0], down_a, lap_a, width);
+      laplacian_codes(up[1], cur[1], down_b, lap_b, width);
+      if (y >= state->mask_first && y < state->mask_end) {
+        update_row(&ctx, y, NULL, NULL, cur[0], cur[1], lap_a, lap_b, cells_a,
+                   cells_b, mask_levels(state) + row);
+      } else {
+        update_row(&ctx, y, NULL, NULL, cur[0], cur[1], lap_a, lap_b, cells_a,
+                   cells_b, NULL);
+      }
+      finish_row(&ctx);
+      /* The old row just copied becomes the row above. */
+      for (int species = 0; species < SPECIES_COUNT; species++) {
+        uint16_t *tmp = up[species];
+        up[species] = cur[species];
+        cur[species] = tmp;
+      }
+    }
+    state->step++;
+  }
+}
+
 /* Advance the field in place. Each species keeps four decoded rows so that
  * neighbors still see the old values of rows that were already rewritten. */
 int rd_step(void *handle, int count) {
@@ -971,6 +1142,10 @@ int rd_step(void *handle, int count) {
   uint16_t *restrict cells_a = plane(state, 0);
   uint16_t *restrict cells_b = is_packed(state) ? cells_a : plane(state, 1);
   StepContext ctx;
+  if (!is_packed(state)) {
+    step_codes(state, count);
+    return 0;
+  }
   for (int iteration = 0; iteration < count; iteration++) {
     /* prev, cur, and next hold the old rows above, at, and below the row
      * being updated. first keeps the original row 0, which is the periodic
@@ -999,11 +1174,11 @@ int rd_step(void *handle, int count) {
       laplacian_row(prev[0], cur[0], next[0], width);
       laplacian_row(prev[1], cur[1], next[1], width);
       if (y >= state->mask_first && y < state->mask_end) {
-        update_row(&ctx, y, cur[0], cur[1], prev[0], prev[1], cells_a, cells_b,
-                   mask_levels(state) + (size_t)y * width);
+        update_row(&ctx, y, cur[0], cur[1], NULL, NULL, prev[0], prev[1],
+                   cells_a, cells_b, mask_levels(state) + (size_t)y * width);
       } else {
-        update_row(&ctx, y, cur[0], cur[1], prev[0], prev[1], cells_a, cells_b,
-                   NULL);
+        update_row(&ctx, y, cur[0], cur[1], NULL, NULL, prev[0], prev[1],
+                   cells_a, cells_b, NULL);
       }
       finish_row(&ctx);
       /* Rotate: the row just finished becomes the row above, and the buffer
