@@ -1,4 +1,5 @@
 import { Simulation, type Parameters } from './simulation.ts';
+import { MASK_KILL, MASK_RAMP, maskLevels } from './wasm-simulation.ts';
 
 const paletteLow = [
   [0, 30, 18],
@@ -45,7 +46,8 @@ export class FloatSimulation {
   dispose() {}
 
   step(params: Parameters) {
-    this.field.step(params);
+    this.field.step(params, 1, this.kills(params.kill));
+    this.applyMask();
   }
 
   seedAt(x: number, y: number, radius = 6) {
@@ -54,6 +56,48 @@ export class FloatSimulation {
       Math.floor((y * 228) / this.height),
       radius,
     );
+    this.applyMask();
+  }
+
+  private levels: Uint8Array | null = null;
+  private killMap: Float32Array | null = null;
+  private killFor = Number.NaN;
+
+  /** Hold b at 0 in the cells of a mask (or none) and raise the kill rate
+   * toward it, like rd_mask of the C core. */
+  setMask(mask: Uint8Array | null) {
+    this.levels = mask ? maskLevels(mask, this.width, this.height) : null;
+    this.killFor = Number.NaN;
+    this.applyMask();
+  }
+
+  maskLevel(x: number, y: number) {
+    return this.levels ? this.levels[y * this.width + x] : MASK_RAMP;
+  }
+
+  /** Per-cell kill rates for the mask levels, rebuilt when kill changes. */
+  private kills(kill: number) {
+    if (!this.levels) return undefined;
+    if (this.killFor !== kill) {
+      const levels = this.levels;
+      this.killMap = Float32Array.from(
+        levels,
+        (level) =>
+          kill + ((MASK_KILL - kill) * (MASK_RAMP - level)) / MASK_RAMP,
+      );
+      this.killFor = kill;
+    }
+    return this.killMap ?? undefined;
+  }
+
+  get(x: number, y: number, species: number) {
+    return (species ? this.field.b : this.field.a)[y * this.width + x];
+  }
+
+  private applyMask() {
+    if (!this.levels) return;
+    for (let i = 0; i < this.levels.length; i++)
+      if (this.levels[i] === 0) this.field.b[i] = 0;
   }
 
   private seedDisplay(x: number, y: number, radius: number) {

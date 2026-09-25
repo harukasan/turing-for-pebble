@@ -50,7 +50,8 @@ export class Simulation {
         this.b[i] = 0.25;
       }
   }
-  step(p: Parameters, count = 1) {
+  /** Advance count steps. kills optionally gives a per-cell kill rate. */
+  step(p: Parameters, count = 1, kills?: Float32Array) {
     const w = this.width,
       h = this.height;
     for (let t = 0; t < count; t++) {
@@ -97,7 +98,11 @@ export class Simulation {
             0,
             Math.min(
               1,
-              b + (p.db * lapB + reaction - (p.kill + p.feed) * b) * p.dt,
+              b +
+                (p.db * lapB +
+                  reaction -
+                  ((kills?.[i] ?? p.kill) + p.feed) * b) *
+                  p.dt,
             ),
           );
         }

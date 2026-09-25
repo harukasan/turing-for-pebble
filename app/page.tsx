@@ -7,8 +7,19 @@ import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { presets, type Parameters } from '@/lib/simulation';
 import { FloatSimulation } from '@/lib/float-simulation';
-import { WasmSimulation, loadCore, effective } from '@/lib/wasm-simulation';
-import { drawClock, loadFonts } from '@/lib/leco';
+import {
+  WasmSimulation,
+  loadCore,
+  effective,
+  buildMask,
+  type CoreAPI,
+} from '@/lib/wasm-simulation';
+import {
+  drawClock,
+  loadFonts,
+  fontIndex,
+  type ClockFont,
+} from '@/lib/clock-fonts';
 import { PebbleMemory } from '@/lib/pebble-memory';
 
 const defaults: Parameters = {
@@ -21,6 +32,13 @@ const defaults: Parameters = {
 type Engine = 'u8-200' | 'q15-100' | 'float-200' | 'float-100';
 // Startup steps of the watchface, mirrored by device behavior mode.
 const DEVICE_STARTUP_STEPS = 1800;
+// Pending steps after a minute change, as RD_MINUTE_STEPS of the watch:
+// with digit avoidance at least 300 steps refill the strokes freed by the
+// previous digits, otherwise 16 steps are added.
+const DEVICE_MINUTE_STEPS = 300;
+const DEVICE_MINUTE_STEPS_PLAIN = 16;
+// Halo around the digits held at the equilibrium, in display pixels.
+const HALO = 1;
 type ActiveSimulation = WasmSimulation | FloatSimulation;
 const engineWidth = (engine: Engine): 100 | 200 =>
   engine.endsWith('200') ? 200 : 100;
@@ -107,7 +125,9 @@ export default function Home() {
     [revision, setRevision] = useState(0);
   const [running, setRunning] = useState(false),
     [speed, setSpeed] = useState(16),
-    [clock, setClock] = useState(true);
+    [clock, setClock] = useState(true),
+    [avoid, setAvoid] = useState(true),
+    [font, setFont] = useState<ClockFont>('leco');
   const [quantize, setQuantize] = useState(true),
     [palette, setPalette] = useState('green'),
     [actual, setActual] = useState(false);
@@ -124,6 +144,8 @@ export default function Home() {
     running,
     speed,
     clock,
+    avoid,
+    font,
     quantize,
     palette,
     deviceMode,
@@ -134,11 +156,23 @@ export default function Home() {
       running,
       speed,
       clock,
+      avoid,
+      font,
       quantize,
       palette,
       deviceMode,
     };
-  }, [params, running, speed, clock, quantize, palette, deviceMode]);
+  }, [
+    params,
+    running,
+    speed,
+    clock,
+    avoid,
+    font,
+    quantize,
+    palette,
+    deviceMode,
+  ]);
   useEffect(() => {
     type Tool = {
       name: string;
@@ -210,7 +244,8 @@ export default function Home() {
     return () => lifecycle.abort();
   }, []);
   const pending = useRef(0),
-    manualPending = useRef(0);
+    manualPending = useRef(0),
+    core = useRef<CoreAPI | null>(null);
   useEffect(() => {
     if (advance) manualPending.current += 100;
   }, [advance]);
@@ -218,15 +253,14 @@ export default function Home() {
     let cancelled = false;
     sim.current?.dispose();
     sim.current = null;
-    Promise.all([
-      isFloat(engine) ? Promise.resolve(null) : loadCore(),
-      loadFonts(),
-    ])
+    // The Float32 engines need the core too, for the clock mask.
+    Promise.all([loadCore(), loadFonts()])
       .then(([api]) => {
         if (cancelled) return;
-        const next = api
-          ? new WasmSimulation(api, engine === 'u8-200' ? 0 : 1, seed)
-          : new FloatSimulation(engineWidth(engine), seed);
+        core.current = api;
+        const next = isFloat(engine)
+          ? new FloatSimulation(engineWidth(engine), seed)
+          : new WasmSimulation(api, engine === 'u8-200' ? 0 : 1, seed);
         sim.current = next;
         setStats({ steps: 0, ms: 0 });
         if (next instanceof WasmSimulation)
@@ -268,6 +302,9 @@ export default function Home() {
     let pixels: ImageData;
     let lastMinute = Math.floor(Date.now() / 60000),
       focused = document.hasFocus();
+    // The simulation and key (font and minute) the mask was built for.
+    let maskSim: ActiveSimulation | null = null,
+      maskKey = '';
     const stopLight = () => {
       lightUntil.current = 0;
     };
@@ -296,9 +333,32 @@ export default function Home() {
       const start = performance.now();
       let steps = 0;
       const minute = Math.floor(Date.now() / 60000);
+      const avoiding = c.clock && c.avoid;
       if (minute !== lastMinute) {
-        if (c.deviceMode && c.running) pending.current += 16;
+        if (c.deviceMode && c.running)
+          pending.current = avoiding
+            ? Math.max(pending.current, DEVICE_MINUTE_STEPS)
+            : pending.current + DEVICE_MINUTE_STEPS_PLAIN;
         lastMinute = minute;
+      }
+      // Keep the pattern out of the digits: rebuild the mask when the
+      // simulation, the font, or the minute changes.
+      const key = avoiding ? `${c.font}|${minute}` : '';
+      if ((s !== maskSim || key !== maskKey) && core.current) {
+        s.setMask(
+          key
+            ? buildMask(
+                core.current,
+                s.width,
+                s.height,
+                fontIndex(c.font),
+                new Date(),
+                HALO,
+              )
+            : null,
+        );
+        maskSim = s;
+        maskKey = key;
       }
       const manual = manualPending.current > 0;
       const budget = deviceWork && !manual ? 120 : 8;
@@ -334,7 +394,7 @@ export default function Home() {
       off.putImageData(pixels, 0, 0);
       ctx.imageSmoothingEnabled = false;
       ctx.drawImage(offscreen, 0, 0);
-      if (c.clock) drawClock(ctx, new Date());
+      if (c.clock) drawClock(ctx, new Date(), c.font);
       if (now - lastStats > 400) {
         setStats({ steps: s.steps, ms: measured });
         lastStats = now;
@@ -374,6 +434,11 @@ export default function Home() {
     palette,
     quantize,
     clock,
+    font,
+    avoidDigits: clock && avoid,
+    halo: HALO,
+    minuteSteps:
+      clock && avoid ? DEVICE_MINUTE_STEPS : DEVICE_MINUTE_STEPS_PLAIN,
     steps: stats.steps,
   };
   const reset = () => {
@@ -386,7 +451,7 @@ export default function Home() {
     a.download = `turing-${seed}-${stats.steps}.${kind}`;
     if (kind === 'h') {
       const q = effective(params);
-      const text = `/* Generated configuration, core v3 */\n#ifndef RD_MODE\n#define RD_MODE ${engine === 'u8-200' ? 0 : 1}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === 'green' ? 0 : palette === 'blue' ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n`;
+      const text = `/* Generated configuration, core v3 */\n#ifndef RD_MODE\n#define RD_MODE ${engine === 'u8-200' ? 0 : 1}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === 'green' ? 0 : palette === 'blue' ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n#ifndef RD_FONT\n#define RD_FONT ${fontIndex(font)}\n#endif\n#ifndef RD_AVOID\n#define RD_AVOID ${Number(avoid)}\n#endif\n#define RD_HALO ${HALO}\n#define RD_MINUTE_STEPS (RD_AVOID ? ${DEVICE_MINUTE_STEPS} : ${DEVICE_MINUTE_STEPS_PLAIN})\n`;
       const url = URL.createObjectURL(new Blob([text]));
       a.href = url;
       a.download = 'config.h';
@@ -534,7 +599,7 @@ export default function Home() {
               <strong>
                 {floatMode
                   ? ((width * ((width * 228) / 200) * 16) / 1024).toFixed(1)
-                  : ((memory[5] ?? 0) / 1024).toFixed(1)}{' '}
+                  : ((memory[6] ?? 0) / 1024).toFixed(1)}{' '}
                 KiB
               </strong>
               <span>{floatMode ? 'Float32の計算配列' : '共通Cの必要量'}</span>
@@ -563,10 +628,10 @@ export default function Home() {
                   <p>
                     共通C: 濃度場 {memory[0]} B / 行バッファ {memory[1]} B /
                     制御 {memory[2]} B / 描画行 {memory[3]} B /
-                    アラインメント余裕 {memory[4]} B
+                    アラインメント余裕 {memory[4]} B / 数字マスク {memory[5]} B
                   </p>
                   <p>
-                    Web固有: Wasm linear memory {memory[6]}
+                    Web固有: Wasm linear memory {memory[7]}
                     B（共通Cを内包） / ImageData 182400 B / Canvas 2面の画素相当
                     364800 B。ブラウザ全体の使用量ではありません。
                   </p>
@@ -753,7 +818,7 @@ export default function Home() {
               onChange={setSpeed}
             />
             <p className="hint">
-              通常は最大30描画/秒、計算予算8ms。実機動作モードは毎分16ステップ、点灯中は最大5秒・10fps・8ステップ/描画。
+              通常は最大30描画/秒、計算予算8ms。実機動作モードは分が変わるたびに300ステップ（数字を避けないときは16ステップ）、点灯中は最大5秒・10fps・8ステップ/描画。
             </p>
             <div className="control-top" style={{ marginTop: 18 }}>
               <label htmlFor="seed">乱数シード</label>
@@ -798,6 +863,27 @@ export default function Home() {
               時刻・日付を表示
               <Switch id="clock" checked={clock} onCheckedChange={setClock} />
             </label>
+            <Choices
+              label="時計フォント"
+              value={font}
+              options={[
+                ['leco', 'LECO'],
+                ['bitham', 'Bitham'],
+              ]}
+              onChange={(value) => setFont(value as ClockFont)}
+            />
+            <label className="toggle" htmlFor="avoid">
+              数字を避ける
+              <Switch
+                id="avoid"
+                checked={avoid}
+                disabled={!clock}
+                onCheckedChange={setAvoid}
+              />
+            </label>
+            <p className="hint">
+              数字の下ではBを0に保ち、周囲5セルで除去率（Kill）を0.075まで上げて、模様を数字の手前で自然に途切れさせます。
+            </p>
             <label className="toggle" htmlFor="actual">
               表示倍率 1×
               <Switch

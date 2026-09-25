@@ -18,7 +18,93 @@ type API = {
   rd_step(p: number, n: number): number;
   rd_steps(p: number): number;
   rd_row(p: number, y: number, c: number, q: number): number;
+  rd_get(p: number, x: number, y: number, s: number): number;
+  rd_mask(p: number, m: number): number;
+  rd_mask_level(p: number, x: number, y: number): number;
+  cm_bytes(w: number, h: number): number;
+  cm_build(
+    m: number,
+    w: number,
+    h: number,
+    font: number,
+    hour: number,
+    minute: number,
+    year: number,
+    month: number,
+    day: number,
+    halo: number,
+  ): number;
 };
+export type CoreAPI = API;
+/** The clock mask of a grid (cm_build in core/clock_mask.c), one bit per
+ * cell in rows of (width + 7) / 8 bytes. */
+export function buildMask(
+  api: API,
+  width: number,
+  height: number,
+  font: number,
+  date: Date,
+  halo: number,
+) {
+  const bytes = api.cm_bytes(width, height);
+  const pointer = api.malloc(bytes);
+  if (!pointer) throw new Error('Wasm allocation failed');
+  try {
+    if (
+      api.cm_build(
+        pointer,
+        width,
+        height,
+        font,
+        date.getHours(),
+        date.getMinutes(),
+        date.getFullYear(),
+        date.getMonth() + 1,
+        date.getDate(),
+        halo,
+      )
+    )
+      throw new Error('Invalid clock mask');
+    return new Uint8Array(api.memory.buffer, pointer, bytes).slice();
+  } finally {
+    api.free(pointer);
+  }
+}
+/** Ramp of the mask levels and the kill rate at the mask (RD_MASK_RAMP and
+ * RD_MASK_KILL of core/rd.h). */
+export const MASK_RAMP = 5;
+export const MASK_KILL = 2458 / 32768;
+/** Mask levels as rd_mask derives them: 0 in a masked cell, else the
+ * chessboard distance to the nearest masked cell without wrapping, capped
+ * at MASK_RAMP. */
+export function maskLevels(mask: Uint8Array, width: number, height: number) {
+  const levels = new Uint8Array(width * height).fill(MASK_RAMP);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      if (!maskBit(mask, width, x, y)) continue;
+      for (
+        let yy = Math.max(0, y - MASK_RAMP);
+        yy <= Math.min(height - 1, y + MASK_RAMP);
+        yy++
+      )
+        for (
+          let xx = Math.max(0, x - MASK_RAMP);
+          xx <= Math.min(width - 1, x + MASK_RAMP);
+          xx++
+        ) {
+          const d = Math.max(Math.abs(xx - x), Math.abs(yy - y));
+          if (d < levels[yy * width + xx]) levels[yy * width + xx] = d;
+        }
+    }
+  return levels;
+}
+/** Whether cell (x, y) is set in a mask of a grid of the given width. */
+export const maskBit = (
+  mask: Uint8Array,
+  width: number,
+  x: number,
+  y: number,
+) => (mask[y * ((width + 7) >> 3) + (x >> 3)] >> (x & 7)) & 1;
 let loaded: Promise<API> | undefined;
 export function loadCore() {
   return (loaded ??= fetch('/wasm/rd.wasm').then(async (r) => {
@@ -54,7 +140,7 @@ export class WasmSimulation {
     this.width = mode === 0 ? 200 : 100;
     this.height = (this.width * 228) / 200;
     this.bytes = api.rd_bytes(mode);
-    this.components = Array.from({ length: 5 }, (_, i) =>
+    this.components = Array.from({ length: 6 }, (_, i) =>
       api.rd_memory(mode, i),
     );
     this.allocation = api.malloc(this.bytes);
@@ -103,6 +189,25 @@ export class WasmSimulation {
       Math.floor((y * 228) / this.height),
       radius,
     );
+  }
+  /** Hold B at 0 in the cells of a mask (or none) and raise the kill rate
+   * toward it, as rd_mask of the core. */
+  setMask(mask: Uint8Array | null) {
+    if (!mask) {
+      this.api.rd_mask(this.state, 0);
+      return;
+    }
+    const pointer = this.api.malloc(mask.length);
+    if (!pointer) throw new Error('Wasm allocation failed');
+    new Uint8Array(this.api.memory.buffer, pointer, mask.length).set(mask);
+    this.api.rd_mask(this.state, pointer);
+    this.api.free(pointer);
+  }
+  maskLevel(x: number, y: number) {
+    return this.api.rd_mask_level(this.state, x, y);
+  }
+  get(x: number, y: number, species: number) {
+    return this.api.rd_get(this.state, x, y, species) / 2 ** 24;
   }
   render(pixels: ImageData, palette: string, quantize: boolean) {
     for (let y = 0; y < 228; y++) {
