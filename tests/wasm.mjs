@@ -10,7 +10,7 @@ const {
     },
   },
 });
-for (let mode = 0; mode < 3; mode++)
+for (let mode = 0; mode < 4; mode++)
   for (const count of [0, 1, 100]) {
     const n = e.rd_bytes(mode),
       p = e.malloc(n),
@@ -28,7 +28,7 @@ for (let mode = 0; mode < 3; mode++)
   }
 
 // Clock masks built and installed in Wasm give the native field.
-for (const mode of [0, 1, 2])
+for (const mode of [0, 1, 2, 3])
   for (const font of [0, 1]) {
     const args = [font, 13, 57, 2046, 8, 29, 1];
     const n = e.rd_bytes(mode),
@@ -49,10 +49,31 @@ for (const mode of [0, 1, 2])
     console.log(`mode ${mode}, font ${font}, masked: native/Wasm ${native}`);
   }
 
+// Interpolated rows of every grid match the native build.
+for (let mode = 0; mode < 4; mode++) {
+  const n = e.rd_bytes(mode),
+    p = e.malloc(n),
+    s = e.rd_init(p, n, mode, 42);
+  e.rd_step(s, 50);
+  let hash = 2166136261;
+  for (let y = 0; y < 228; y++) {
+    const row = new Uint8Array(e.memory.buffer, e.rd_row(s, y, 0, 3), 800);
+    for (const v of row) hash = Math.imul(hash ^ v, 16777619) >>> 0;
+  }
+  const native = Number(
+    execFileSync('build/core-test', ['render', String(mode), '50'], {
+      encoding: 'utf8',
+    }).trim(),
+  );
+  assert.equal(hash, native);
+  e.free(p);
+  console.log(`mode ${mode}, interpolated rows: native/Wasm ${native}`);
+}
+
 // Repeated mode resets reuse the allocator and remain within fixed linear memory.
 const linear = e.memory.buffer.byteLength;
 for (let i = 0; i < 300; i++) {
-  const mode = i % 3,
+  const mode = i % 4,
     n = e.rd_bytes(mode),
     p = e.malloc(n);
   assert(p);

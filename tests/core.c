@@ -101,6 +101,19 @@ static void check_codes(void) {
   assert(round_shift((int64_t)3 << 40, 30) == 3 << 10);
   assert(round_shift_unsigned((1u << 23) - 1, 24) == 0 &&
          round_shift_unsigned(1u << 23, 24) == 1);
+  /* The branch-free rounding equals the definition, halfway away from
+   * zero, for both signs and every shift used. */
+  for (int i = 0; i < 200000; i++) {
+    int64_t value = (int64_t)((uint64_t)mix32((uint32_t)i) << 32 |
+                              mix32((uint32_t)i * 7919u)) >>
+                    (i % 24);
+    for (int bits = 15; bits <= 30; bits += 15) {
+      int64_t half = (int64_t)1 << (bits - 1);
+      int64_t expected =
+          value < 0 ? -((-value + half) >> bits) : (value + half) >> bits;
+      assert(round_shift(value, bits) == expected);
+    }
+  }
   /* The unit dt shortcut is exact for both signs. */
   for (int64_t rate = -3000000; rate <= 3000000; rate += 7919) {
     assert(round_shift(rate * RD_Q15_ONE, RATE_SHIFT) ==
@@ -280,21 +293,62 @@ static void check_diffusion(State *state, int species, int32_t value) {
 /* rd_row_rgb2 is the quantized rd_row output packed to two bits per
  * channel, for every palette and display row, and every B code goes
  * through the lookup table or its fallback to the same byte. */
+/* Floor of a / b for b > 0, written out for the references. */
+static long floor_ratio(long a, long b) {
+  long q = a / b;
+  return q * b > a ? q - 1 : q;
+}
+
+/* Interpolated Q15 B at the center of display pixel (x, y), from the
+ * definition: the center in cell units, the four surrounding cells with
+ * periodic indices, a vertical then a horizontal lerp in 256ths rounded
+ * half up. */
+static unsigned interpolated_reference(State *state, int x, int y) {
+  int w = state->width, h = state->height;
+  long qx = floor_ratio(((2L * x + 1) * w - RD_DISPLAY_WIDTH) * 256,
+                        2L * RD_DISPLAY_WIDTH);
+  long qy = floor_ratio(((2L * y + 1) * h - RD_DISPLAY_HEIGHT) * 256,
+                        2L * RD_DISPLAY_HEIGHT);
+  long cx = floor_ratio(qx, 256), cy = floor_ratio(qy, 256);
+  unsigned wx = (unsigned)(qx - cx * 256), wy = (unsigned)(qy - cy * 256);
+  int x0 = (int)((cx % w + w) % w), x1 = (x0 + 1) % w;
+  int y0 = (int)((cy % h + h) % h), y1 = (y0 + 1) % h;
+  unsigned b00 = (unsigned)rd_get(state, x0, y0, RD_SPECIES_B) >> 9;
+  unsigned b01 = (unsigned)rd_get(state, x0, y1, RD_SPECIES_B) >> 9;
+  unsigned b10 = (unsigned)rd_get(state, x1, y0, RD_SPECIES_B) >> 9;
+  unsigned b11 = (unsigned)rd_get(state, x1, y1, RD_SPECIES_B) >> 9;
+  unsigned left = (b00 * (256 - wy) + b01 * wy + 128) >> 8;
+  unsigned right = (b10 * (256 - wy) + b11 * wy + 128) >> 8;
+  return (left * (256 - wx) + right * wx + 128) >> 8;
+}
+
+/* rd_row_rgb2 is the quantized rd_row output packed to two bits per
+ * channel, for every palette, both sampling flags, and sampled display
+ * rows. Interpolated pixels are the colors of the reference value, and
+ * every B code or value goes through a lookup table or its fallback to the
+ * same byte. */
 static void check_rgb2(State *state) {
   uint8_t copy[RD_DISPLAY_WIDTH];
   for (int palette = 0; palette <= RD_PALETTE_MONO; palette++) {
-    for (int y = 0; y < RD_DISPLAY_HEIGHT; y += y < 8 ? 1 : 7) {
-      uint8_t *rgb2 = rd_row_rgb2(state, y, palette);
-      assert(rgb2);
-      memcpy(copy, rgb2, sizeof copy);
-      uint8_t *rgba = rd_row(state, y, palette, 1);
-      assert(rgba);
-      for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
-        uint8_t expected =
-            (uint8_t)(ARGB8_OPAQUE | (rgba[x * 4] >> 6) << 4 |
-                      (rgba[x * 4 + 1] >> 6) << 2 | (rgba[x * 4 + 2] >> 6));
-        assert(copy[x] == expected);
-        assert((copy[x] & ARGB8_OPAQUE) == ARGB8_OPAQUE);
+    for (int sampling = 0; sampling <= RD_ROW_BILINEAR;
+         sampling += RD_ROW_BILINEAR) {
+      for (int y = 0; y < RD_DISPLAY_HEIGHT; y += y < 8 ? 1 : 7) {
+        uint8_t *rgb2 = rd_row_rgb2(state, y, palette, sampling);
+        assert(rgb2);
+        memcpy(copy, rgb2, sizeof copy);
+        uint8_t *rgba = rd_row(state, y, palette, sampling | RD_ROW_QUANTIZE);
+        assert(rgba);
+        for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+          uint8_t expected =
+              (uint8_t)(ARGB8_OPAQUE | (rgba[x * 4] >> 6) << 4 |
+                        (rgba[x * 4 + 1] >> 6) << 2 | (rgba[x * 4 + 2] >> 6));
+          assert(copy[x] == expected);
+          assert((copy[x] & ARGB8_OPAQUE) == ARGB8_OPAQUE);
+          if (sampling) {
+            unsigned value = interpolated_reference(state, x, y);
+            assert(copy[x] == value_argb8(palette, decode_q15(value)));
+          }
+        }
       }
     }
     ensure_lookup_table(state, palette);
@@ -306,10 +360,50 @@ static void check_rgb2(State *state) {
           is_packed(state) ? table[code] : table[code >> LUT_BUCKET_BITS];
       assert(value == 0 || value == expected);
     }
+    ensure_value_table(state, palette);
+    for (unsigned value = 0; value <= Q15_CODE_MAX; value++) {
+      assert(value_color(value_table(state), palette, value) ==
+             value_argb8(palette, decode_q15(value)));
+    }
   }
   /* Invalid arguments return NULL without building a table. */
-  assert(!rd_row_rgb2(state, RD_DISPLAY_HEIGHT, 0));
-  assert(!rd_row_rgb2(state, 0, RD_PALETTE_MONO + 1));
+  assert(!rd_row_rgb2(state, RD_DISPLAY_HEIGHT, 0, 0));
+  assert(!rd_row_rgb2(state, 0, RD_PALETTE_MONO + 1, 0));
+  assert(!rd_row_rgb2(state, 0, 0, 4) && !rd_row(state, 0, 0, 4));
+}
+
+/* The nearest output of every rendering call for modes 0-2, hashed, equals
+ * that of the core before interpolated rendering was added: a clock mask,
+ * 300 steps, every palette, rd_row with flags 0 and 1, and rd_row_rgb2. */
+static void check_nearest_unchanged(void) {
+  const uint32_t expected[3] = {1597135921u, 1718569397u, 1149036341u};
+  for (int mode = 0; mode < 3; mode++) {
+    void *memory = malloc(rd_bytes(mode));
+    void *state = rd_init(memory, rd_bytes(mode), mode, 42);
+    uint8_t *mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
+    cm_build(mask, rd_width(state), rd_height(state), CM_FONT_BITHAM, 13, 57,
+             2046, 8, 29, 1);
+    rd_mask(state, mask);
+    rd_step(state, 300);
+    uint32_t hash = FNV_OFFSET_BASIS;
+    for (int palette = 0; palette <= RD_PALETTE_MONO; palette++) {
+      for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+        for (int quantize = 0; quantize < 2; quantize++) {
+          const uint8_t *row = rd_row(state, y, palette, quantize);
+          for (int i = 0; i < RD_ROW_BYTES; i++) {
+            hash = (hash ^ row[i]) * FNV_PRIME;
+          }
+        }
+        const uint8_t *row = rd_row_rgb2(state, y, palette, 0);
+        for (int i = 0; i < RD_DISPLAY_WIDTH; i++) {
+          hash = (hash ^ row[i]) * FNV_PRIME;
+        }
+      }
+    }
+    assert(hash == expected[mode]);
+    free(mask);
+    free(memory);
+  }
 }
 
 /* Mask levels by definition: 0 in a masked cell, else the chessboard
@@ -361,7 +455,7 @@ static void check_mask(int mode) {
   rd_step(state, 60);
   rd_step(reference_state, 60);
   assert(rd_memory(mode, RD_COMPONENT_MASK) ==
-         (size_t)state->width * state->height);
+         mask_bytes(state->width, state->height));
   size_t bytes = cm_bytes(state->width, state->height);
   uint8_t *mask = calloc(bytes, 1);
   int stride = (state->width + 7) / 8;
@@ -424,7 +518,8 @@ static void check_clock_mask(void) {
   assert(cm_bytes(0, 114) == 0);
   static uint8_t mask[5700];
   memset(mask, 0xa5, sizeof mask);
-  const int bad[][10] = {{150, 171, 0, 14, 50, 2026, 9, 24, 0},
+  const int bad[][10] = {{201, 229, 0, 14, 50, 2026, 9, 24, 0},
+                         {40, 45, 0, 14, 50, 2026, 9, 24, 0},
                          {100, 100, 0, 14, 50, 2026, 9, 24, 0},
                          {100, 114, CM_FONT_COUNT, 14, 50, 2026, 9, 24, 0},
                          {100, 114, -1, 14, 50, 2026, 9, 24, 0},
@@ -460,6 +555,25 @@ static void check_clock_mask(void) {
 }
 
 int main(int argc, char **argv) {
+  if (argc == 4 && strcmp(argv[1], "render") == 0) {
+    /* Render mode: FNV-1a of every interpolated, quantized lime row after
+     * `steps` steps of `mode`. */
+    int mode = atoi(argv[2]), count = atoi(argv[3]);
+    void *memory = malloc(rd_bytes(mode));
+    void *state = rd_init(memory, rd_bytes(mode), mode, 42);
+    rd_step(state, count);
+    uint32_t hash = FNV_OFFSET_BASIS;
+    for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+      const uint8_t *row =
+          rd_row(state, y, RD_PALETTE_LIME, RD_ROW_QUANTIZE | RD_ROW_BILINEAR);
+      for (int i = 0; i < RD_ROW_BYTES; i++) {
+        hash = (hash ^ row[i]) * FNV_PRIME;
+      }
+    }
+    printf("%u\n", hash);
+    free(memory);
+    return 0;
+  }
   if (argc > 1) {
     /* Hash mode: print the field hash after `count` steps of `mode`,
      * optionally with the clock mask of `font hour minute year month day
@@ -492,7 +606,8 @@ int main(int argc, char **argv) {
   check_laplacian();
   check_encode_masked();
   check_clock_mask();
-  for (int mode = 0; mode < 3; mode++) {
+  check_nearest_unchanged();
+  for (int mode = 0; mode < MODE_COUNT; mode++) {
     size_t size = rd_bytes(mode);
     uint8_t *memory = malloc(size + 16);
     uint8_t *reference_memory = malloc(size);
@@ -540,7 +655,7 @@ int main(int argc, char **argv) {
     assert(rd_seed(state, RD_DISPLAY_WIDTH, 0, 4) == -1);
     assert(rd_step(state, -1) == -1);
     assert(!rd_row(state, RD_DISPLAY_HEIGHT, 0, 1));
-    assert(!rd_row_rgb2(state, -1, 0));
+    assert(!rd_row_rgb2(state, -1, 0, 0));
     assert(rd_get(state, -1, 0, RD_SPECIES_A) == -1);
     assert(rd_mask(NULL, NULL) == -1 && rd_mask_level(state, -1, 0) == -1);
     assert(rd_mask_level(state, 0, state->height) == -1);
@@ -593,8 +708,8 @@ int main(int argc, char **argv) {
       assert(aligned_state);
       rd_step(aligned_state, 1);
       assert(rd_row(aligned_state, RD_DISPLAY_HEIGHT - 1, RD_PALETTE_MONO, 1));
-      assert(
-          rd_row_rgb2(aligned_state, RD_DISPLAY_HEIGHT - 1, RD_PALETTE_CYAN));
+      assert(rd_row_rgb2(aligned_state, RD_DISPLAY_HEIGHT - 1, RD_PALETTE_CYAN,
+                         RD_ROW_BILINEAR));
       for (int j = 0; j < alignment; j++) {
         assert(unaligned[j] == 0xa5);
       }

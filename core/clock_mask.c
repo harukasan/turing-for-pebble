@@ -50,9 +50,17 @@ int cm_font_available(int font) {
   return font >= 0 && font < CM_FONT_COUNT && CM_FONTS[font][CM_TIME].glyphs;
 }
 
-/* Mark the cells covering the halo square around display pixel (x, y). A
- * grid axis is the display axis or half of it, so the cells covering a
- * pixel range are exactly the range of the cells of its end pixels. */
+/* Grid cell holding the center of display pixel p on an axis of n cells
+ * spanning size pixels. */
+static int cm_cell(int p, int n, int size) {
+  return (2 * p + 1) * n / (2 * size);
+}
+
+/* Mark the cells holding the centers of the halo square around display
+ * pixel (x, y). A grid axis has at most as many cells as display pixels, so
+ * consecutive pixel centers fall in the same or the next cell, and the
+ * cells of a pixel range are exactly the range of the cells of its end
+ * pixels. */
 static void cm_splat(uint8_t *mask, int width, int height, int x, int y,
                      int halo) {
   int x0 = x - halo < 0 ? 0 : x - halo;
@@ -63,9 +71,10 @@ static void cm_splat(uint8_t *mask, int width, int height, int x, int y,
     return;
   }
   int stride = (width + 7) / 8;
-  int gx0 = x0 * width / RD_DISPLAY_WIDTH, gx1 = x1 * width / RD_DISPLAY_WIDTH;
-  int gy0 = y0 * height / RD_DISPLAY_HEIGHT;
-  int gy1 = y1 * height / RD_DISPLAY_HEIGHT;
+  int gx0 = cm_cell(x0, width, RD_DISPLAY_WIDTH);
+  int gx1 = cm_cell(x1, width, RD_DISPLAY_WIDTH);
+  int gy0 = cm_cell(y0, height, RD_DISPLAY_HEIGHT);
+  int gy1 = cm_cell(y1, height, RD_DISPLAY_HEIGHT);
   for (int gy = gy0; gy <= gy1; gy++) {
     uint8_t *row = mask + (size_t)gy * stride;
     for (int gx = gx0; gx <= gx1; gx++) {
@@ -100,7 +109,7 @@ static void cm_line(uint8_t *mask, int width, int height, const CmFont *font,
 
 int cm_build(uint8_t *mask, int width, int height, int font, int hour,
              int minute, int year, int month, int day, int halo) {
-  if (!mask || (width != RD_DISPLAY_WIDTH && width != RD_DISPLAY_WIDTH / 2) ||
+  if (!mask || width < CM_MIN_WIDTH || width > RD_DISPLAY_WIDTH ||
       height != width * RD_DISPLAY_HEIGHT / RD_DISPLAY_WIDTH ||
       !cm_font_available(font) || hour < 0 || hour > 23 || minute < 0 ||
       minute > 59 || year < 0 || year > 9999 || month < 1 || month > 12 ||

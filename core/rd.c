@@ -21,8 +21,12 @@
 #include "rd.h"
 #include <string.h>
 
-/* 16-bit planes per cell: one packed word, or one Q15 word per species. */
-#define MODE_PLANES(mode) ((mode) == 1 ? 2 : 1)
+/* Modes: 0 200 x 228 packed, 1 100 x 114 Q15, 2 100 x 114 packed, and
+ * 3 120 x 136 Q15, the watch grid shown with interpolation. 16-bit planes
+ * per cell: one packed word, or one Q15 word per species. */
+#define MODE_COUNT 4
+#define MODE_PLANES(mode) ((mode) == 1 || (mode) == 3 ? 2 : 1)
+static const uint8_t MODE_WIDTH[MODE_COUNT] = {200, 100, 100, 120};
 
 /* 'R', 'D', '1', 0x02: marks an initialized State. */
 #define STATE_MAGIC 0x52443102u
@@ -118,6 +122,10 @@
 #else
 #define MASK_SUPPORTED 1
 #endif
+/* Rows within RD_MASK_RAMP - 1 of a cell can give it a level below the
+ * cap, so the ring holds that many rows on either side. */
+#define RING_REACH (RD_MASK_RAMP - 1)
+#define RING_ROWS (2 * RING_REACH + 1)
 
 #if defined(__GNUC__)
 #define ALWAYS_INLINE inline __attribute__((always_inline))
@@ -202,18 +210,22 @@ static const uint16_t ROOT_TABLE[1 << ROOT_INDEX_BITS] = {
  *   [saved rows: SAVED_ROWS x SPECIES_COUNT x width int32]
  *   [residual rows: SPECIES_COUNT x width int32]
  *   [output row, RD_ROW_BYTES][display lookup table, LUT_BYTES]
- *   [mask levels: one byte per cell, unless MASK_SUPPORTED is 0]
+ *   [value lookup table, LUT_BYTES, packed modes only]
+ *   [column index and weight tables, 2 x RD_DISPLAY_WIDTH]
+ *   [interpolation scratch row: width uint16]
+ *   [mask levels, one byte per cell, unless MASK_SUPPORTED is 0]
  *
  * rd_memory reports the same bytes as an accounting breakdown by component,
  * which is not the physical order. Row buffers cover the saved rows and the
- * residual rows; the rendering component covers the output row and the
- * lookup table.
+ * residual rows; the rendering component covers the output row, the
+ * lookup tables, and the interpolation tables and scratch row.
  */
 typedef struct {
   uint32_t magic, seed, step;
   int width, height, packed, feed, kill, da, db, dt;
-  /* Palette the display lookup table was built for, or NO_PALETTE. */
-  int lut_palette;
+  /* Palette the display lookup table was built for, or NO_PALETTE, and
+   * the same for the value table of the packed modes. */
+  int lut_palette, value_lut_palette;
   /* Rows [mask_first, mask_end) hold every cell whose mask level is below
    * RD_MASK_RAMP; empty if equal. */
   int mask_first, mask_end;
@@ -245,13 +257,11 @@ static int mode_supported(int mode) {
 #ifdef RD_MODE
   return mode == RD_MODE;
 #else
-  return mode >= 0 && mode <= 2;
+  return mode >= 0 && mode < MODE_COUNT;
 #endif
 }
 
-static int grid_width(int mode) {
-  return mode == 0 ? RD_DISPLAY_WIDTH : RD_DISPLAY_WIDTH / 2;
-}
+static int grid_width(int mode) { return MODE_WIDTH[mode]; }
 
 static int grid_height(int width) {
   return width * RD_DISPLAY_HEIGHT / RD_DISPLAY_WIDTH;
@@ -281,6 +291,11 @@ static inline int planes(const State *state) {
   return is_packed(state) ? 1 : SPECIES_COUNT;
 }
 
+/* Mask bytes: one level per cell. */
+static size_t mask_bytes(int width, int height) {
+  return (size_t)width * height;
+}
+
 size_t rd_memory(int mode, int component) {
   if (!mode_supported(mode)) {
     return 0;
@@ -295,11 +310,12 @@ size_t rd_memory(int mode, int component) {
   case RD_COMPONENT_CONTROL:
     return sizeof(State);
   case RD_COMPONENT_OUTPUT_ROW:
-    return RD_ROW_BYTES + LUT_BYTES;
+    return RD_ROW_BYTES + LUT_BYTES + (MODE_PLANES(mode) == 1 ? LUT_BYTES : 0) +
+           2 * RD_DISPLAY_WIDTH + (size_t)width * sizeof(uint16_t);
   case RD_COMPONENT_ALIGNMENT:
     return STATE_ALIGNMENT - 1;
   case RD_COMPONENT_MASK:
-    return MASK_SUPPORTED ? (size_t)width * height : 0;
+    return MASK_SUPPORTED ? mask_bytes(width, height) : 0;
   default:
     return 0;
   }
@@ -339,16 +355,108 @@ static uint8_t *lookup_table(State *state) {
   return output_row(state) + RD_ROW_BYTES;
 }
 
-/* Mask levels, after the lookup table, one byte per cell in row order. */
-static uint8_t *mask_levels(State *state) {
-  return lookup_table(state) + LUT_BYTES;
+/* Lookup table of Q15 B values in 64-value buckets, used by interpolated
+ * rendering. In the Q15 modes a code is its value, so it is the display
+ * lookup table itself. */
+static uint8_t *value_table(State *state) {
+  return lookup_table(state) + (is_packed(state) ? LUT_BYTES : 0);
 }
 
-/* A masked cell: level 0. Without a mask no cell is masked, and no level
- * is read outside the rows [mask_first, mask_end). */
+/* Left grid column and weight (of the right column, in 256ths) of every
+ * display column, for interpolated rendering. */
+static uint8_t *column_index(State *state) {
+  return lookup_table(state) + (is_packed(state) ? 2 * LUT_BYTES : LUT_BYTES);
+}
+
+static uint8_t *column_weight(State *state) {
+  return column_index(state) + RD_DISPLAY_WIDTH;
+}
+
+/* One grid row of interpolated Q15 B values. */
+static uint16_t *interpolation_row(State *state) {
+  return (uint16_t *)(column_weight(state) + RD_DISPLAY_WIDTH);
+}
+
+/* Mask levels, after the rendering area, one byte per cell in row order.
+ * Only the rows [mask_first, mask_end) are written and read. */
+static uint8_t *mask_levels(State *state) {
+  return (uint8_t *)(interpolation_row(state) + state->width);
+}
+
+/* Horizontal distance of every cell of grid row r to the nearest masked
+ * cell of that row, capped at RD_MASK_RAMP; RD_MASK_RAMP outside the grid.
+ * Distances do not wrap. The two bytes after the row receive the first and
+ * last column below the cap (first > last when there is none). */
+static void distance_row(const uint8_t *bitmap, int width, int height, int r,
+                         uint8_t *out) {
+  int stride = (width + 7) / 8, distance = RD_MASK_RAMP;
+  int first = width, last = -1;
+  for (int x = 0; x < width; x++) {
+    int set =
+        r >= 0 && r < height && bitmap[r * stride + (x >> 3)] >> (x & 7) & 1;
+    distance = set ? 0 : distance < RD_MASK_RAMP ? distance + 1 : RD_MASK_RAMP;
+    out[x] = (uint8_t)distance;
+  }
+  distance = RD_MASK_RAMP;
+  for (int x = width - 1; x >= 0; x--) {
+    distance = out[x] == 0               ? 0
+               : distance < RD_MASK_RAMP ? distance + 1
+                                         : RD_MASK_RAMP;
+    if (distance < out[x]) {
+      out[x] = (uint8_t)distance;
+    }
+    if (out[x] < RD_MASK_RAMP) {
+      first = x;
+      if (last < 0) {
+        last = x;
+      }
+    }
+  }
+  out[width] = (uint8_t)(first > last ? 1 : first);
+  out[width + 1] = (uint8_t)(first > last ? 0 : last);
+}
+
+static inline int ring_slot(int r) {
+  return (r % RING_ROWS + RING_ROWS) % RING_ROWS;
+}
+
+/* Bring the ring to row y: all rows y - RING_REACH to y + RING_REACH when
+ * start is set, else only the new row y + RING_REACH. */
+static void advance_ring(const uint8_t *bitmap, uint8_t *ring, int width,
+                         int height, int y, int start) {
+  for (int r = start ? y - RING_REACH : y + RING_REACH; r <= y + RING_REACH;
+       r++) {
+    distance_row(bitmap, width, height, r, ring + ring_slot(r) * (width + 2));
+  }
+}
+
+/* Levels of row y from the ring: the chessboard distance is the minimum
+ * over the rows of max(row distance, horizontal distance), taken only over
+ * the columns where a row is below the cap. */
+static void ring_levels(const uint8_t *ring, int width, int y, uint8_t *out) {
+  memset(out, RD_MASK_RAMP, (size_t)width);
+  for (int dy = -RING_REACH; dy <= RING_REACH; dy++) {
+    const uint8_t *row = ring + ring_slot(y + dy) * (width + 2);
+    int vertical = dy < 0 ? -dy : dy;
+    for (int x = row[width]; x <= row[width + 1]; x++) {
+      int level = row[x] > vertical ? row[x] : vertical;
+      if (level < out[x]) {
+        out[x] = (uint8_t)level;
+      }
+    }
+  }
+}
+
+/* Mask level of one cell. */
+static int cell_level(State *state, int x, int y) {
+  return y >= state->mask_first && y < state->mask_end
+             ? mask_levels(state)[(size_t)y * state->width + x]
+             : RD_MASK_RAMP;
+}
+
+/* A masked cell: level 0. Without a mask no cell is masked. */
 static int cell_masked(State *state, int x, int y) {
-  return y >= state->mask_first && y < state->mask_end &&
-         mask_levels(state)[y * state->width + x] == 0;
+  return cell_level(state, x, y) == 0;
 }
 
 /* Round a value to the nearest multiple of 2^bits, halfway values away from
@@ -561,6 +669,22 @@ static int random_below(uint32_t random, int range) {
   return (int)(((uint64_t)random * range) >> 32);
 }
 
+/* Floor of a / b for b > 0. */
+static int floor_div(int a, int b) {
+  return a >= 0 ? a / b : -((-a + b - 1) / b);
+}
+
+/* Interpolation position of display coordinate p on an axis of n cells
+ * spanning size display pixels: the pixel center in cell units is
+ * u = ((2p + 1) n - size) / (2 size), and q = floor(256 u) gives the lower
+ * cell, periodic, and the weight of the next cell in 256ths. */
+static void axis_sample(int p, int n, int size, int *index, int *weight) {
+  int q = floor_div(((2 * p + 1) * n - size) * 256, 2 * size);
+  int cell = floor_div(q, 256);
+  *weight = q - cell * 256;
+  *index = (cell + n) % n;
+}
+
 /* Initialize the block to the equilibrium A = 1, B = 0, then seed
  * INITIAL_DISKS disks at LCG-chosen display positions and radii. */
 void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
@@ -578,7 +702,13 @@ void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
   state->width = grid_width(mode);
   state->height = grid_height(state->width);
   state->packed = MODE_PLANES(mode) == 1;
-  state->lut_palette = NO_PALETTE;
+  state->lut_palette = state->value_lut_palette = NO_PALETTE;
+  for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+    int index, weight;
+    axis_sample(x, state->width, RD_DISPLAY_WIDTH, &index, &weight);
+    column_index(state)[x] = (uint8_t)index;
+    column_weight(state)[x] = (uint8_t)weight;
+  }
   rd_params(state, DEFAULT_FEED, DEFAULT_KILL, RD_Q15_ONE, RD_Q15_ONE / 2,
             RD_Q15_ONE);
   for (int i = 0; i < state->width * state->height; i++) {
@@ -905,78 +1035,49 @@ int rd_height(void *handle) {
   return state ? state->height : -1;
 }
 
-/* Install a cell mask (NULL clears it): derive the mask levels with a
- * two-pass chessboard distance transform that does not wrap, find their
- * rows, and set B to 0 in the masked cells right away. */
+/* Install a cell mask (NULL clears it): find the band of rows within
+ * RD_MASK_RAMP - 1 rows of a masked cell, derive the levels of the band,
+ * and set B to 0 in the masked cells right away. */
 int rd_mask(void *handle, const uint8_t *mask) {
   State *state = checked_state(handle);
   if (!state || !MASK_SUPPORTED) {
     return -1;
   }
   int width = state->width, height = state->height;
-  int stride = (width + 7) / 8;
-  uint8_t *levels = mask_levels(state);
+  int stride = (width + 7) / 8, first = -1, last = -1;
   state->mask_first = state->mask_end = 0;
   if (!mask) {
     return 0;
   }
   for (int y = 0; y < height; y++) {
     for (int x = 0; x < width; x++) {
-      levels[y * width + x] =
-          mask[y * stride + (x >> 3)] >> (x & 7) & 1 ? 0 : RD_MASK_RAMP;
-    }
-  }
-  /* Forward pass from the upper and left neighbors, backward pass from the
-   * lower and right neighbors, each step one level. */
-  for (int y = 0; y < height; y++) {
-    for (int x = 0; x < width; x++) {
-      int level = levels[y * width + x];
-      for (int dx = -1; dx <= 1 && y > 0; dx++) {
-        if (x + dx >= 0 && x + dx < width &&
-            levels[(y - 1) * width + x + dx] + 1 < level) {
-          level = levels[(y - 1) * width + x + dx] + 1;
-        }
-      }
-      if (x > 0 && levels[y * width + x - 1] + 1 < level) {
-        level = levels[y * width + x - 1] + 1;
-      }
-      levels[y * width + x] = (uint8_t)level;
-    }
-  }
-  for (int y = height - 1; y >= 0; y--) {
-    for (int x = width - 1; x >= 0; x--) {
-      int level = levels[y * width + x];
-      for (int dx = -1; dx <= 1 && y < height - 1; dx++) {
-        if (x + dx >= 0 && x + dx < width &&
-            levels[(y + 1) * width + x + dx] + 1 < level) {
-          level = levels[(y + 1) * width + x + dx] + 1;
-        }
-      }
-      if (x < width - 1 && levels[y * width + x + 1] + 1 < level) {
-        level = levels[y * width + x + 1] + 1;
-      }
-      levels[y * width + x] = (uint8_t)level;
-    }
-  }
-  for (int y = 0; y < height; y++) {
-    int ramped = 0;
-    for (int x = 0; x < width; x++) {
-      if (levels[y * width + x] < RD_MASK_RAMP) {
-        ramped = 1;
-      }
-      if (levels[y * width + x] == 0) {
+      if (mask[y * stride + (x >> 3)] >> (x & 7) & 1) {
         unsigned code_a, code_b;
         load_codes(state, y * width + x, &code_a, &code_b);
         store_codes(state, y * width + x, code_a, 0);
+        if (first < 0) {
+          first = y;
+        }
+        last = y;
       }
-    }
-    if (ramped) {
-      if (state->mask_end == 0) {
-        state->mask_first = y;
-      }
-      state->mask_end = y + 1;
     }
   }
+  if (first < 0) {
+    return 0;
+  }
+  int band_first =
+      first - (RD_MASK_RAMP - 1) < 0 ? 0 : first - (RD_MASK_RAMP - 1);
+  int band_end = last + RD_MASK_RAMP > height ? height : last + RD_MASK_RAMP;
+  /* The saved rows are free between steps and hold the ring of distance
+   * rows and the row being derived. */
+  uint8_t *ring = (uint8_t *)saved_rows(state);
+  uint8_t *levels = mask_levels(state);
+  for (int y = band_first; y < band_end; y++) {
+    advance_ring(mask, ring, width, height, y, y == band_first);
+    ring_levels(ring, width, y, levels + (size_t)y * width);
+  }
+  state->mask_first = band_first;
+  state->mask_end = band_end;
   return 0;
 }
 
@@ -985,9 +1086,7 @@ int rd_mask_level(void *handle, int x, int y) {
   if (!state || x < 0 || x >= state->width || y < 0 || y >= state->height) {
     return -1;
   }
-  return y >= state->mask_first && y < state->mask_end
-             ? mask_levels(state)[y * state->width + x]
-             : RD_MASK_RAMP;
+  return cell_level(state, x, y);
 }
 
 /* FNV-1a over the stored words as canonical little-endian 16-bit values, so
@@ -1009,14 +1108,12 @@ uint32_t rd_hash(void *handle) {
   return hash;
 }
 
-/* The three color channels of one B code: intensity is B times
+/* The three color channels of a Q24 B value: intensity is B times
  * DISPLAY_GAIN clamped to 1.0, mapped between the palette endpoints, or a
  * monochrome threshold, and optionally quantized to RGB2 levels. */
-static void pixel_rgb(const State *state, int palette, int quantize,
-                      unsigned code_b, uint8_t rgb[3]) {
-  int intensity = (int)round_shift(
-      (int64_t)decode(is_packed(state), RD_SPECIES_B, code_b) * DISPLAY_GAIN,
-      Q15_SHIFT);
+static void value_rgb(int palette, int quantize, int32_t value,
+                      uint8_t rgb[3]) {
+  int intensity = (int)round_shift((int64_t)value * DISPLAY_GAIN, Q15_SHIFT);
   if (intensity > RD_Q15_ONE) {
     intensity = RD_Q15_ONE;
   }
@@ -1035,13 +1132,45 @@ static void pixel_rgb(const State *state, int palette, int quantize,
   }
 }
 
-/* The quantized color of one B code as an opaque ARGB8 byte. */
-static uint8_t pixel_argb8(const State *state, int palette, unsigned code_b) {
+/* The colors of one B code. */
+static void pixel_rgb(const State *state, int palette, int quantize,
+                      unsigned code_b, uint8_t rgb[3]) {
+  value_rgb(palette, quantize, decode(is_packed(state), RD_SPECIES_B, code_b),
+            rgb);
+}
+
+/* The quantized color of a Q24 B value as an opaque ARGB8 byte. */
+static uint8_t value_argb8(int palette, int32_t value) {
   uint8_t rgb[3];
-  pixel_rgb(state, palette, 1, code_b, rgb);
+  value_rgb(palette, 1, value, rgb);
   return (uint8_t)(ARGB8_OPAQUE | (rgb[0] >> ARGB8_CHANNEL_SHIFT) << 4 |
                    (rgb[1] >> ARGB8_CHANNEL_SHIFT) << 2 |
                    (rgb[2] >> ARGB8_CHANNEL_SHIFT));
+}
+
+/* The quantized color of one B code as an opaque ARGB8 byte. */
+static uint8_t pixel_argb8(const State *state, int palette, unsigned code_b) {
+  return value_argb8(palette, decode(is_packed(state), RD_SPECIES_B, code_b));
+}
+
+/* Fill a table of Q15 B values in LUT_BUCKET buckets: the color shared by
+ * every value of a bucket, or 0 (never a valid pixel) where they differ. */
+static void fill_value_table(uint8_t *table, int palette) {
+  for (unsigned bucket = 0; bucket < LUT_ENTRIES; bucket++) {
+    unsigned first = bucket << LUT_BUCKET_BITS;
+    unsigned last = first + LUT_BUCKET - 1;
+    if (last > Q15_CODE_MAX) {
+      last = Q15_CODE_MAX;
+    }
+    uint8_t value = value_argb8(palette, decode_q15(first));
+    for (unsigned code = first + 1; code <= last; code++) {
+      if (value_argb8(palette, decode_q15(code)) != value) {
+        value = 0;
+        break;
+      }
+    }
+    table[bucket] = value;
+  }
 }
 
 /* Build the display lookup table for a palette unless it is current. */
@@ -1055,34 +1184,83 @@ static void ensure_lookup_table(State *state, int palette) {
       table[code] = pixel_argb8(state, palette, code);
     }
   } else {
-    for (unsigned bucket = 0; bucket < LUT_ENTRIES; bucket++) {
-      unsigned first = bucket << LUT_BUCKET_BITS;
-      unsigned last = first + LUT_BUCKET - 1;
-      if (last > Q15_CODE_MAX) {
-        last = Q15_CODE_MAX;
-      }
-      uint8_t value = pixel_argb8(state, palette, first);
-      for (unsigned code = first + 1; code <= last; code++) {
-        if (pixel_argb8(state, palette, code) != value) {
-          value = 0;
-          break;
-        }
-      }
-      table[bucket] = value;
-    }
+    fill_value_table(table, palette);
   }
   state->lut_palette = palette;
 }
 
+/* Build the value table used by interpolated rendering. */
+static void ensure_value_table(State *state, int palette) {
+  if (!is_packed(state)) {
+    ensure_lookup_table(state, palette);
+  } else if (state->value_lut_palette != palette) {
+    fill_value_table(value_table(state), palette);
+    state->value_lut_palette = palette;
+  }
+}
+
+/* The quantized color of a Q15 B value through the value table. */
+static inline uint8_t value_color(const uint8_t *table, int palette,
+                                  unsigned value) {
+  uint8_t color = table[value >> LUT_BUCKET_BITS];
+  return color ? color : value_argb8(palette, decode_q15(value));
+}
+
+/* B of a grid cell as a Q15 value: the code itself in the Q15 modes, and
+ * code^2 >> 3 (exactly the decoded value) for the packed codes. */
+static inline unsigned cell_b_q15(State *state, int index) {
+  if (is_packed(state)) {
+    unsigned code = plane(state, 0)[index] & B_CODE_MAX;
+    return (code * code) >> 3;
+  }
+  return plane(state, RD_SPECIES_B)[index];
+}
+
+/* Interpolate the grid rows around display row y into the scratch row. */
+static const uint16_t *interpolate_rows(State *state, int y) {
+  int width = state->width, grid_y, weight;
+  axis_sample(y, state->height, RD_DISPLAY_HEIGHT, &grid_y, &weight);
+  int next_y = grid_y + 1 == state->height ? 0 : grid_y + 1;
+  uint16_t *row = interpolation_row(state);
+  for (int x = 0; x < width; x++) {
+    unsigned top = cell_b_q15(state, grid_y * width + x);
+    unsigned bottom = cell_b_q15(state, next_y * width + x);
+    row[x] = (uint16_t)((top * (256 - weight) + bottom * weight + 128) >> 8);
+  }
+  return row;
+}
+
+/* Interpolated Q15 B value of display column x from the scratch row. */
+static inline unsigned interpolate_column(State *state, const uint16_t *row,
+                                          int x) {
+  unsigned left = column_index(state)[x];
+  unsigned right = left + 1 == (unsigned)state->width ? 0 : left + 1;
+  unsigned weight = column_weight(state)[x];
+  return (row[left] * (256 - weight) + row[right] * weight + 128) >> 8;
+}
+
 /* Render display row y into the shared RGBA output row. Each display pixel
- * samples the grid cell that covers it. */
-uint8_t *rd_row(void *handle, int y, int palette, int quantize) {
+ * samples the grid cell that covers it, or with RD_ROW_BILINEAR the B
+ * value interpolated at its center. */
+uint8_t *rd_row(void *handle, int y, int palette, int flags) {
   State *state = checked_state(handle);
   if (!state || y < 0 || y >= RD_DISPLAY_HEIGHT || palette < 0 ||
-      palette > RD_PALETTE_MONO || (quantize != 0 && quantize != 1)) {
+      palette > RD_PALETTE_MONO ||
+      (flags & ~(RD_ROW_QUANTIZE | RD_ROW_BILINEAR))) {
     return NULL;
   }
+  int quantize = flags & RD_ROW_QUANTIZE;
   uint8_t *output = output_row(state);
+  if (flags & RD_ROW_BILINEAR) {
+    const uint16_t *row = interpolate_rows(state, y);
+    for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+      value_rgb(palette, quantize,
+                decode_q15(interpolate_column(state, row, x)),
+                output + x * BYTES_PER_PIXEL);
+      output[x * BYTES_PER_PIXEL + 3] = 255; /* opaque alpha */
+    }
+    return output;
+  }
   int grid_y = y * state->height / RD_DISPLAY_HEIGHT;
   for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
     int grid_x = x * state->width / RD_DISPLAY_WIDTH;
@@ -1095,28 +1273,52 @@ uint8_t *rd_row(void *handle, int y, int palette, int quantize) {
 }
 
 /* Render display row y as quantized ARGB8 bytes into the shared output row,
- * the value rd_row with quantize = 1 gives after packing each channel's top
- * two bits. Grid cells map to display pixels by a shift, because a grid
- * axis is the display axis or half of it. */
-uint8_t *rd_row_rgb2(void *handle, int y, int palette) {
+ * the value rd_row with RD_ROW_QUANTIZE and the same RD_ROW_BILINEAR flag
+ * gives after packing each channel's top two bits. When a grid axis is the
+ * display axis or half of it, nearest cells map to display pixels by a
+ * shift. */
+uint8_t *rd_row_rgb2(void *handle, int y, int palette, int flags) {
   State *state = checked_state(handle);
   if (!state || y < 0 || y >= RD_DISPLAY_HEIGHT || palette < 0 ||
-      palette > RD_PALETTE_MONO) {
+      palette > RD_PALETTE_MONO ||
+      (flags & ~(RD_ROW_QUANTIZE | RD_ROW_BILINEAR))) {
     return NULL;
   }
-  ensure_lookup_table(state, palette);
   uint8_t *output = output_row(state);
+  if (flags & RD_ROW_BILINEAR) {
+    ensure_value_table(state, palette);
+    const uint8_t *table = value_table(state);
+    const uint16_t *row = interpolate_rows(state, y);
+    for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+      output[x] =
+          value_color(table, palette, interpolate_column(state, row, x));
+    }
+    return output;
+  }
+  ensure_lookup_table(state, palette);
   const uint8_t *table = lookup_table(state);
-  int shift = state->width == RD_DISPLAY_WIDTH ? 0 : 1;
+  int width = state->width;
+  if (width != RD_DISPLAY_WIDTH && width != RD_DISPLAY_WIDTH / 2) {
+    int grid_y = y * state->height / RD_DISPLAY_HEIGHT;
+    for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+      unsigned code_a, code_b;
+      load_codes(state, grid_y * width + x * width / RD_DISPLAY_WIDTH, &code_a,
+                 &code_b);
+      uint8_t value =
+          is_packed(state) ? table[code_b] : table[code_b >> LUT_BUCKET_BITS];
+      output[x] = value ? value : pixel_argb8(state, palette, code_b);
+    }
+    return output;
+  }
+  int shift = width == RD_DISPLAY_WIDTH ? 0 : 1;
   int grid_y = y >> shift;
   if (is_packed(state)) {
-    const uint16_t *cells = plane(state, 0) + (size_t)grid_y * state->width;
+    const uint16_t *cells = plane(state, 0) + (size_t)grid_y * width;
     for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
       output[x] = table[cells[x >> shift] & B_CODE_MAX];
     }
   } else {
-    const uint16_t *cells =
-        plane(state, RD_SPECIES_B) + (size_t)grid_y * state->width;
+    const uint16_t *cells = plane(state, RD_SPECIES_B) + (size_t)grid_y * width;
     for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
       unsigned code = cells[x >> shift];
       uint8_t value = table[code >> LUT_BUCKET_BITS];

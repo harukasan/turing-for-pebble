@@ -7,6 +7,8 @@
  * and of RD_FONT in the watch configuration. */
 enum { CM_FONT_LECO, CM_FONT_BITHAM, CM_FONT_COUNT };
 
+/* Grid widths accepted by cm_build, from this up to the display width. */
+#define CM_MIN_WIDTH 50
 /* Largest halo around the digits, in display pixels. */
 #define CM_MAX_HALO 8
 
@@ -29,11 +31,12 @@ const CmLayout *cm_layout(int font);
  * RD_FONT has only that set. */
 int cm_font_available(int font);
 
-/* Build the mask of the clock digits for a grid of 200 x 228 or 100 x 114
- * cells: the time HH:MM and the date YYYY.MM.DD drawn in the font set as
- * the watch draws them, each glyph pixel widened by a square halo of `halo`
- * display pixels and clipped to the display, and every grid cell that
- * covers such a pixel marked. Returns 0, or -1 without touching the mask
+/* Build the mask of the clock digits for a grid of width cells from
+ * CM_MIN_WIDTH to 200 and height width * 228 / 200: the time HH:MM and the
+ * date YYYY.MM.DD drawn in the font set as the watch draws them, each glyph
+ * pixel widened by a square halo of `halo` display pixels and clipped to
+ * the display, and every grid cell holding the center of such a pixel
+ * marked. Returns 0, or -1 without touching the mask
  * when an argument is out of range. */
 int cm_build(uint8_t *mask, int width, int height, int font, int hour,
              int minute, int year, int month, int day, int halo);

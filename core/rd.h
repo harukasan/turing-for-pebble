@@ -38,7 +38,9 @@ enum { RD_PALETTE_LIME, RD_PALETTE_CYAN, RD_PALETTE_MONO };
 
 /* mode 0: 200x228, one 16-bit word per cell (A 7-bit linear, B 9-bit
  * square-root companded); mode 1: 100x114, one Q15 word per species;
- * mode 2: diagnostic 100x114 with the packed 16-bit cells of mode 0. */
+ * mode 2: diagnostic 100x114 with the packed 16-bit cells of mode 0;
+ * mode 3: 120x136, one Q15 word per species, meant to be shown with
+ * RD_ROW_BILINEAR. */
 size_t rd_bytes(int mode);
 size_t rd_memory(int mode, int component);
 void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed);
@@ -48,10 +50,17 @@ int rd_step(void *handle, int count);
 int rd_get(void *handle, int x, int y, int species);
 uint32_t rd_steps(void *handle);
 uint32_t rd_hash(void *handle);
-uint8_t *rd_row(void *handle, int y, int palette, int quantize);
+/* Flags of rd_row and rd_row_rgb2: RD_ROW_QUANTIZE rounds each channel to
+ * the RGB2 levels (rd_row_rgb2 always does), and RD_ROW_BILINEAR
+ * interpolates B at each pixel center between the four nearest cells,
+ * periodic like the field, before coloring. Without it each pixel shows
+ * the cell that covers it. */
+#define RD_ROW_QUANTIZE 1
+#define RD_ROW_BILINEAR 2
+uint8_t *rd_row(void *handle, int y, int palette, int flags);
 /* Display row y as RD_DISPLAY_WIDTH opaque ARGB8 bytes (2 bits per
  * channel), the quantized rd_row colors in the watch framebuffer format. */
-uint8_t *rd_row_rgb2(void *handle, int y, int palette);
+uint8_t *rd_row_rgb2(void *handle, int y, int palette, int flags);
 /* Grid size of the handle's mode. */
 int rd_width(void *handle);
 int rd_height(void *handle);
