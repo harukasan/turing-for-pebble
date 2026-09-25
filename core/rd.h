@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define RD_VERSION 2
+#define RD_VERSION 3
 
 /* Coefficients (rd_params) are Q15 fixed point: RD_Q15_ONE represents 1.0. */
 #define RD_Q15_ONE 32768
@@ -48,4 +48,7 @@ int rd_get(void *handle, int x, int y, int species);
 uint32_t rd_steps(void *handle);
 uint32_t rd_hash(void *handle);
 uint8_t *rd_row(void *handle, int y, int palette, int quantize);
+/* Display row y as RD_DISPLAY_WIDTH opaque ARGB8 bytes (2 bits per
+ * channel), the quantized rd_row colors in the watch framebuffer format. */
+uint8_t *rd_row_rgb2(void *handle, int y, int palette);
 #endif

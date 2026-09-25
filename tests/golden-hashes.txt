@@ -1,0 +1,12 @@
+# Field hashes of numerical definition version 3: mode steps hash (seed 42,
+# default parameters). scripts/check-optimization.sh compares every build
+# against these; any difference means the numerical contract changed.
+0 1 2679910999
+0 100 2981002916
+0 1000 4136537897
+1 1 3469461881
+1 100 2679497981
+1 1000 2978618702
+2 1 1640301591
+2 100 2554574024
+2 1000 836491883

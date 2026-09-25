@@ -70,7 +70,7 @@ Mean over 10 cases (5 presets × 2 seeds), 200 × 228 unless `g=100`:
 | `g=200,a=lin6,b=lin10,r=sto,i=q15`    | 10    | 0.00125    | 0.00172          | 0.999           | 0.0045     | 0.01953     | 0.05207           | 0.622            | 0.0352      |
 | `g=200,a=lin8,b=lin8,r=near,i=q15`    | 10    | 0.00506    | 0.00735          | 0.941           | 0.0093     | 0.06453     | 0.13889           | 0.006            | 0.1226      |
 
-Version 1 mode 0 is `g=200,a=lin8,b=lin8,r=sto,i=q15`, version 1 mode 1 is `g=100,a=q15,b=q15,r=near,i=q15`, and version 1 mode 2 is `g=100,a=lin8,b=lin8,r=sto,i=q15`. Version 2 mode 0 is `g=200,a=lin7,b=sqr9,r=fs,i=q24,d=8`, version 2 mode 1 is `g=100,a=q15,b=q15,r=fs,i=q24,d=8`, and version 2 mode 2 is `g=100,a=lin7,b=sqr9,r=fs,i=q24,d=8`.
+Version 1 mode 0 is `g=200,a=lin8,b=lin8,r=sto,i=q15`, version 1 mode 1 is `g=100,a=q15,b=q15,r=near,i=q15`, and version 1 mode 2 is `g=100,a=lin8,b=lin8,r=sto,i=q15`. Version 3 mode 0 is `g=200,a=lin7,b=sqr9,r=fs,i=q24,d=8`, version 3 mode 1 is `g=100,a=q15,b=q15,r=fs,i=q24`, and version 3 mode 2 is `g=100,a=lin7,b=sqr9,r=fs,i=q24,d=8`. Version 2 used `d=8` in mode 1 as well.
 
 ## Findings
 
@@ -78,7 +78,7 @@ Version 1 mode 0 is `g=200,a=lin8,b=lin8,r=sto,i=q15`, version 1 mode 1 is `g=10
 - **Finer B codes are wasted under stochastic rounding.** Nine linear or companded B bits with seven A bits give 0.0121 and 0.0129, and six A bits with ten B bits is worse than the baseline, because the injected A noise then dominates.
 - **Error diffusion turns finer codes into precision.** With Floyd–Steinberg diffusion, seven A bits and nine companded B bits reach 0.0048 with version 1 arithmetic and 0.0032 with version 2 arithmetic, 4.7 times better than the baseline with the same 91,200 B of field memory and slightly better than version 1 mode 1 at 100 × 114. Companding remains worth 25% over nine linear bits, one-dimensional diffusion loses 10% in the mean and doubles the worst case, and twenty fraction bits are within 2% of twenty-four.
 - **Q15 arithmetic was the dominant error of the Q15 storage mode.** Version 2 arithmetic with error diffusion reduces the 100 × 114 Q15 error from 0.0045 to 0.00003, and nearest or stochastic rounding of the Q15 store would leave 0.0005 or 0.0002.
-- **A half-strength threshold dither improves both accuracy and long-run statistics.** `d=8` lowers the version 2 mode 0 error from 0.0032 to 0.0022 and raises its lowest correlation from 0.97 to 0.99, while `d=4` and `d=16` are worse than `d=8`. It is adopted for every mode; on the Q15 store it costs nothing measurable.
+- **A half-strength threshold dither improves both accuracy and long-run statistics.** `d=8` lowers the version 2 mode 0 error from 0.0032 to 0.0022 and raises its lowest correlation from 0.97 to 0.99, while `d=4` and `d=16` are worse than `d=8`. It is adopted for the packed modes. The Q15 store of mode 1 rounds to the nearest code instead (`d=0`, 0.00003 against 0.00006 with the dither, and a spots mass ratio of 0.99 without it), which also removes the per-cell hash from that mode.
 - **Eighteen bits per cell would halve the error again.** Eight A bits with ten companded B bits reach 0.0014 at 1,000 steps without dither and 0.0010 with it. This needs 11,400 B more than mode 0 and an extension plane for the two extra bits, and it is not implemented.
 
 ## Long runs

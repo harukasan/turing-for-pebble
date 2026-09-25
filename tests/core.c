@@ -6,15 +6,16 @@
 /* Full-screen oracle: one step computed from a complete copy of both planes
  * with independent neighbor indexing, so the row-buffer scheme in rd_step is
  * checked against a straightforward implementation. The Laplacian rounding is
- * written out on purpose instead of calling laplacian(). Cells are encoded
- * in row order through the shared error diffusion functions. */
+ * written out on purpose instead of calling laplacian_row(). Cells are
+ * encoded in row order through the shared error diffusion functions. */
 static void reference(State *state) {
   int cells = state->width * state->height;
   size_t plane_bytes = (size_t)cells * sizeof(uint16_t);
   uint16_t *next_planes = malloc(plane_bytes * planes(state));
   assert(next_planes);
   uint16_t *saved = plane(state, 0);
-  begin_step(state);
+  StepContext ctx;
+  begin_step(state, &ctx);
   for (int y = 0; y < state->height; y++) {
     for (int x = 0; x < state->width; x++) {
       int32_t laps[SPECIES_COUNT];
@@ -31,14 +32,18 @@ static void reference(State *state) {
         laps[species] = sum < 0 ? -((-sum + 10) / 20) : (sum + 10) / 20;
       }
       int32_t next_a, next_b;
-      react_cell(state, rd_get(state, x, y, RD_SPECIES_A),
-                 rd_get(state, x, y, RD_SPECIES_B), laps[0], laps[1], &next_a,
+      react_cell(rd_get(state, x, y, RD_SPECIES_A),
+                 rd_get(state, x, y, RD_SPECIES_B), laps[0], laps[1], ctx.feed,
+                 ctx.decay, ctx.da, ctx.db, ctx.dt, ctx.unit_dt, &next_a,
                  &next_b);
       int cell_index = y * state->width + x;
-      uint32_t dither = cell_dither(state, cell_index);
+      uint32_t dither =
+          is_packed(state) ? cell_dither(ctx.step_salt, cell_index) : 0;
       unsigned code_a =
-          encode_cell(state, RD_SPECIES_A, x, next_a, dither & DITHER_MASK);
-      unsigned code_b = encode_cell(state, RD_SPECIES_B, x, next_b,
+          encode_cell(is_packed(state), RD_SPECIES_A, ctx.residual[0],
+                      &ctx.shares[0], x, next_a, dither & DITHER_MASK);
+      unsigned code_b = encode_cell(is_packed(state), RD_SPECIES_B,
+                                    ctx.residual[1], &ctx.shares[1], x, next_b,
                                     (dither >> DITHER_B_SHIFT) & DITHER_MASK);
       if (is_packed(state)) {
         next_planes[cell_index] = (uint16_t)((code_a << B_BITS) | code_b);
@@ -47,11 +52,29 @@ static void reference(State *state) {
         next_planes[cells + cell_index] = (uint16_t)code_b;
       }
     }
-    finish_row(state);
+    finish_row(&ctx);
   }
   memcpy(saved, next_planes, plane_bytes * planes(state));
   free(next_planes);
   state->step++;
+}
+
+/* Bit-by-bit integer square root, the reference for the table version. */
+static uint32_t isqrt_reference(uint32_t value) {
+  uint32_t result = 0, bit = 1u << 16;
+  while (bit > value) {
+    bit >>= 2;
+  }
+  while (bit) {
+    if (value >= result + bit) {
+      value -= result + bit;
+      result = (result >> 1) + bit;
+    } else {
+      result >>= 1;
+    }
+    bit >>= 2;
+  }
+  return result;
 }
 
 /* Rounding helpers and codes. */
@@ -60,14 +83,26 @@ static void check_codes(void) {
   assert(round_shift((1 << 23) - 1, 24) == 0 &&
          round_shift(-(1 << 23) + 1, 24) == 0);
   assert(round_shift((int64_t)3 << 40, 30) == 3 << 10);
+  assert(round_shift_unsigned((1u << 23) - 1, 24) == 0 &&
+         round_shift_unsigned(1u << 23, 24) == 1);
+  /* The unit dt shortcut is exact for both signs. */
+  for (int64_t rate = -3000000; rate <= 3000000; rate += 7919) {
+    assert(round_shift(rate * RD_Q15_ONE, RATE_SHIFT) ==
+           round_shift(rate, UNIT_RATE_SHIFT));
+  }
   /* isqrt is exact for the whole 18-bit domain used by floor_b. */
-  for (uint32_t value = 0; value <= B_CODE_MAX * B_CODE_MAX; value++) {
+  for (uint32_t value = 0; value < 1u << ROOT_BITS; value++) {
     uint32_t root = isqrt(value);
+    assert(root == isqrt_reference(value));
     assert(root * root <= value && (root + 1) * (root + 1) > value);
   }
   /* Decoding is strictly increasing and floor_* returns the largest code
-   * decoding within the value, for every code and just below the next. */
+   * decoding within the value, for every code and just below the next. The
+   * A table is the rounded division it replaces. */
   for (unsigned code = 0; code <= A_CODE_MAX; code++) {
+    assert(decode_a(code) ==
+           (int32_t)((((uint32_t)code << RD_VALUE_BITS) + A_CODE_MAX / 2) /
+                     A_CODE_MAX));
     assert(code == 0 || decode_a(code) > decode_a(code - 1));
     assert(floor_a(decode_a(code)) == code);
     assert(code == A_CODE_MAX || floor_a(decode_a(code + 1) - 1) == code);
@@ -86,29 +121,92 @@ static void check_codes(void) {
   }
 }
 
+/* Nine-point Laplacian of one column, as the contract states it. */
+static int32_t laplacian_reference(const int32_t *up, const int32_t *cur,
+                                   const int32_t *down, int x, int width) {
+  int left = (x + width - 1) % width;
+  int right = (x + 1) % width;
+  int32_t axial_sum = cur[left] + cur[right] + up[x] + down[x];
+  int32_t diagonal_sum = up[left] + up[right] + down[left] + down[right];
+  int32_t value = LAPLACIAN_AXIAL_WEIGHT * axial_sum + diagonal_sum -
+                  LAPLACIAN_SCALE * cur[x];
+  return value < 0 ? -((-value + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE)
+                   : (value + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE;
+}
+
+/* The in-place row pass equals the per-column definition, including the
+ * wrapped columns, on pseudo-random rows of every relevant width. */
+static void check_laplacian(void) {
+  const int widths[3] = {RD_DISPLAY_WIDTH, RD_DISPLAY_WIDTH / 2, 3};
+  for (int w = 0; w < 3; w++) {
+    int width = widths[w];
+    int32_t *up = malloc(width * sizeof(int32_t));
+    int32_t *cur = malloc(width * sizeof(int32_t));
+    int32_t *down = malloc(width * sizeof(int32_t));
+    int32_t *expected = malloc(width * sizeof(int32_t));
+    for (int trial = 0; trial < 50; trial++) {
+      for (int x = 0; x < width; x++) {
+        up[x] =
+            (int32_t)(mix32((uint32_t)(trial * 7919 + x)) % (RD_VALUE_ONE + 1));
+        cur[x] = (int32_t)(mix32((uint32_t)(trial * 104729 + x + 1)) %
+                           (RD_VALUE_ONE + 1));
+        down[x] = (int32_t)(mix32((uint32_t)(trial * 15485863 + x + 2)) %
+                            (RD_VALUE_ONE + 1));
+        if (trial == 0) {
+          up[x] = cur[x] = down[x] = RD_VALUE_ONE;
+        }
+      }
+      for (int x = 0; x < width; x++) {
+        expected[x] = laplacian_reference(up, cur, down, x, width);
+      }
+      laplacian_row(up, cur, down, width);
+      for (int x = 0; x < width; x++) {
+        assert(up[x] == expected[x]);
+        assert(trial != 0 || up[x] == 0);
+      }
+    }
+    free(up);
+    free(cur);
+    free(down);
+    free(expected);
+  }
+}
+
 /* Encode one value with the residual rows cleared, returning the code. */
 static unsigned decide(State *state, int species, int32_t value,
                        uint32_t random) {
+  StepContext ctx;
   memset(residual_row(state, species), 0,
          (size_t)state->width * sizeof(int32_t));
-  begin_step(state);
-  unsigned code = encode_cell(state, species, 0, value, random);
+  begin_step(state, &ctx);
+  unsigned code = encode_cell(is_packed(state), species, ctx.residual[species],
+                              &ctx.shares[species], 0, value, random);
   memset(residual_row(state, species), 0,
          (size_t)state->width * sizeof(int32_t));
-  begin_step(state);
   return code;
 }
 
-/* The dithered threshold lies in [1/4, 3/4) of the code step. */
+/* Packed codes: the dithered threshold lies in [1/4, 3/4) of the code
+ * step. Q15 codes: the nearest code, halfway upward, whatever the dither. */
 static void check_dither(State *state) {
   for (int species = 0; species < SPECIES_COUNT; species++) {
+    int packed = is_packed(state);
     unsigned code = species == RD_SPECIES_A ? 40 : 130;
-    int32_t low = decode(state, species, code),
-            step = decode(state, species, code + 1) - low;
+    int32_t low = decode(packed, species, code),
+            step = decode(packed, species, code + 1) - low;
     /* random 2^14 is the midpoint threshold: halfway rounds up, one less
      * rounds down. */
     assert(decide(state, species, low + step / 2, DITHER_BASE) == code + 1);
     assert(decide(state, species, low + step / 2 - 1, DITHER_BASE) == code);
+    if (!packed) {
+      assert(decide(state, species, low + step * 3 / 10, 0) == code);
+      assert(decide(state, species, low + step * 7 / 10, DITHER_MASK) ==
+             code + 1);
+      assert(decide(state, species, low, 0) == code);
+      assert(decide(state, species, low + step / 2, 0) == code + 1);
+      assert(decide(state, species, low + step / 2 - 1, DITHER_MASK) == code);
+      continue;
+    }
     /* random 0 is a quarter: 30% rounds up. random 2^15 - 1 is just below
      * three quarters: 70% rounds down, 76% rounds up. */
     assert(decide(state, species, low + step * 3 / 10, 0) == code + 1);
@@ -118,35 +216,84 @@ static void check_dither(State *state) {
     /* Exact codes never move, whatever the dither. */
     assert(decide(state, species, low, 0) == code);
     assert(decide(state, species, low, DITHER_MASK) == code);
+    /* The largest step of the species decides in the same way through the
+     * 32-bit and 64-bit comparisons. */
+    unsigned top = code_limit(packed, species) - 1;
+    int32_t top_low = decode(packed, species, top),
+            top_step = decode(packed, species, top + 1) - top_low;
+    assert(decide(state, species, top_low + top_step / 2, DITHER_BASE) ==
+           top + 1);
+    assert(decide(state, species, top_low + top_step / 2 - 1, DITHER_BASE) ==
+           top);
+    assert(decide(state, species, top_low + top_step - 1, DITHER_MASK) ==
+           top + 1);
+    assert(decide(state, species, top_low + top_step / 4 - 1, 0) == top);
   }
 }
 
 /* Error diffusion conserves the encoded mass of a row exactly: the decoded
  * codes plus the shares still held equal the sum of the inputs. */
 static void check_diffusion(State *state, int species, int32_t value) {
+  int packed = is_packed(state);
   int32_t *residual = residual_row(state, species);
   memset(residual, 0, (size_t)state->width * sizeof(int32_t));
-  begin_step(state);
+  StepContext ctx;
+  begin_step(state, &ctx);
   int64_t decoded = 0, held = 0;
   for (int x = 0; x < state->width; x++) {
     uint32_t random = mix32((uint32_t)x) & DITHER_MASK;
-    decoded +=
-        decode(state, species, encode_cell(state, species, x, value, random));
+    decoded += decode(packed, species,
+                      encode_cell(packed, species, ctx.residual[species],
+                                  &ctx.shares[species], x, value, random));
   }
-  finish_row(state);
+  finish_row(&ctx);
   for (int x = 0; x < state->width; x++) {
     held += residual[x];
   }
-  held += state->carry[species];
+  held += ctx.shares[species].carry;
   assert(decoded + held == (int64_t)value * state->width);
   /* The decoded row average is within one code step of the input. */
-  unsigned code = floor_code(state, species, value);
+  unsigned code = floor_code(packed, species, value);
   int32_t step =
-      decode(state, species, code + 1) - decode(state, species, code);
+      decode(packed, species, code + 1) - decode(packed, species, code);
   assert(llabs(decoded - (int64_t)value * state->width) <=
          (int64_t)step * state->width);
   memset(residual, 0, (size_t)state->width * sizeof(int32_t));
-  begin_step(state);
+}
+
+/* rd_row_rgb2 is the quantized rd_row output packed to two bits per
+ * channel, for every palette and display row, and every B code goes
+ * through the lookup table or its fallback to the same byte. */
+static void check_rgb2(State *state) {
+  uint8_t copy[RD_DISPLAY_WIDTH];
+  for (int palette = 0; palette <= RD_PALETTE_MONO; palette++) {
+    for (int y = 0; y < RD_DISPLAY_HEIGHT; y += y < 8 ? 1 : 7) {
+      uint8_t *rgb2 = rd_row_rgb2(state, y, palette);
+      assert(rgb2);
+      memcpy(copy, rgb2, sizeof copy);
+      uint8_t *rgba = rd_row(state, y, palette, 1);
+      assert(rgba);
+      for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+        uint8_t expected =
+            (uint8_t)(ARGB8_OPAQUE | (rgba[x * 4] >> 6) << 4 |
+                      (rgba[x * 4 + 1] >> 6) << 2 | (rgba[x * 4 + 2] >> 6));
+        assert(copy[x] == expected);
+        assert((copy[x] & ARGB8_OPAQUE) == ARGB8_OPAQUE);
+      }
+    }
+    ensure_lookup_table(state, palette);
+    const uint8_t *table = lookup_table(state);
+    unsigned limit = code_limit(is_packed(state), RD_SPECIES_B);
+    for (unsigned code = 0; code <= limit; code++) {
+      uint8_t expected = pixel_argb8(state, palette, code);
+      uint8_t value =
+          is_packed(state) ? table[code] : table[code >> LUT_BUCKET_BITS];
+      assert(value == 0 || value == expected);
+    }
+  }
+  /* Invalid arguments return NULL without building a table. */
+  assert(!rd_row_rgb2(state, RD_DISPLAY_HEIGHT, 0));
+  assert(!rd_row_rgb2(state, 0, RD_PALETTE_MONO + 1));
 }
 
 int main(int argc, char **argv) {
@@ -163,6 +310,7 @@ int main(int argc, char **argv) {
   assert(rd_bytes(-1) == 0);
   assert(rd_init(NULL, 0, 0, 0) == NULL);
   check_codes();
+  check_laplacian();
   for (int mode = 0; mode < 3; mode++) {
     size_t size = rd_bytes(mode);
     uint8_t *memory = malloc(size + 16);
@@ -185,25 +333,33 @@ int main(int argc, char **argv) {
       reference(reference_state);
       assert(rd_hash(state) == rd_hash(reference_state));
     }
-    /* Coefficient endpoints are accepted and still match the oracle. */
-    for (int endpoint = 0; endpoint < 2; endpoint++) {
-      int endpoint_value = endpoint ? RD_Q15_ONE : 0;
-      assert(!rd_params(state, endpoint_value, endpoint_value, endpoint_value,
-                        endpoint_value, endpoint_value));
-      assert(!rd_params(reference_state, endpoint_value, endpoint_value,
-                        endpoint_value, endpoint_value, endpoint_value));
+    /* Coefficient endpoints and a non-unit timestep are accepted and still
+     * match the oracle. */
+    const int trials[3][5] = {
+        {0, 0, 0, 0, 0},
+        {RD_Q15_ONE, RD_Q15_ONE, RD_Q15_ONE, RD_Q15_ONE, RD_Q15_ONE},
+        {950, 1868, RD_Q15_ONE, RD_Q15_ONE / 2, 12345}};
+    for (int trial = 0; trial < 3; trial++) {
+      const int *t = trials[trial];
+      assert(!rd_params(state, t[0], t[1], t[2], t[3], t[4]));
+      assert(!rd_params(reference_state, t[0], t[1], t[2], t[3], t[4]));
       rd_step(state, 3);
       for (int j = 0; j < 3; j++) {
         reference(reference_state);
       }
       assert(rd_hash(state) == rd_hash(reference_state));
     }
+    assert(
+        !rd_params(state, 950, 1868, RD_Q15_ONE, RD_Q15_ONE / 2, RD_Q15_ONE));
+    /* Rendering paths agree. */
+    check_rgb2(state);
     /* Invalid arguments leave the block and its surroundings untouched. */
     memcpy(snapshot, memory, size);
     assert(rd_params(state, -1, 0, 0, 0, 0) == -1);
     assert(rd_seed(state, RD_DISPLAY_WIDTH, 0, 4) == -1);
     assert(rd_step(state, -1) == -1);
     assert(!rd_row(state, RD_DISPLAY_HEIGHT, 0, 1));
+    assert(!rd_row_rgb2(state, -1, 0));
     assert(rd_get(state, -1, 0, RD_SPECIES_A) == -1);
     assert(memcmp(snapshot, memory, size) == 0);
     for (size_t i = size; i < size + 16; i++) {
@@ -251,6 +407,8 @@ int main(int argc, char **argv) {
       assert(aligned_state);
       rd_step(aligned_state, 1);
       assert(rd_row(aligned_state, RD_DISPLAY_HEIGHT - 1, RD_PALETTE_MONO, 1));
+      assert(
+          rd_row_rgb2(aligned_state, RD_DISPLAY_HEIGHT - 1, RD_PALETTE_CYAN));
       for (int j = 0; j < alignment; j++) {
         assert(unaligned[j] == 0xa5);
       }
@@ -260,7 +418,7 @@ int main(int argc, char **argv) {
       free(unaligned);
     }
     printf("mode %d: %zu bytes, "
-           "oracle/boundary/equilibrium/validation/dither/diffusion OK\n",
+           "oracle/laplacian/codes/rgb2/validation/dither/diffusion OK\n",
            mode, size);
     free(memory);
     free(reference_memory);
