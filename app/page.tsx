@@ -19,6 +19,8 @@ const defaults: Parameters = {
   dt: 1,
 };
 type Engine = 'u8-200' | 'q15-100' | 'float-200' | 'float-100';
+// Startup steps of the watchface, mirrored by device behavior mode.
+const DEVICE_STARTUP_STEPS = 1800;
 type ActiveSimulation = WasmSimulation | FloatSimulation;
 const engineWidth = (engine: Engine): 100 | 200 =>
   engine.endsWith('200') ? 200 : 100;
@@ -100,7 +102,7 @@ export default function Home() {
   const canvas = useRef<HTMLCanvasElement>(null),
     sim = useRef<ActiveSimulation | null>(null);
   const [params, setParams] = useState(defaults);
-  const [engine, setEngine] = useState<Engine>('u8-200'),
+  const [engine, setEngine] = useState<Engine>('q15-100'),
     [seed, setSeed] = useState(42),
     [revision, setRevision] = useState(0);
   const [running, setRunning] = useState(false),
@@ -237,7 +239,7 @@ export default function Home() {
           setRunning(false);
         }
       });
-    pending.current = config.current.deviceMode ? 2000 : 0;
+    pending.current = config.current.deviceMode ? DEVICE_STARTUP_STEPS : 0;
     manualPending.current = 0;
     lightUntil.current = 0;
     return () => {
@@ -281,16 +283,16 @@ export default function Home() {
     document.addEventListener('visibilitychange', stopLight);
     const render = (now: number) => {
       frame = requestAnimationFrame(render);
-      if (
-        document.hidden ||
-        (config.current.deviceMode && !focused) ||
-        now - lastPaint < (config.current.deviceMode ? 100 : 1000 / 30)
-      )
+      const c = config.current;
+      // Like the watch, pending startup or minute work runs in consecutive
+      // 50 ms slices with the screen painted at most every 100 ms.
+      const deviceWork = c.deviceMode && c.running && pending.current > 0;
+      if (document.hidden || (c.deviceMode && !focused)) return;
+      if (!deviceWork && now - lastPaint < (c.deviceMode ? 100 : 1000 / 30))
         return;
-      lastPaint = now;
+      // Pending work paints every 200 ms like the watch, animation every 100 ms.
       const s = sim.current;
       if (!s) return;
-      const c = config.current;
       const start = performance.now();
       let steps = 0;
       const minute = Math.floor(Date.now() / 60000);
@@ -299,11 +301,14 @@ export default function Home() {
         lastMinute = minute;
       }
       const manual = manualPending.current > 0;
+      const budget = deviceWork && !manual ? 120 : 8;
       const target = manual
         ? Math.min(manualPending.current, 8)
         : c.running
           ? pending.current > 0
-            ? Math.min(pending.current, 8)
+            ? c.deviceMode
+              ? pending.current
+              : Math.min(pending.current, 8)
             : c.deviceMode
               ? now < lightUntil.current
                 ? 8
@@ -313,11 +318,13 @@ export default function Home() {
       while (steps < target) {
         s.step(c.params);
         steps++;
-        if (performance.now() - start >= 8) break;
+        if (performance.now() - start >= budget) break;
       }
       if (manual) manualPending.current -= steps;
       else if (pending.current > 0) pending.current -= steps;
       if (steps) measured = (performance.now() - start) / steps;
+      if (deviceWork && pending.current > 0 && now - lastPaint < 200) return;
+      lastPaint = now;
       if (!pixels) {
         offscreen.width = 200;
         offscreen.height = 228;
@@ -344,9 +351,13 @@ export default function Home() {
   }, []);
   const settings = {
     model: 'Gray-Scott',
-    version: 2,
+    version: 3,
     method: engine,
-    rounding: floatMode ? 'float32-storage' : 'floyd-steinberg-dithered',
+    rounding: floatMode
+      ? 'float32-storage'
+      : engine === 'u8-200'
+        ? 'floyd-steinberg-dithered'
+        : 'floyd-steinberg-nearest',
     storage: floatMode
       ? 'float32'
       : engine === 'u8-200'
@@ -375,7 +386,7 @@ export default function Home() {
     a.download = `turing-${seed}-${stats.steps}.${kind}`;
     if (kind === 'h') {
       const q = effective(params);
-      const text = `/* Generated configuration, core v2 */\n#ifndef RD_MODE\n#define RD_MODE ${engine === 'u8-200' ? 0 : 1}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === 'green' ? 0 : palette === 'blue' ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n`;
+      const text = `/* Generated configuration, core v3 */\n#ifndef RD_MODE\n#define RD_MODE ${engine === 'u8-200' ? 0 : 1}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === 'green' ? 0 : palette === 'blue' ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n`;
       const url = URL.createObjectURL(new Blob([text]));
       a.href = url;
       a.download = 'config.h';

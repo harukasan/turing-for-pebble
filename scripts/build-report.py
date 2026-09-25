@@ -10,6 +10,9 @@ r['arm'] = []
 measurements = json.loads(Path('docs/emulator-measurements.json').read_text())[
     'measurements'
 ]
+hardware = json.loads(Path('docs/hardware-measurements.json').read_text())[
+    'measurements'
+]
 for mode in [0, 1]:
     core_bytes = next(c['coreBytes'] for c in r['comparisons'] if c['mode'] == mode)
     values = (
@@ -20,6 +23,8 @@ for mode in [0, 1]:
         .split()
     )
     text, data, bss = map(int, values[:3])
+    # The newest physical-watch measurement of this mode, if any.
+    physical = next((m for m in reversed(hardware) if m['mode'] == mode), None)
     stack = {}
     for f in Path(f'build/pebble/stack-{mode}').glob('*.su'):
         for line in f.read_text().splitlines():
@@ -45,7 +50,27 @@ for mode in [0, 1]:
             'stackLimit': 'Nonrecursive app frames only. OS callbacks and library stack are additional, not measured.',
             'minimumFreeHeapBytes': measurements[mode]['minimumFreeHeapBytes'],
             'emulatorObservation': measurements[mode],
-            'physicalComputeAndDrawMs': None,
+            'physicalComputeAndDrawMs': None
+            if physical is None
+            else round(
+                (
+                    physical['avgStepUs'] * 8
+                    + physical['avgDrawUs']
+                    + physical['avgTextUs']
+                )
+                / 1000,
+                1,
+            ),
+            'physicalStartupMs': None
+            if physical is None
+            else physical['startupWallMs'],
+            'physicalStepsPerSecond': None
+            if physical is None
+            else physical['stepsPerSecond'],
+            'physicalMinimumFreeHeapBytes': None
+            if physical is None
+            else physical['minimumFreeHeapBytes'],
+            'physicalMeasurement': physical,
         }
     )
 r['fontVerification'] = {

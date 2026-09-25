@@ -23,7 +23,11 @@
     "emulator:mode1": "sh scripts/emulator.sh install 1",
     "emulator:screenshot": "sh scripts/emulator.sh screenshot",
     "emulator:logs": "sh scripts/emulator.sh logs",
-    "emulator:kill": "sh scripts/emulator.sh kill"
+    "emulator:kill": "sh scripts/emulator.sh kill",
+    "device": "sh scripts/emulator.sh device-install 0",
+    "device:mode1": "sh scripts/emulator.sh device-install 1",
+    "device:logs": "sh scripts/emulator.sh device-logs",
+    "device:screenshot": "sh scripts/emulator.sh device-screenshot"
   },
   "dependencies": {
     "react": "19.2.6",

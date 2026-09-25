@@ -19,7 +19,7 @@ Machine-readable results and comparison images are in `public/reports/`. These a
 
 ## Pattern comparison
 
-For the cell-by-cell comparison with the original Float32 implementation, see [Float32 precision comparison](float-precision.md). The fixed-point implementation is not numerically identical to the Float32 reference. Numerical definition version 2 (packed 7-bit A and 9-bit square-root B codes, Floyd–Steinberg error diffusion with a dithered threshold, and Q24 arithmetic) reduced the mode 0 error at 1,000 steps by about 7 times and the mode 1 error by about 100 times. [Storage precision study](precision-optimization.md) records the candidates that were measured.
+For the cell-by-cell comparison with the original Float32 implementation, see [Float32 precision comparison](float-precision.md). The fixed-point implementation is not numerically identical to the Float32 reference. Numerical definition version 3 (packed 7-bit A and 9-bit square-root B codes, Floyd–Steinberg error diffusion with a dithered threshold for the packed codes, and Q24 arithmetic) reduced the mode 0 error at 1,000 steps by about 7 times and the mode 1 error by more than 100 times. [Storage precision study](precision-optimization.md) records the candidates that were measured.
 
 The Web now exposes Float32 reference runs at both grid resolutions alongside the two production Wasm modes. The adapter test checks that its initial disk occupancy matches the C core in both grids and that Q15 initial values match exactly on the 100 × 114 grid. Its step, seed, and RGB2 rendering paths are also exercised. The UI switches by resetting to the same seed and preserves the original controls.
 
@@ -35,15 +35,28 @@ At step 10,000, a further single step changes 0.11–0.17% of displayed pixels f
 
 ## Memory
 
-Core allocation is 100,075 B for mode 0 and 50,475 B for mode 1. These include decoded scratch rows, error diffusion residual rows, the rendering row, control state, and alignment. Concentration planes plus scratch rows alone occupy 96.875 KiB and 48.438 KiB respectively. Version 2 added 6,428 B to mode 0 and 2,428 B to mode 1 for the decoded 32-bit rows, the residual rows, and the dither salt.
+Core allocation is 100,567 B for mode 0 and 50,967 B for mode 1. These include decoded scratch rows, error diffusion residual rows, the rendering row, the display lookup table, control state, and alignment. Concentration planes plus scratch rows alone occupy 96.875 KiB and 48.438 KiB respectively. Version 2 added 6,920 B to mode 0 and 2,920 B to mode 1 for the decoded 32-bit rows, the residual rows, and the display lookup table. The watchface is now compiled with `-O3`, which grew its load size from 4,705 B to about 10.5 KB (mode 0) and 11.3 KB (mode 1); `scripts/build-pebble.sh` fails above 12,288 B.
 
 The current `public/reports/comparison.json` records measured ELF text/data/BSS and compiler stack reports. Application RAM estimates use the 128 KiB app region and subtract both the load footprint and the core allocation. They do not include additional OS allocations.
 
-Observed emulator heap results are recorded with their build/observation scope. Version 1 mode 0 showed 32,888 B after startup and two subsequent minute updates. Version 1 mode 1 showed 78,688 B after startup and a subsequent minute update. The version 2 allocation is larger by the amounts above, so the expected corresponding values are about 26.5 KiB and 76 KiB before remeasurement. The observation metadata is retained in `docs/emulator-measurements.json`. These exceed 16 KiB in the observed emulator intervals, but they are not a substitute for a sustained normal-operation and backlight workload on hardware. Use the current report for subsequent measurements.
+Observed emulator heap results are recorded with their build/observation scope. Version 1 mode 0 showed 32,888 B after startup and two subsequent minute updates. Version 1 mode 1 showed 78,688 B after startup and a subsequent minute update. The version 2 allocation and the larger code are together about 11.2 KB (mode 0) and 6.7 KB (mode 1) more than those binaries had, so the expected corresponding values are about 21.7 KiB and 72 KiB before remeasurement. The observation metadata is retained in `docs/emulator-measurements.json`. These exceed 16 KiB in the observed emulator intervals, but they are not a substitute for a sustained normal-operation and backlight workload on hardware. Use the current report for subsequent measurements.
 
 The two `.pbw` files were rebuilt for numerical definition version 2. Their current ELF section sizes are refreshed in `public/reports/comparison.json`. The heap observations above belong to the earlier version 1 binaries listed in `docs/emulator-measurements.json` and must be remeasured on the final binaries before an acceptance decision.
 
 Compiler `.su` files report bounded, static frames and no application recursion. The report includes their sum as a deliberately conservative application-only stack bound. This is not a full stack high-water measurement. The OS and library call paths contribute additional stack usage.
+
+## Physical Pebble Time 2 measurements
+
+The first physical measurements were taken on 2026-09-25 through the phone's developer connection, with the scheduling, drawing, and bit-exact core changes described in [Shared C core](core.md). `docs/hardware-measurements.json` holds the raw entries and `scripts/build-report.py` copies them into `public/reports/comparison.json`.
+
+| Mode                        | Steps per second |    Step | Blit per frame | Text per frame | Minimum free heap | 2,000 startup steps |
+| --------------------------- | ---------------: | ------: | -------------: | -------------: | ----------------: | ------------------: |
+| 0                           |             11.4 |   81 ms |         3.2 ms |         2.8 ms |          21,104 B |         about 175 s |
+| 1                           |             56.2 | 16.4 ms |         3.3 ms |         2.0 ms |          68,376 B |          about 36 s |
+| 1, version 3                |             58.3 | 15.2 ms |         2.9 ms |         3.1 ms |          68,680 B |          about 34 s |
+| 1, production (1,800 steps) |             63.0 | 15.1 ms |         3.5 ms |         3.0 ms |          69,176 B |     28.8 s measured |
+
+The hardware clock was valid throughout (`clock_invalid=0`). The 1,000,000-iteration calibration loop of the profile build took 46–47 ms. A 256-step log interval reproduced the mode 0 rate as 256 steps per 22.5 s. Neither mode reached the 30 s target for 2,000 steps with bit-exact code: mode 1 needed about 18% more speed and mode 0 about six times more. Version 3 (nearest rounding for the Q15 codes, no per-cell hash in mode 1) raised mode 1 to 58.3 steps/s at 15.2 ms per step, and the startup was set to 1,800 steps with 120 ms slices and one redraw per 200 ms, which brings mode 1's startup to a measured 28.8 s for 1,816 steps (1,800 plus one minute tick) at 63.0 steps/s.
 
 ## Timing limitation
 
@@ -56,11 +69,11 @@ Backlight windows use a separate five-second AppTimer, so they do not depend on 
 - Verify Web mode switching, repeated initialization, pause/advance behavior, simulated backlight/focus behavior, PNG export, and configuration downloads interactively. No connected browser is available to this agent.
 - Observe real-device backlight-on/off and focus loss, without an accelerometer subscription.
 - Measure minimum free heap throughout startup, minute updates, and backlight animation. Require at least 16 KiB during normal operation.
-- Measure compute and draw times on a physical Emery watch. Require combined animation compute and drawing to fit within 100 ms.
+- Measure compute and draw times on a physical Emery watch with `PEBBLE_PHONE=<ip> npm run device` and `device:mode1`, record the `RD startup` line in `docs/hardware-measurements.json`, and rerun `scripts/build-report.py`. Require 2,000 startup steps within 30 s and combined animation compute and drawing within 100 ms.
 - Validate full stack headroom including OS and library contributions.
 - Compare perceived flicker, legibility, and pattern quality on the physical display.
 
-If both candidates pass, use mode 0 as the standard. If mode 0 fails the memory or timing gate and mode 1 passes, use mode 1. The Web currently starts with mode 0 as a provisional comparison default. Both build outputs remain available.
+Mode 1 is the production build: it is the only candidate that completes its startup in about 30 s on the physical watch, so `pebble/src/c/config.h`, the build default, and the Web's initial selection use it. Mode 0 remains available as the high-resolution comparison build.
 
 ## Emulator rendering after startup
 

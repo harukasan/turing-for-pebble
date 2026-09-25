@@ -1,5 +1,5 @@
 #ifndef RD_MODE
-#define RD_MODE 0
+#define RD_MODE 1
 #endif
 #define RD_SEED 42u
 #define RD_FEED 950

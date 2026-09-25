@@ -35,7 +35,13 @@ def build(ctx):
         ctx.env = ctx.all_envs[platform]
         ctx.set_group(ctx.env.PLATFORM_NAME)
         app_elf = '{}/pebble-app.elf'.format(ctx.env.BUILD_DIR)
-        ctx.pbl_build(source=ctx.path.ant_glob('src/c/**/*.c'), target=app_elf, bin_type='app', cflags=['-DRD_MODE=' + os.environ.get('RD_BUILD_MODE', '0'), '-fstack-usage'])
+        # Per-target flags come after the SDK's -Os, so RD_BUILD_OPT (default
+        # -O3) selects the optimization level. RD_BUILD_PROFILE=1 adds the
+        # clock calibration and periodic profile log to the watchface.
+        cflags = ['-DRD_MODE=' + os.environ.get('RD_BUILD_MODE', '1'), '-fstack-usage', os.environ.get('RD_BUILD_OPT', '-O3')]
+        if os.environ.get('RD_BUILD_PROFILE') == '1':
+            cflags.append('-DRD_PROFILE')
+        ctx.pbl_build(source=ctx.path.ant_glob('src/c/**/*.c'), target=app_elf, bin_type='app', cflags=cflags)
 
         if build_worker:
             worker_elf = '{}/pebble-worker.elf'.format(ctx.env.BUILD_DIR)

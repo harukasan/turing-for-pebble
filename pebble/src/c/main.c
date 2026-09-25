@@ -2,26 +2,37 @@
  * Emery watchface: runs the shared core in timer slices and draws the field
  * with a LECO clock on top. The scheduling model is described in
  * docs/behavior.md:
- *   - startup advances STARTUP_STEPS steps in slices,
- *   - every minute adds STEPS_PER_MINUTE pending steps,
- *   - a backlight-on event animates for at most BACKLIGHT_WINDOW_MS,
- *   - each slice runs at most STEPS_PER_SLICE steps within SLICE_BUDGET_MS,
+ *   - startup advances STARTUP_STEPS steps in consecutive slices of at most
+ *     STARTUP_SLICE_BUDGET_MS, rescheduled SCHEDULE_NOW_MS apart, with the
+ *     screen redrawn at most every WORK_FRAME_INTERVAL_MS,
+ *   - every minute adds STEPS_PER_MINUTE pending steps, run the same way,
+ *   - a backlight-on event animates for at most BACKLIGHT_WINDOW_MS, at most
+ *     STEPS_PER_SLICE steps within SLICE_BUDGET_MS per frame,
  *   - focus loss cancels timers and focus restore resumes pending work.
+ * Timing counters are accumulated for the startup summary log; RD_PROFILE
+ * adds a clock calibration loop and a periodic profile log.
  */
 #include "../../../core/rd.h"
 #include "config.h"
 #include <pebble.h>
 
-#define STARTUP_STEPS 2000
+#define STARTUP_STEPS 1800
 #define STEPS_PER_MINUTE 16
 #define STEPS_PER_SLICE 8
 #define SLICE_BUDGET_MS 8
+#define STARTUP_SLICE_BUDGET_MS 120
 #define FRAME_INTERVAL_MS 100
+/* Redraw interval while startup or minute work is pending. */
+#define WORK_FRAME_INTERVAL_MS 200
 #define SCHEDULE_NOW_MS 1
 #define BACKLIGHT_WINDOW_MS 5000
-#define LOG_INTERVAL_STEPS 16
+#define LOG_INTERVAL_STEPS 256
 /* Reported instead of a measured duration when wall time is discontinuous. */
 #define TIMING_SENTINEL_MS 1000
+/* A longer gap between startup slices means the face was interrupted. */
+#define STARTUP_GAP_LIMIT_MS 5000
+/* Iterations of the RD_PROFILE calibration loop. */
+#define CALIBRATION_ITERATIONS 1000000u
 
 /* Clock layout, shared with the Web preview. */
 #define CLOCK_Y 78
@@ -32,12 +43,24 @@
 static Window *window;
 static Layer *layer;
 static AppTimer *timer, *light_timer;
+static GFont font_clock, font_date;
 static void *allocation, *state;
 static bool focused = true, lit;
 static bool timing_unreliable;
 static int pending = STARTUP_STEPS;
 static size_t min_heap = (size_t)-1;
-static uint32_t max_compute, max_draw;
+static uint32_t max_compute, max_draw, max_step;
+/* When the screen was last marked dirty, and whether it ever was. */
+static uint32_t last_mark_ms;
+static bool marked;
+
+/* Startup accounting: validated compute and gap time, counts, and whether a
+ * focus loss or long gap interrupted the startup. */
+static uint32_t busy_ms, gap_ms, blit_ms_total, text_ms_total;
+static uint32_t steps_total, slices, draws, next_log_step = LOG_INTERVAL_STEPS;
+static uint32_t startup_start_ms, last_slice_end_ms;
+static bool slice_seen, interrupted, startup_logged;
+static uint32_t calibration_ms;
 
 static uint32_t now_ms(void) {
   time_t seconds;
@@ -57,6 +80,9 @@ static uint32_t elapsed_ms(uint32_t start) {
   return (uint32_t)delta;
 }
 
+/* Milliseconds since a moment, without validation, for throttling. */
+static int32_t since_ms(uint32_t then) { return (int32_t)(now_ms() - then); }
+
 static void sample_heap(void) {
   size_t free_bytes = heap_bytes_free();
   if (free_bytes < min_heap) {
@@ -64,51 +90,142 @@ static void sample_heap(void) {
   }
 }
 
-/* Write the rendered field straight into the framebuffer as RGB2, then draw
- * the clock over it. */
-static void draw(Layer *unused_layer, GContext *ctx) {
-  (void)unused_layer;
+#ifdef RD_PROFILE
+/* A fixed integer loop, timed, gives the CPU clock class and shows dynamic
+ * frequency changes when repeated. */
+static uint32_t calibrate(void) {
   uint32_t start = now_ms();
+  volatile uint32_t sink = 0;
+  for (uint32_t i = 0; i < CALIBRATION_ITERATIONS; i++) {
+    sink += i;
+  }
+  return elapsed_ms(start);
+}
+#endif
+
+/* Blit the field straight into the framebuffer as ARGB8 rows from the core,
+ * then draw the clock over it. Only the unobstructed rows are written, so a
+ * Timeline Peek keeps its area. */
+static void draw(Layer *this_layer, GContext *ctx) {
+  uint32_t start = now_ms();
+  GRect bounds = layer_get_unobstructed_bounds(this_layer);
+  int y_end = bounds.origin.y + bounds.size.h;
+  if (y_end > RD_DISPLAY_HEIGHT) {
+    y_end = RD_DISPLAY_HEIGHT;
+  }
   GBitmap *frame_buffer = graphics_capture_frame_buffer(ctx);
   if (frame_buffer) {
-    for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+    const uint8_t *pixels = NULL;
+    for (int y = bounds.origin.y < 0 ? 0 : bounds.origin.y; y < y_end; y++) {
       GBitmapDataRowInfo row = gbitmap_get_data_row_info(frame_buffer, y);
-      uint8_t *pixels = rd_row(state, y, RD_PALETTE, 1);
-      for (int x = row.min_x; x <= row.max_x; x++) {
-        row.data[x] =
-            GColorFromRGB(pixels[x * 4], pixels[x * 4 + 1], pixels[x * 4 + 2])
-                .argb;
+#if RD_MODE == 0
+      pixels = rd_row_rgb2(state, y, RD_PALETTE);
+#else
+      /* Display rows 2k and 2k + 1 show the same grid row. */
+      if (!pixels || (y & 1) == 0) {
+        pixels = rd_row_rgb2(state, y, RD_PALETTE);
+      }
+#endif
+      int first = row.min_x < 0 ? 0 : row.min_x;
+      int last =
+          row.max_x >= RD_DISPLAY_WIDTH ? RD_DISPLAY_WIDTH - 1 : row.max_x;
+      if (pixels && last >= first) {
+        memcpy(row.data + first, pixels + first, (size_t)(last - first + 1));
       }
     }
     graphics_release_frame_buffer(ctx, frame_buffer);
   }
+  uint32_t blit = elapsed_ms(start);
   if (RD_CLOCK) {
     time_t now = time(NULL);
     struct tm *local_time = localtime(&now);
     char text[16];
     graphics_context_set_text_color(ctx, GColorWhite);
     strftime(text, sizeof(text), "%H:%M", local_time);
-    graphics_draw_text(
-        ctx, text, fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS),
-        GRect(0, CLOCK_Y, RD_DISPLAY_WIDTH, CLOCK_HEIGHT),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    graphics_draw_text(ctx, text, font_clock,
+                       GRect(0, CLOCK_Y, RD_DISPLAY_WIDTH, CLOCK_HEIGHT),
+                       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
+                       NULL);
     strftime(text, sizeof(text), "%Y.%m.%d", local_time);
     graphics_draw_text(
-        ctx, text, fonts_get_system_font(FONT_KEY_LECO_20_BOLD_NUMBERS),
-        GRect(0, DATE_Y, RD_DISPLAY_WIDTH, DATE_HEIGHT),
+        ctx, text, font_date, GRect(0, DATE_Y, RD_DISPLAY_WIDTH, DATE_HEIGHT),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
   uint32_t elapsed = elapsed_ms(start);
   if (elapsed > max_draw) {
     max_draw = elapsed;
   }
+  if (elapsed < TIMING_SENTINEL_MS) {
+    blit_ms_total += blit;
+    text_ms_total += elapsed - blit;
+    draws++;
+  }
   sample_heap();
 }
 
 static void schedule(uint32_t delay);
 
-/* One timer slice: run pending startup or minute steps, or animation steps
- * while the backlight is on, stopping at the time budget. */
+static void log_summary(void) {
+  uint32_t steps = steps_total ? steps_total : 1;
+  uint32_t frames = draws ? draws : 1;
+  uint32_t wall = busy_ms + gap_ms;
+  /* wall_ms sums validated slice and gap times; since_init_ms is the raw
+   * clock difference as a cross-check. A log message is truncated beyond
+   * about 90 characters, so the summary spans four short lines. */
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD startup mode=%d steps=%lu wall_ms=%lu since_init_ms=%ld", RD_MODE,
+          (unsigned long)steps_total, (unsigned long)wall,
+          (long)since_ms(startup_start_ms));
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD startup busy_ms=%lu rate_x10=%lu avg_step_us=%lu max_step_ms=%lu",
+          (unsigned long)busy_ms,
+          (unsigned long)(wall ? (uint64_t)steps_total * 10000 / wall : 0),
+          (unsigned long)((uint64_t)busy_ms * 1000 / steps),
+          (unsigned long)max_step);
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD startup avg_draw_us=%lu avg_text_us=%lu slices=%lu draws=%lu",
+          (unsigned long)((uint64_t)blit_ms_total * 1000 / frames),
+          (unsigned long)((uint64_t)text_ms_total * 1000 / frames),
+          (unsigned long)slices, (unsigned long)draws);
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD startup heap_min=%lu loop_ms=%lu interrupted=%d clock_invalid=%d",
+          (unsigned long)min_heap, (unsigned long)calibration_ms, interrupted,
+          timing_unreliable);
+}
+
+static void log_progress(void) {
+#ifdef RD_PROFILE
+  if (!calibration_ms) {
+    calibration_ms = calibrate();
+  }
+  uint32_t wall = busy_ms + gap_ms;
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD prof mode=%d step=%lu rate_x10=%lu busy_ms=%lu gap_ms=%lu",
+          RD_MODE, (unsigned long)rd_steps(state),
+          (unsigned long)(wall ? (uint64_t)steps_total * 10000 / wall : 0),
+          (unsigned long)busy_ms, (unsigned long)gap_ms);
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD prof max_step_ms=%lu draws=%lu blit_ms=%lu text_ms=%lu",
+          (unsigned long)max_step, (unsigned long)draws,
+          (unsigned long)blit_ms_total, (unsigned long)text_ms_total);
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD prof heap_min=%lu loop_ms=%lu clock_invalid=%d",
+          (unsigned long)min_heap, (unsigned long)calibration_ms,
+          timing_unreliable);
+#else
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD mode=%d step=%lu heap_min=%lu compute_max_ms=%lu "
+          "draw_max_ms=%lu clock_invalid=%d",
+          RD_MODE, (unsigned long)rd_steps(state), (unsigned long)min_heap,
+          (unsigned long)max_compute, (unsigned long)max_draw,
+          timing_unreliable);
+#endif
+}
+
+/* One timer slice: run pending startup or minute steps within the startup
+ * budget, or animation steps while the backlight is on within the frame
+ * budget. Pending work is rescheduled immediately and the screen is
+ * redrawn at most every FRAME_INTERVAL_MS. */
 static void update(void *context) {
   (void)context;
   timer = NULL;
@@ -116,40 +233,69 @@ static void update(void *context) {
     return;
   }
   uint32_t start = now_ms();
+  bool working = pending > 0;
+  if (working && slice_seen) {
+    /* A backwards clock is a clock fault, a long gap an interruption. */
+    int32_t gap = since_ms(last_slice_end_ms);
+    if (gap < 0) {
+      timing_unreliable = true;
+    } else if (gap >= STARTUP_GAP_LIMIT_MS) {
+      interrupted = true;
+    } else {
+      gap_ms += (uint32_t)gap;
+    }
+  }
   bool animate = lit;
-  int target = pending > 0
-                   ? (pending < STEPS_PER_SLICE ? pending : STEPS_PER_SLICE)
-               : animate ? STEPS_PER_SLICE
-                         : 0;
+  uint32_t budget = working ? STARTUP_SLICE_BUDGET_MS : SLICE_BUDGET_MS;
+  int target = working ? pending : animate ? STEPS_PER_SLICE : 0;
   int done = 0;
   while (done < target) {
+    uint32_t step_start = now_ms();
     rd_step(state, 1);
     done++;
-    if (elapsed_ms(start) >= SLICE_BUDGET_MS) {
+    uint32_t step = elapsed_ms(step_start);
+    if (step > max_step) {
+      max_step = step;
+    }
+    if (elapsed_ms(start) >= budget) {
       break;
     }
   }
-  if (pending > 0) {
+  if (working) {
     pending -= done;
   }
   uint32_t elapsed = elapsed_ms(start);
   if (elapsed > max_compute) {
     max_compute = elapsed;
   }
+  if (elapsed < TIMING_SENTINEL_MS) {
+    busy_ms += elapsed;
+  }
+  steps_total += (uint32_t)done;
+  slices++;
   if (done) {
-    layer_mark_dirty(layer);
+    int32_t since = since_ms(last_mark_ms);
+    int32_t interval = working ? WORK_FRAME_INTERVAL_MS : FRAME_INTERVAL_MS;
+    if (!marked || pending == 0 || since < 0 || since >= interval) {
+      layer_mark_dirty(layer);
+      last_mark_ms = now_ms();
+      marked = true;
+    }
   }
   sample_heap();
-  if (pending > 0 || animate) {
+  if (pending > 0) {
+    last_slice_end_ms = now_ms();
+    slice_seen = true;
+    schedule(SCHEDULE_NOW_MS);
+  } else if (animate) {
     schedule(FRAME_INTERVAL_MS);
   }
-  if (pending == 0 || rd_steps(state) % LOG_INTERVAL_STEPS == 0) {
-    APP_LOG(APP_LOG_LEVEL_INFO,
-            "RD mode=%d step=%lu heap_min=%lu compute_max_ms=%lu "
-            "draw_max_ms=%lu clock_invalid=%d",
-            RD_MODE, (unsigned long)rd_steps(state), (unsigned long)min_heap,
-            (unsigned long)max_compute, (unsigned long)max_draw,
-            timing_unreliable);
+  if (pending == 0 && !startup_logged) {
+    startup_logged = true;
+    log_summary();
+  } else if (rd_steps(state) >= next_log_step) {
+    next_log_step += LOG_INTERVAL_STEPS;
+    log_progress();
   }
 }
 
@@ -184,14 +330,14 @@ static void backlight(bool on) {
   if (!on) {
     stop();
     if (pending) {
-      schedule(FRAME_INTERVAL_MS);
+      schedule(SCHEDULE_NOW_MS);
     }
     return;
   }
   if (!lit && focused) {
     lit = true;
     light_timer = app_timer_register(BACKLIGHT_WINDOW_MS, light_expired, NULL);
-    schedule(FRAME_INTERVAL_MS);
+    schedule(pending ? SCHEDULE_NOW_MS : FRAME_INTERVAL_MS);
   }
 }
 
@@ -199,10 +345,13 @@ static void focus(bool on) {
   focused = on;
   if (!on) {
     stop();
+    if (pending > 0 && !startup_logged) {
+      interrupted = true;
+    }
   } else {
     layer_mark_dirty(layer);
     if (pending) {
-      schedule(FRAME_INTERVAL_MS);
+      schedule(SCHEDULE_NOW_MS);
     }
   }
 }
@@ -226,6 +375,8 @@ static void init(void) {
     return;
   }
   rd_params(state, RD_FEED, RD_KILL, RD_DA, RD_DB, RD_DT);
+  font_clock = fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
+  font_date = fonts_get_system_font(FONT_KEY_LECO_20_BOLD_NUMBERS);
   window = window_create();
   layer = layer_create(GRect(0, 0, RD_DISPLAY_WIDTH, RD_DISPLAY_HEIGHT));
   layer_set_update_proc(layer, draw);
@@ -235,8 +386,14 @@ static void init(void) {
   backlight_service_subscribe(backlight);
   app_focus_service_subscribe(focus);
   sample_heap();
-  APP_LOG(APP_LOG_LEVEL_INFO, "RD init mode=%d heap_min=%lu", RD_MODE,
-          (unsigned long)min_heap);
+#ifdef RD_PROFILE
+  calibration_ms = calibrate();
+#endif
+  startup_start_ms = now_ms();
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD init mode=%d core_bytes=%lu heap_min=%lu loop_ms=%lu", RD_MODE,
+          (unsigned long)rd_bytes(RD_MODE), (unsigned long)min_heap,
+          (unsigned long)calibration_ms);
   schedule(SCHEDULE_NOW_MS);
 }
 

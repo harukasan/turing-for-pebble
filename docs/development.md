@@ -73,7 +73,7 @@ Exclusions:
 mise run build-pebble
 ```
 
-This builds both modes and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. The shared UUID means installing the second mode replaces the first in an emulator or watch.
+This builds both modes and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. The sources are compiled with `-O3` after the SDK's own flags (`RD_BUILD_OPT` overrides it; `-O3` measured 6% faster steps than `-O2` on the watch), `RD_BUILD_PROFILE=1` adds the clock calibration loop and the periodic profile log, and the script fails if an ELF's load size exceeds 12,288 bytes, because code shares the 128 KiB app region with the core allocation. The shared UUID means installing the second mode replaces the first in an emulator or watch.
 
 ```sh
 npm run emulator              # build if needed, then install mode 0
@@ -81,9 +81,13 @@ npm run emulator:mode1        # the same for mode 1
 npm run emulator:screenshot   # build/emery.png
 npm run emulator:logs         # stream the watchface logs, Ctrl-C to stop
 npm run emulator:kill         # stop the emulator
+PEBBLE_PHONE=<ip> npm run device             # install mode 0 on the watch and stream its logs
+PEBBLE_PHONE=<ip> npm run device:mode1       # the same for mode 1
+PEBBLE_PHONE=<ip> npm run device:logs        # stream watch logs
+PEBBLE_PHONE=<ip> npm run device:screenshot  # build/watch.png
 ```
 
-These run `scripts/emulator.sh`, which re-executes itself under `mise exec` when `pebble` is not on `PATH`. The underlying commands are:
+These run `scripts/emulator.sh`, which re-executes itself under `mise exec` when `pebble` is not on `PATH`. The `device` commands use the phone's Pebble app developer connection (`--phone`), so enable it in the app and set `PEBBLE_PHONE` to the IP it shows. Start `npm run device` before the face launches so the startup summary is captured. The underlying commands are:
 
 ```sh
 mise exec -- pebble install --emulator emery --vnc build/pebble/mode-0.pbw
