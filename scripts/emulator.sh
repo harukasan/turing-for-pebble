@@ -36,7 +36,7 @@ phone() {
 
 case "$command" in
   install)
-    pebble install --emulator emery --vnc "$(built_pbw "${2:-0}")"
+    pebble install --emulator emery --vnc "$(built_pbw "${2:-3}")"
     ;;
   screenshot)
     pebble screenshot --emulator emery --vnc --no-open "${2:-build/emery.png}"
@@ -50,7 +50,7 @@ case "$command" in
   device-install)
     # --logs keeps streaming after the install, so the startup summary that
     # the watchface logs when its 2,000 startup steps finish is captured.
-    pebble install --phone "$(phone)" --logs "$(built_pbw "${2:-0}")"
+    pebble install --phone "$(phone)" --logs "$(built_pbw "${2:-3}")"
     ;;
   device-logs)
     pebble logs --phone "$(phone)"

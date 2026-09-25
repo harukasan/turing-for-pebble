@@ -18,7 +18,7 @@
 #include "config.h"
 #include <pebble.h>
 
-#define STARTUP_STEPS 1800
+#define STARTUP_STEPS RD_STARTUP_STEPS
 #define STEPS_PER_SLICE 8
 #define SLICE_BUDGET_MS 8
 #define STARTUP_SLICE_BUDGET_MS 120
@@ -118,13 +118,13 @@ static void draw(Layer *this_layer, GContext *ctx) {
     const uint8_t *pixels = NULL;
     for (int y = bounds.origin.y < 0 ? 0 : bounds.origin.y; y < y_end; y++) {
       GBitmapDataRowInfo row = gbitmap_get_data_row_info(frame_buffer, y);
-#if RD_MODE == 0
-      pixels = rd_row_rgb2(state, y, RD_PALETTE);
-#else
+#if (RD_RENDER_FLAGS & RD_ROW_BILINEAR) == 0 && (RD_MODE == 1 || RD_MODE == 2)
       /* Display rows 2k and 2k + 1 show the same grid row. */
       if (!pixels || (y & 1) == 0) {
-        pixels = rd_row_rgb2(state, y, RD_PALETTE);
+        pixels = rd_row_rgb2(state, y, RD_PALETTE, RD_RENDER_FLAGS);
       }
+#else
+      pixels = rd_row_rgb2(state, y, RD_PALETTE, RD_RENDER_FLAGS);
 #endif
       int first = row.min_x < 0 ? 0 : row.min_x;
       int last =
@@ -392,6 +392,24 @@ static void tick(struct tm *tick_time, TimeUnits units_changed) {
   schedule(SCHEDULE_NOW_MS);
 }
 
+#ifdef RD_BENCH
+void rd_bench_log(void *state, int count, uint32_t (*now)(void),
+                  uint32_t out[4]);
+
+/* Phase timing of 20 steps, logged as microseconds per step, once the log
+ * stream has had time to attach. */
+static void bench(void *context) {
+  (void)context;
+  uint32_t t[4];
+  rd_bench_log(state, 20, now_ms, t);
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD bench decode=%lu lap=%lu react=%lu encode=%lu step=%lu",
+          (unsigned long)(t[0] * 50), (unsigned long)((t[1] - t[0]) * 50),
+          (unsigned long)((t[2] - t[1]) * 50),
+          (unsigned long)((t[3] - t[2]) * 50), (unsigned long)(t[3] * 50));
+}
+#endif
+
 static void init(void) {
   allocation = malloc(rd_bytes(RD_MODE));
   if (!allocation) {
@@ -419,6 +437,9 @@ static void init(void) {
   sample_heap();
 #ifdef RD_PROFILE
   calibration_ms = calibrate();
+#endif
+#ifdef RD_BENCH
+  app_timer_register(3000, bench, NULL);
 #endif
   startup_start_ms = now_ms();
   APP_LOG(APP_LOG_LEVEL_INFO,

@@ -13,7 +13,7 @@ measurements = json.loads(Path('docs/emulator-measurements.json').read_text())[
 hardware = json.loads(Path('docs/hardware-measurements.json').read_text())[
     'measurements'
 ]
-for mode in [0, 1]:
+for mode in [0, 1, 3]:
     core_bytes = next(c['coreBytes'] for c in r['comparisons'] if c['mode'] == mode)
     values = (
         subprocess.check_output(
@@ -23,6 +23,7 @@ for mode in [0, 1]:
         .split()
     )
     text, data, bss = map(int, values[:3])
+    emulator = next((m for m in measurements if m.get('mode') == mode), None)
     # The newest physical-watch measurement of this mode, if any.
     physical = next((m for m in reversed(hardware) if m['mode'] == mode), None)
     stack = {}
@@ -48,8 +49,10 @@ for mode in [0, 1]:
             'stackFramesBytes': stack,
             'conservativeAppStackSumBytes': sum(stack.values()),
             'stackLimit': 'Nonrecursive app frames only. OS callbacks and library stack are additional, not measured.',
-            'minimumFreeHeapBytes': measurements[mode]['minimumFreeHeapBytes'],
-            'emulatorObservation': measurements[mode],
+            'minimumFreeHeapBytes': None
+            if emulator is None
+            else emulator['minimumFreeHeapBytes'],
+            'emulatorObservation': emulator,
             'physicalComputeAndDrawMs': None
             if physical is None
             else round(

@@ -3843,6 +3843,1286 @@
           }
         }
       ]
+    },
+    {
+      "mode": 3,
+      "preset": "迷路",
+      "seed": 42,
+      "width": 120,
+      "height": 136,
+      "requestedParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.029,
+        "kill": 0.057
+      },
+      "effectiveParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.02899169921875,
+        "kill": 0.0570068359375
+      },
+      "samples": [
+        {
+          "step": 0,
+          "a": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.9629901960784314,
+            "fixedMean": 0.9629901960784314
+          },
+          "b": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.018504901960784314,
+            "fixedMean": 0.018504901960784314
+          }
+        },
+        {
+          "step": 1,
+          "a": {
+            "mae": 3.6149559652104095e-7,
+            "rmse": 0.0000015739918268771461,
+            "maxAbsolute": 0.000024437904357910156,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999999191742,
+            "floatMean": 0.9617500605426875,
+            "fixedMean": 0.9617500679165709
+          },
+          "b": {
+            "mae": 0.000001242673184320915,
+            "rmse": 0.000004114539273879406,
+            "maxAbsolute": 0.000024415552616119385,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999978866002,
+            "floatMean": 0.019226620326562804,
+            "fixedMean": 0.019226685692282284
+          }
+        },
+        {
+          "step": 10,
+          "a": {
+            "mae": 0.000005598026601707234,
+            "rmse": 0.000008796980194150044,
+            "maxAbsolute": 0.000039696693420410156,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999976612566,
+            "floatMean": 0.9484317078346423,
+            "fixedMean": 0.948431463802562
+          },
+          "b": {
+            "mae": 0.000004400223037734239,
+            "rmse": 0.0000079630178212563,
+            "maxAbsolute": 0.000051021575927734375,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999947578296,
+            "floatMean": 0.026705157200420177,
+            "fixedMean": 0.026705300574209175
+          }
+        },
+        {
+          "step": 100,
+          "a": {
+            "mae": 0.000010412852918984844,
+            "rmse": 0.00001303245305336541,
+            "maxAbsolute": 0.00006514787673950195,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999990340179,
+            "floatMean": 0.7203444570503836,
+            "fixedMean": 0.7203434401867437
+          },
+          "b": {
+            "mae": 0.000009096732500530049,
+            "rmse": 0.000012018627379388414,
+            "maxAbsolute": 0.00005435943603515625,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999962241727,
+            "floatMean": 0.1100756348075253,
+            "fixedMean": 0.11007600298114852
+          }
+        },
+        {
+          "step": 1000,
+          "a": {
+            "mae": 0.000021858752577328214,
+            "rmse": 0.00003442169984033923,
+            "maxAbsolute": 0.0004248619079589844,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999739381444,
+            "floatMean": 0.5220528566095904,
+            "fixedMean": 0.5220507677863626
+          },
+          "b": {
+            "mae": 0.000017046640220773862,
+            "rmse": 0.000025405201210428793,
+            "maxAbsolute": 0.0003170520067214966,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999667291153,
+            "floatMean": 0.16161440221596207,
+            "fixedMean": 0.161614662993188
+          }
+        }
+      ]
+    },
+    {
+      "mode": 3,
+      "preset": "迷路",
+      "seed": 1234,
+      "width": 120,
+      "height": 136,
+      "requestedParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.029,
+        "kill": 0.057
+      },
+      "effectiveParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.02899169921875,
+        "kill": 0.0570068359375
+      },
+      "samples": [
+        {
+          "step": 0,
+          "a": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.9628370098039216,
+            "fixedMean": 0.9628370098039216
+          },
+          "b": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.018581495098039216,
+            "fixedMean": 0.018581495098039216
+          }
+        },
+        {
+          "step": 1,
+          "a": {
+            "mae": 3.633253714617561e-7,
+            "rmse": 0.0000015556009611280089,
+            "maxAbsolute": 0.000024437904357910156,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999999215665,
+            "floatMean": 0.9615917412235456,
+            "fixedMean": 0.9615917505002489
+          },
+          "b": {
+            "mae": 0.0000012507091513743587,
+            "rmse": 0.000004143919212766246,
+            "maxAbsolute": 0.000024415552616119385,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999978682075,
+            "floatMean": 0.019306200733020282,
+            "fixedMean": 0.019306270748961206
+          }
+        },
+        {
+          "step": 10,
+          "a": {
+            "mae": 0.000005707774749573539,
+            "rmse": 0.000008855798917659041,
+            "maxAbsolute": 0.00003960728645324707,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999976296923,
+            "floatMean": 0.9482089516962422,
+            "fixedMean": 0.9482086836122999
+          },
+          "b": {
+            "mae": 0.000004574243136834749,
+            "rmse": 0.000008052885470387868,
+            "maxAbsolute": 0.00003865361213684082,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999946618813,
+            "floatMean": 0.02682218472649439,
+            "fixedMean": 0.026822344462076823
+          }
+        },
+        {
+          "step": 100,
+          "a": {
+            "mae": 0.000011018426248840257,
+            "rmse": 0.000014362657345757214,
+            "maxAbsolute": 0.00010585784912109375,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999988510438,
+            "floatMean": 0.7079962321502321,
+            "fixedMean": 0.7079949061075846
+          },
+          "b": {
+            "mae": 0.000009694720103715004,
+            "rmse": 0.000012908866559008705,
+            "maxAbsolute": 0.00008690357208251953,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999957549549,
+            "floatMean": 0.11551567894267607,
+            "fixedMean": 0.11551609600291532
+          }
+        },
+        {
+          "step": 1000,
+          "a": {
+            "mae": 0.00004520100340539334,
+            "rmse": 0.0000977957297371675,
+            "maxAbsolute": 0.0015674233436584473,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999778066485,
+            "floatMean": 0.5209998264141819,
+            "fixedMean": 0.5209961797676834
+          },
+          "b": {
+            "mae": 0.000031643165286867785,
+            "rmse": 0.00006446292835477423,
+            "maxAbsolute": 0.001105189323425293,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999776455204,
+            "floatMean": 0.16116848585941126,
+            "fixedMean": 0.16116927090813132
+          }
+        }
+      ]
+    },
+    {
+      "mode": 3,
+      "preset": "珊瑚",
+      "seed": 42,
+      "width": 120,
+      "height": 136,
+      "requestedParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.0545,
+        "kill": 0.062
+      },
+      "effectiveParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.05450439453125,
+        "kill": 0.06201171875
+      },
+      "samples": [
+        {
+          "step": 0,
+          "a": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.9629901960784314,
+            "fixedMean": 0.9629901960784314
+          },
+          "b": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.018504901960784314,
+            "fixedMean": 0.018504901960784314
+          }
+        },
+        {
+          "step": 1,
+          "a": {
+            "mae": 3.6149559652104095e-7,
+            "rmse": 0.0000015739918268771461,
+            "maxAbsolute": 0.000024437904357910156,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999999147821,
+            "floatMean": 0.9626942803937139,
+            "fixedMean": 0.9626942877675972
+          },
+          "b": {
+            "mae": 0.000001240053611314472,
+            "rmse": 0.000004104813078864591,
+            "maxAbsolute": 0.000024415552616119385,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999977591414,
+            "floatMean": 0.018661895535279104,
+            "fixedMean": 0.018661960900998583
+          }
+        },
+        {
+          "step": 10,
+          "a": {
+            "mae": 0.000005335203718905356,
+            "rmse": 0.000008510120124541392,
+            "maxAbsolute": 0.00004363059997558594,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999995978919,
+            "floatMean": 0.9618418329851884,
+            "fixedMean": 0.9618416225208956
+          },
+          "b": {
+            "mae": 0.000004134397799305105,
+            "rmse": 0.000007493825480117213,
+            "maxAbsolute": 0.000044018030166625977,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999904729895,
+            "floatMean": 0.018461809123277422,
+            "fixedMean": 0.01846193051805683
+          }
+        },
+        {
+          "step": 100,
+          "a": {
+            "mae": 0.00001025741883352691,
+            "rmse": 0.000012816899526165615,
+            "maxAbsolute": 0.00006371736526489258,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999973475155,
+            "floatMean": 0.9228904554821259,
+            "fixedMean": 0.9228902816772461
+          },
+          "b": {
+            "mae": 0.000006498233815085255,
+            "rmse": 0.000010073747900540574,
+            "maxAbsolute": 0.00005677342414855957,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999955445222,
+            "floatMean": 0.03891055716884407,
+            "fixedMean": 0.038910426345526
+          }
+        },
+        {
+          "step": 1000,
+          "a": {
+            "mae": 0.000020164538028777816,
+            "rmse": 0.000028590500183124126,
+            "maxAbsolute": 0.00017517805099487305,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999927060583,
+            "floatMean": 0.6572409361107823,
+            "fixedMean": 0.6572427824431775
+          },
+          "b": {
+            "mae": 0.000016097692256099102,
+            "rmse": 0.00002284843342201607,
+            "maxAbsolute": 0.00013816356658935547,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999870555407,
+            "floatMean": 0.1609962670770584,
+            "fixedMean": 0.160995423560049
+          }
+        }
+      ]
+    },
+    {
+      "mode": 3,
+      "preset": "珊瑚",
+      "seed": 1234,
+      "width": 120,
+      "height": 136,
+      "requestedParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.0545,
+        "kill": 0.062
+      },
+      "effectiveParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.05450439453125,
+        "kill": 0.06201171875
+      },
+      "samples": [
+        {
+          "step": 0,
+          "a": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.9628370098039216,
+            "fixedMean": 0.9628370098039216
+          },
+          "b": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.018581495098039216,
+            "fixedMean": 0.018581495098039216
+          }
+        },
+        {
+          "step": 1,
+          "a": {
+            "mae": 3.633253714617561e-7,
+            "rmse": 0.0000015556009611280089,
+            "maxAbsolute": 0.000024437904357910156,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999999172483,
+            "floatMean": 0.9625398692693196,
+            "fixedMean": 0.9625398785460229
+          },
+          "b": {
+            "mae": 0.0000012507091513743587,
+            "rmse": 0.000004143919212766246,
+            "maxAbsolute": 0.000024415552616119385,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999977290607,
+            "floatMean": 0.018739138504686566,
+            "fixedMean": 0.01873920852062749
+          }
+        },
+        {
+          "step": 10,
+          "a": {
+            "mae": 0.000005527773835495407,
+            "rmse": 0.000008657027550723532,
+            "maxAbsolute": 0.00003695487976074219,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999958379098,
+            "floatMean": 0.9616752354921225,
+            "fixedMean": 0.9616750137478698
+          },
+          "b": {
+            "mae": 0.000004416119053698495,
+            "rmse": 0.000007791239461825218,
+            "maxAbsolute": 0.00005061924457550049,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999897467676,
+            "floatMean": 0.018544369560681725,
+            "fixedMean": 0.018544498144411573
+          }
+        },
+        {
+          "step": 100,
+          "a": {
+            "mae": 0.000010045552078415366,
+            "rmse": 0.000012542530501165677,
+            "maxAbsolute": 0.00006768107414245605,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999974236206,
+            "floatMean": 0.9243852138957557,
+            "fixedMean": 0.9243853606429755
+          },
+          "b": {
+            "mae": 0.000006413464529798278,
+            "rmse": 0.000010054497545898447,
+            "maxAbsolute": 0.00006082653999328613,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999954482208,
+            "floatMean": 0.03802888942259749,
+            "fixedMean": 0.03802879744885015
+          }
+        },
+        {
+          "step": 1000,
+          "a": {
+            "mae": 0.000024174299894594678,
+            "rmse": 0.00003558612945375862,
+            "maxAbsolute": 0.00021904706954956055,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999883694478,
+            "floatMean": 0.6484293772272912,
+            "fixedMean": 0.648428471883138
+          },
+          "b": {
+            "mae": 0.00001854630287033508,
+            "rmse": 0.000027330984763646148,
+            "maxAbsolute": 0.00019040703773498535,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999811775719,
+            "floatMean": 0.16524166718960281,
+            "fixedMean": 0.16524207919251685
+          }
+        }
+      ]
+    },
+    {
+      "mode": 3,
+      "preset": "細胞分裂",
+      "seed": 42,
+      "width": 120,
+      "height": 136,
+      "requestedParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.0367,
+        "kill": 0.0649
+      },
+      "effectiveParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.036712646484375,
+        "kill": 0.064910888671875
+      },
+      "samples": [
+        {
+          "step": 0,
+          "a": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.9629901960784314,
+            "fixedMean": 0.9629901960784314
+          },
+          "b": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.018504901960784314,
+            "fixedMean": 0.018504901960784314
+          }
+        },
+        {
+          "step": 1,
+          "a": {
+            "mae": 0.0000012502695123354594,
+            "rmse": 0.00000414339045774563,
+            "maxAbsolute": 0.000027477741241455078,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999993993451,
+            "floatMean": 0.962035811287077,
+            "fixedMean": 0.962035826140759
+          },
+          "b": {
+            "mae": 0.000001240053611314472,
+            "rmse": 0.000004104813078864591,
+            "maxAbsolute": 0.000024415552616119385,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999978277611,
+            "floatMean": 0.01893748123342555,
+            "fixedMean": 0.01893754659914503
+          }
+        },
+        {
+          "step": 10,
+          "a": {
+            "mae": 0.000005435852297380859,
+            "rmse": 0.000008582284504802384,
+            "maxAbsolute": 0.00004023313522338867,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999971220582,
+            "floatMean": 0.9543854528344144,
+            "fixedMean": 0.954385222640692
+          },
+          "b": {
+            "mae": 0.000004243312061516001,
+            "rmse": 0.000007696414613271501,
+            "maxAbsolute": 0.00003992021083831787,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999926419594,
+            "floatMean": 0.021749484944719313,
+            "fixedMean": 0.021749621746586817
+          }
+        },
+        {
+          "step": 100,
+          "a": {
+            "mae": 0.000010806400621054219,
+            "rmse": 0.000015244096179619331,
+            "maxAbsolute": 0.00014787912368774414,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999997025876,
+            "floatMean": 0.8778923795321116,
+            "fixedMean": 0.8778935600729549
+          },
+          "b": {
+            "mae": 0.000008166815614605542,
+            "rmse": 0.000012241939276284635,
+            "maxAbsolute": 0.00012612342834472656,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999920037628,
+            "floatMean": 0.046457805109098166,
+            "fixedMean": 0.04645739349664426
+          }
+        },
+        {
+          "step": 1000,
+          "a": {
+            "mae": 0.00003836253365757419,
+            "rmse": 0.00007756530591267913,
+            "maxAbsolute": 0.0009668469429016113,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999224767206,
+            "floatMean": 0.8385190689224092,
+            "fixedMean": 0.8385154256633683
+          },
+          "b": {
+            "mae": 0.00002443414091612112,
+            "rmse": 0.000054697147440811616,
+            "maxAbsolute": 0.0007857233285903931,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999998619556221,
+            "floatMean": 0.0589878357357183,
+            "fixedMean": 0.058989212559718715
+          }
+        }
+      ]
+    },
+    {
+      "mode": 3,
+      "preset": "細胞分裂",
+      "seed": 1234,
+      "width": 120,
+      "height": 136,
+      "requestedParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.0367,
+        "kill": 0.0649
+      },
+      "effectiveParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.036712646484375,
+        "kill": 0.064910888671875
+      },
+      "samples": [
+        {
+          "step": 0,
+          "a": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.9628370098039216,
+            "fixedMean": 0.9628370098039216
+          },
+          "b": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.018581495098039216,
+            "fixedMean": 0.018581495098039216
+          }
+        },
+        {
+          "step": 1,
+          "a": {
+            "mae": 0.0000012586952424516865,
+            "rmse": 0.000004173831883009858,
+            "maxAbsolute": 0.000024437904357910156,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999993929581,
+            "floatMean": 0.9618786747110825,
+            "fixedMean": 0.9618786905326095
+          },
+          "b": {
+            "mae": 0.0000012507091513743587,
+            "rmse": 0.000004143919212766246,
+            "maxAbsolute": 0.000024415552616119385,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999977985979,
+            "floatMean": 0.019015864872113417,
+            "fixedMean": 0.019015934888054344
+          }
+        },
+        {
+          "step": 10,
+          "a": {
+            "mae": 0.000005566301372121362,
+            "rmse": 0.000008677891078633845,
+            "maxAbsolute": 0.0000374913215637207,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999970565397,
+            "floatMean": 0.95418798164008,
+            "fixedMean": 0.9541877110799154
+          },
+          "b": {
+            "mae": 0.000004527235040697833,
+            "rmse": 0.000007983231078272956,
+            "maxAbsolute": 0.000041231513023376465,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999921154572,
+            "floatMean": 0.021845332243308764,
+            "fixedMean": 0.021845475365133846
+          }
+        },
+        {
+          "step": 100,
+          "a": {
+            "mae": 0.000010059060821054029,
+            "rmse": 0.000012600780145162973,
+            "maxAbsolute": 0.00006479024887084961,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999980329732,
+            "floatMean": 0.8703092035919647,
+            "fixedMean": 0.8703089340060365
+          },
+          "b": {
+            "mae": 0.000007839919940096602,
+            "rmse": 0.000011017715135656932,
+            "maxAbsolute": 0.00006818771362304688,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999939683428,
+            "floatMean": 0.049827862966155295,
+            "fixedMean": 0.049827949673521756
+          }
+        },
+        {
+          "step": 1000,
+          "a": {
+            "mae": 0.00005100860680435218,
+            "rmse": 0.00009856422262481142,
+            "maxAbsolute": 0.0008333921432495117,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999998768153906,
+            "floatMean": 0.8358574773020604,
+            "fixedMean": 0.8358526603848326
+          },
+          "b": {
+            "mae": 0.000030599565696809515,
+            "rmse": 0.0000666843421163641,
+            "maxAbsolute": 0.0007077157497406006,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999997962777349,
+            "floatMean": 0.05997869895848644,
+            "fixedMean": 0.059980224160587084
+          }
+        }
+      ]
+    },
+    {
+      "mode": 3,
+      "preset": "斑点",
+      "seed": 42,
+      "width": 120,
+      "height": 136,
+      "requestedParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.035,
+        "kill": 0.065
+      },
+      "effectiveParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.035003662109375,
+        "kill": 0.06500244140625
+      },
+      "samples": [
+        {
+          "step": 0,
+          "a": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.9629901960784314,
+            "fixedMean": 0.9629901960784314
+          },
+          "b": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.018504901960784314,
+            "fixedMean": 0.018504901960784314
+          }
+        },
+        {
+          "step": 1,
+          "a": {
+            "mae": 0.0000012502695123354594,
+            "rmse": 0.00000414339045774563,
+            "maxAbsolute": 0.000027477741241455078,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999994014501,
+            "floatMean": 0.9619725621104532,
+            "fixedMean": 0.9619725769641353
+          },
+          "b": {
+            "mae": 8.970663960402211e-7,
+            "rmse": 0.000003430874290797709,
+            "maxAbsolute": 0.000024415552616119385,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999998487409,
+            "floatMean": 0.018967411647363583,
+            "fixedMean": 0.018967488232780907
+          }
+        },
+        {
+          "step": 10,
+          "a": {
+            "mae": 0.000005432515971216501,
+            "rmse": 0.0000086084701356758,
+            "maxAbsolute": 0.000034749507904052734,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999972058188,
+            "floatMean": 0.9535759692810768,
+            "fixedMean": 0.9535756447735955
+          },
+          "b": {
+            "mae": 0.000004278379010730138,
+            "rmse": 0.000007770953005575566,
+            "maxAbsolute": 0.00004622340202331543,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999992753478,
+            "floatMean": 0.0221402711057515,
+            "fixedMean": 0.022140480490291818
+          }
+        },
+        {
+          "step": 100,
+          "a": {
+            "mae": 0.00000988093716110669,
+            "rmse": 0.000012246172950996016,
+            "maxAbsolute": 0.00006312131881713867,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999998049253,
+            "floatMean": 0.8747175362554617,
+            "fixedMean": 0.8747171944262935
+          },
+          "b": {
+            "mae": 0.00000783811106938488,
+            "rmse": 0.000010790213743269105,
+            "maxAbsolute": 0.00005163252353668213,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999933095075,
+            "floatMean": 0.045673409822650675,
+            "fixedMean": 0.045673461988860485
+          }
+        },
+        {
+          "step": 1000,
+          "a": {
+            "mae": 0.000028929631134458616,
+            "rmse": 0.00005721360706211857,
+            "maxAbsolute": 0.0006145834922790527,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999528449394,
+            "floatMean": 0.8687915321275154,
+            "fixedMean": 0.8687839526756137
+          },
+          "b": {
+            "mae": 0.00001859388181468914,
+            "rmse": 0.00003948669752617361,
+            "maxAbsolute": 0.0004969686269760132,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999126704252,
+            "floatMean": 0.04631100068026428,
+            "fixedMean": 0.04631384868247836
+          }
+        }
+      ]
+    },
+    {
+      "mode": 3,
+      "preset": "斑点",
+      "seed": 1234,
+      "width": 120,
+      "height": 136,
+      "requestedParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.035,
+        "kill": 0.065
+      },
+      "effectiveParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.035003662109375,
+        "kill": 0.06500244140625
+      },
+      "samples": [
+        {
+          "step": 0,
+          "a": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.9628370098039216,
+            "fixedMean": 0.9628370098039216
+          },
+          "b": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.018581495098039216,
+            "fixedMean": 0.018581495098039216
+          }
+        },
+        {
+          "step": 1,
+          "a": {
+            "mae": 0.0000012586952424516865,
+            "rmse": 0.000004173831883009858,
+            "maxAbsolute": 0.000024437904357910156,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999993950919,
+            "floatMean": 0.9618151637415091,
+            "fixedMean": 0.9618151795630362
+          },
+          "b": {
+            "mae": 8.780681573804102e-7,
+            "rmse": 0.0000034000534728697123,
+            "maxAbsolute": 0.000024415552616119385,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999985229345,
+            "floatMean": 0.019045919170215104,
+            "fixedMean": 0.0190460111580643
+          }
+        },
+        {
+          "step": 10,
+          "a": {
+            "mae": 0.000005582665257594164,
+            "rmse": 0.000008659632559328393,
+            "maxAbsolute": 0.00003886222839355469,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999971704218,
+            "floatMean": 0.9533751623339805,
+            "fixedMean": 0.9533748308817546
+          },
+          "b": {
+            "mae": 0.000004472422608799418,
+            "rmse": 0.000007885305749856419,
+            "maxAbsolute": 0.00004127621650695801,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999925658946,
+            "floatMean": 0.022237693550030628,
+            "fixedMean": 0.02223789551678826
+          }
+        },
+        {
+          "step": 100,
+          "a": {
+            "mae": 0.000010019496046737129,
+            "rmse": 0.00001245595960352506,
+            "maxAbsolute": 0.000055909156799316406,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999980675464,
+            "floatMean": 0.8669043164618094,
+            "fixedMean": 0.866904307346718
+          },
+          "b": {
+            "mae": 0.000007894510316452974,
+            "rmse": 0.000010947355475631932,
+            "maxAbsolute": 0.00005307793617248535,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999936141257,
+            "floatMean": 0.049051375284343654,
+            "fixedMean": 0.049051391377168546
+          }
+        },
+        {
+          "step": 1000,
+          "a": {
+            "mae": 0.00002512030632180326,
+            "rmse": 0.000044393377974088856,
+            "maxAbsolute": 0.0003440380096435547,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999710430799,
+            "floatMean": 0.8713119774709875,
+            "fixedMean": 0.8713068101920334
+          },
+          "b": {
+            "mae": 0.00001651262345899361,
+            "rmse": 0.00003144301425977936,
+            "maxAbsolute": 0.0002867281436920166,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999433530002,
+            "floatMean": 0.0452831602087233,
+            "fixedMean": 0.0452852305243997
+          }
+        }
+      ]
+    },
+    {
+      "mode": 3,
+      "preset": "細線",
+      "seed": 42,
+      "width": 120,
+      "height": 136,
+      "requestedParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.023,
+        "kill": 0.052
+      },
+      "effectiveParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.02301025390625,
+        "kill": 0.052001953125
+      },
+      "samples": [
+        {
+          "step": 0,
+          "a": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.9629901960784314,
+            "fixedMean": 0.9629901960784314
+          },
+          "b": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.018504901960784314,
+            "fixedMean": 0.018504901960784314
+          }
+        },
+        {
+          "step": 1,
+          "a": {
+            "mae": 3.6149559652104095e-7,
+            "rmse": 0.0000015739918268771461,
+            "maxAbsolute": 0.000024437904357910156,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999999920157,
+            "floatMean": 0.9615286884245042,
+            "fixedMean": 0.9615286957983877
+          },
+          "b": {
+            "mae": 0.000001242673184320915,
+            "rmse": 0.000004114539273879406,
+            "maxAbsolute": 0.000024415552616119385,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999979332027,
+            "floatMean": 0.019429921251424936,
+            "fixedMean": 0.019429986617144415
+          }
+        },
+        {
+          "step": 10,
+          "a": {
+            "mae": 0.000005445826579542721,
+            "rmse": 0.000008606565636072748,
+            "maxAbsolute": 0.000038564205169677734,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999998128463,
+            "floatMean": 0.9437238024803354,
+            "fixedMean": 0.9437235215130975
+          },
+          "b": {
+            "mae": 0.000004395908042184749,
+            "rmse": 0.000007972498543820348,
+            "maxAbsolute": 0.000052303075790405273,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999959696864,
+            "floatMean": 0.030585153636431783,
+            "fixedMean": 0.030585337620155483
+          }
+        },
+        {
+          "step": 100,
+          "a": {
+            "mae": 0.000010184161182419926,
+            "rmse": 0.00001271107445625778,
+            "maxAbsolute": 0.00005561113357543945,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999999254921,
+            "floatMean": 0.6007917345620181,
+            "fixedMean": 0.6007904707216749
+          },
+          "b": {
+            "mae": 0.000009623209022150924,
+            "rmse": 0.00001245881310979343,
+            "maxAbsolute": 0.00005701184272766113,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999965411033,
+            "floatMean": 0.15265076593907131,
+            "fixedMean": 0.15265125573850147
+          }
+        },
+        {
+          "step": 1000,
+          "a": {
+            "mae": 0.00007912115668695347,
+            "rmse": 0.00016846322768287656,
+            "maxAbsolute": 0.0026674866676330566,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999624416103,
+            "floatMean": 0.5029575137065395,
+            "fixedMean": 0.5029858476975385
+          },
+          "b": {
+            "mae": 0.000048669236703597774,
+            "rmse": 0.00011151683149805526,
+            "maxAbsolute": 0.002316713333129883,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999994162411515,
+            "floatMean": 0.15918850785838717,
+            "fixedMean": 0.15917809430290672
+          }
+        }
+      ]
+    },
+    {
+      "mode": 3,
+      "preset": "細線",
+      "seed": 1234,
+      "width": 120,
+      "height": 136,
+      "requestedParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.023,
+        "kill": 0.052
+      },
+      "effectiveParameters": {
+        "da": 1,
+        "db": 0.5,
+        "dt": 1,
+        "feed": 0.02301025390625,
+        "kill": 0.052001953125
+      },
+      "samples": [
+        {
+          "step": 0,
+          "a": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.9628370098039216,
+            "fixedMean": 0.9628370098039216
+          },
+          "b": {
+            "mae": 0,
+            "rmse": 0,
+            "maxAbsolute": 0,
+            "fractionAboveOnePercent": 0,
+            "correlation": 1,
+            "floatMean": 0.018581495098039216,
+            "fixedMean": 0.018581495098039216
+          }
+        },
+        {
+          "step": 1,
+          "a": {
+            "mae": 3.633253714617561e-7,
+            "rmse": 0.0000015556009611280089,
+            "maxAbsolute": 0.000024437904357910156,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999999922531,
+            "floatMean": 0.9613694528300388,
+            "fixedMean": 0.9613694621067421
+          },
+          "b": {
+            "mae": 0.0000012507091513743587,
+            "rmse": 0.000004143919212766246,
+            "maxAbsolute": 0.000024415552616119385,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.999999997915211,
+            "floatMean": 0.019510343135220418,
+            "fixedMean": 0.019510413151161345
+          }
+        },
+        {
+          "step": 10,
+          "a": {
+            "mae": 0.0000057174933745580564,
+            "rmse": 0.00000886974590404995,
+            "maxAbsolute": 0.00004050135612487793,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999980125891,
+            "floatMean": 0.9434814210305466,
+            "fixedMean": 0.943481091892018
+          },
+          "b": {
+            "mae": 0.000004556365021268243,
+            "rmse": 0.000008109124814336116,
+            "maxAbsolute": 0.000044912099838256836,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999958477049,
+            "floatMean": 0.030718424258140652,
+            "fixedMean": 0.030718631370394836
+          }
+        },
+        {
+          "step": 100,
+          "a": {
+            "mae": 0.00001057505004984491,
+            "rmse": 0.000013176736756335287,
+            "maxAbsolute": 0.0000686943531036377,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999991982755,
+            "floatMean": 0.5814949356229501,
+            "fixedMean": 0.5814942322525324
+          },
+          "b": {
+            "mae": 0.000009929711627430571,
+            "rmse": 0.000012690157995142218,
+            "maxAbsolute": 0.00005745887756347656,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999999963914296,
+            "floatMean": 0.16036017754557663,
+            "fixedMean": 0.16036040736179727
+          }
+        },
+        {
+          "step": 1000,
+          "a": {
+            "mae": 0.00007704553084776682,
+            "rmse": 0.00014421322601465087,
+            "maxAbsolute": 0.0013605356216430664,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999997440466657,
+            "floatMean": 0.5367416887662794,
+            "fixedMean": 0.5367240363476323
+          },
+          "b": {
+            "mae": 0.00004547280427776094,
+            "rmse": 0.00009200074798291847,
+            "maxAbsolute": 0.0011059343814849854,
+            "fractionAboveOnePercent": 0,
+            "correlation": 0.9999996312404063,
+            "floatMean": 0.1454660607524049,
+            "fixedMean": 0.14547367095947267
+          }
+        }
+      ]
     }
   ]
 }

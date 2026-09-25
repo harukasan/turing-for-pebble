@@ -40,7 +40,7 @@ def run(case):
 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
     rows = list(
         pool.map(
-            run, [(m, p, s) for m in range(3) for p in range(5) for s in [42, 1234]]
+            run, [(m, p, s) for m in range(4) for p in range(5) for s in [42, 1234]]
         )
     )
 report = {
@@ -54,23 +54,23 @@ report = {
     'comparisons': rows,
 }
 (out / 'comparison.json').write_text(json.dumps(report, indent=2))
-canvas = Image.new('RGB', (600, 4 * 258), '#111111')
+canvas = Image.new('RGB', (800, 4 * 258), '#111111')
 draw = ImageDraw.Draw(canvas)
 for p in range(4):
-    for m in range(3):
+    for m in range(4):
         canvas.paste(
             Image.open(out / f'mode-{m}-preset-{p}-seed-42.png'),
             (m * 200, p * 258 + 30),
         )
         draw.text(
             (m * 200 + 4, p * 258 + 8),
-            f'{["200x228 A7+B9", "100x114 Q15", "100x114 A7+B9"][m]} / preset {p}',
+            f'{["200x228 A7+B9", "100x114 Q15", "100x114 A7+B9", "120x136 Q15"][m]} / preset {p}',
             fill='white',
         )
 canvas.save(out / 'comparison.png')
-# Thin-line preset 4, seed 42: mode 0 on the left, mode 1 on the right.
-thin = Image.new('RGB', (400, 228), '#111111')
-for m in range(2):
-    thin.paste(Image.open(out / f'mode-{m}-preset-4-seed-42.png'), (m * 200, 0))
+# Thin-line preset 4, seed 42: modes 0, 1, and 3 from left to right.
+thin = Image.new('RGB', (600, 228), '#111111')
+for i, m in enumerate([0, 1, 3]):
+    thin.paste(Image.open(out / f'mode-{m}-preset-4-seed-42.png'), (i * 200, 0))
 thin.save(out / 'thin-lines.png')
 print(json.dumps(report, indent=2))

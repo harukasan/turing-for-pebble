@@ -69,9 +69,9 @@ function metrics(reference, state, width, height) {
 }
 
 const rows = [];
-for (const mode of [0, 1, 2]) {
-  const width = mode === 0 ? 200 : 100;
-  const height = (width * 228) / 200;
+for (const mode of [0, 1, 2, 3]) {
+  const width = [200, 100, 100, 120][mode];
+  const height = Math.floor((width * 228) / 200);
   const bytes = api.rd_bytes(mode);
   const allocation = api.malloc(bytes);
   assert(allocation, 'Wasm allocation failed');

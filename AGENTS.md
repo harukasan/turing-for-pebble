@@ -24,7 +24,7 @@ This repository is a local Gray–Scott reaction-diffusion experiment for Pebble
 | `public/reports/`                              | Generated images and build or emulator measurements       |
 | `docs/`                                        | Detailed design, setup, validation, and numerical results |
 
-The Web offers 200 × 228 8-bit Wasm, 100 × 114 Q15 Wasm, and Float32 at both grid sizes. Mode 2 in the C core is a diagnostic 100 × 114 8-bit configuration. Mode switching resets to the same seed. The Float32 implementation is a reference, not a Pebble build. The `細線` preset is intended to expose narrow-band differences. See [docs/behavior.md](docs/behavior.md) and [docs/float-precision.md](docs/float-precision.md).
+The Web offers 200 × 228 8-bit Wasm, 120 × 136 Q15 Wasm (mode 3, the watch build, shown with interpolated rendering), 100 × 114 Q15 Wasm, and Float32 at each of these grid sizes. Mode 2 in the C core is a diagnostic 100 × 114 8-bit configuration. Mode switching resets to the same seed. The Float32 implementation is a reference, not a Pebble build. The `細線` preset is intended to expose narrow-band differences. See [docs/behavior.md](docs/behavior.md) and [docs/float-precision.md](docs/float-precision.md).
 
 ## Environment and checks
 

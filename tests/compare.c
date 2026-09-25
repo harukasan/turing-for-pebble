@@ -17,7 +17,7 @@ int main(int argc, char **argv) {
   uint32_t seed = (uint32_t)strtoul(argv[3], NULL, 10);
   const int feeds[PRESET_COUNT] = {950, 1786, 1203, 1147, 754};
   const int kills[PRESET_COUNT] = {1868, 2032, 2127, 2130, 1704};
-  if (mode < 0 || mode > 2 || preset < 0 || preset >= PRESET_COUNT ||
+  if (mode < 0 || mode > 3 || preset < 0 || preset >= PRESET_COUNT ||
       count < 1) {
     return 1;
   }
@@ -31,8 +31,9 @@ int main(int argc, char **argv) {
   clock_t start = clock();
   rd_step(state, count);
   double ms = 1000. * (clock() - start) / CLOCKS_PER_SEC / count;
-  int width = mode == 0 ? RD_DISPLAY_WIDTH : RD_DISPLAY_WIDTH / 2;
-  int height = width * RD_DISPLAY_HEIGHT / RD_DISPLAY_WIDTH;
+  int width = rd_width(state), height = rd_height(state);
+  /* Mode 3 is shown interpolated, like the watch. */
+  int flags = RD_ROW_QUANTIZE | (mode == 3 ? RD_ROW_BILINEAR : 0);
   double sum = 0, sum_squares = 0;
   int changed = 0, changed_pixels = 0;
   int *previous = malloc(width * height * sizeof(int));
@@ -43,7 +44,7 @@ int main(int argc, char **argv) {
   }
   fprintf(ppm, "P6\n%d %d\n255\n", RD_DISPLAY_WIDTH, RD_DISPLAY_HEIGHT);
   for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
-    unsigned char *row = rd_row(state, y, RD_PALETTE_LIME, 1);
+    unsigned char *row = rd_row(state, y, RD_PALETTE_LIME, flags);
     for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
       fwrite(row + x * 4, 1, 3, ppm);
       for (int channel = 0; channel < 4; channel++) {
@@ -69,7 +70,7 @@ int main(int argc, char **argv) {
     }
   }
   for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
-    unsigned char *row = rd_row(state, y, RD_PALETTE_LIME, 1);
+    unsigned char *row = rd_row(state, y, RD_PALETTE_LIME, flags);
     for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
       unsigned char *before = colors + (y * RD_DISPLAY_WIDTH + x) * 4;
       changed_pixels += row[x * 4] != before[0] ||
