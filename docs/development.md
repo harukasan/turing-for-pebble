@@ -73,7 +73,7 @@ Exclusions:
 mise run build-pebble
 ```
 
-This builds both modes and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. The sources are compiled with `-O3` after the SDK's own flags (`RD_BUILD_OPT` overrides it; `-O3` measured 6% faster steps than `-O2` on the watch), `RD_BUILD_PROFILE=1` adds the clock calibration loop and the periodic profile log, and the script fails if an ELF's load size exceeds 12,288 bytes, because code shares the 128 KiB app region with the core allocation. The shared UUID means installing the second mode replaces the first in an emulator or watch.
+This builds both modes and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. The sources are compiled with `-O3` after the SDK's own flags (`RD_BUILD_OPT` overrides it; `-O3` measured 6% faster steps than `-O2` on the watch), `RD_BUILD_PROFILE=1` adds the clock calibration loop and the periodic profile log, and the script fails if an ELF's load size exceeds 20,480 bytes (mode 1 is about 17.3 KB with the digit mask, whose row loop is duplicated so that rows away from the digits keep the loop without the mask levels), because code shares the 128 KiB app region with the core allocation. The shared UUID means installing the second mode replaces the first in an emulator or watch.
 
 ```sh
 npm run emulator              # build if needed, then install mode 0
@@ -120,18 +120,23 @@ sh scripts/precision-sweep.sh 100 1000 3000
 
 ## Font provenance
 
-The glyphs in `public/fonts/leco.json` were extracted from official PebbleOS revision `119cb96e3f47be0f61191c0b90a502bb01f2d9bc`, from:
+The glyphs in `public/fonts/clock-fonts.json` and `core/clock_glyphs.h` were extracted from official PebbleOS revision `119cb96e3f47be0f61191c0b90a502bb01f2d9bc`, from:
 
 - `resources/normal/base/pbf/LECO_42_NUMBERS.pbf`
 - `resources/normal/base/pbf/LECO_20_BOLD_NUMBERS.pbf`
+- `resources/normal/base/pbf/BITHAM_42_BOLD.pbf`
+- `resources/normal/base/pbf/BITHAM_30_BLACK.pbf`
+
+The font sets are listed in `SETS` of `scripts/extract-fonts.py`. Only the digits and the separator of each line are kept. `--list PATTERN` prints the characters of the matching PBFs; BITHAM_18_LIGHT_SUBSET and BITHAM_34_LIGHT_SUBSET contain no digits.
 
 Source: [coredevices/PebbleOS](https://github.com/coredevices/PebbleOS/tree/119cb96e3f47be0f61191c0b90a502bb01f2d9bc). License: Apache-2.0, copied to `public/fonts/LICENSE`. Per-file SHA-256 values and the source revision are embedded in the JSON. Glyph dimensions, bearings, advances, and monochrome pixels are preserved. The extractor requires a local checkout of that revision and its official `pbf_extract.py`:
 
 ```sh
 mise exec -- python scripts/extract-fonts.py /path/to/PebbleOS
-mise exec -- python scripts/verify-fonts.py build/emery-mode-0.png 14:50 2026.09.24
+mise exec -- python scripts/gen-clock-glyphs.py
+mise exec -- python scripts/verify-fonts.py build/emery.png 13:16 2026.09.25 --font leco --halo 1
 ```
 
-The second command is specific to the recorded screenshot and its displayed timestamp.
+A sparse clone of `tools/font` and `resources/normal/base/pbf` at that revision is enough for the extractor. The last command checks a screenshot with the time and date it shows: its white pixels must be exactly the glyph pixels, and with `--halo` every other pixel within the halo must be black. `RD_BUILD_FONT=1 mise run build-pebble` builds the Bitham watchface.
 
 Mise tool allowlisting follows the official [enable_tools setting](https://mise.jdx.dev/configuration/settings.html#enable_tools). The project does not change the global tool configuration.

@@ -14,6 +14,7 @@ The implementation is available for local Web use and Emery builds. Production a
 - Wasm was served with HTTP 200 and `application/wasm`.
 - Both Emery `.pbw` variants were built and installed in the emulator. Mode 0 was also observed after a back-button backlight animation and subsequent minute updates without a lower minimum free heap.
 - The Emery screenshot's 2,427 white clock/date pixels exactly match the extracted PBF glyph positions and bitmap pixels. There are zero missing or extra white pixels. This verifies font geometry against the emulator, not browser Canvas interaction.
+- With digit avoidance (B held at 0 under the digits, graded kill around them) and a 1-pixel halo, mode 1 emulator screenshots matched both font sets exactly: LECO at 13:31 2026.09.25 (2,358 glyph pixels) and Bitham at 13:32 2026.09.25 (3,453 glyph pixels). Every halo pixel was black. A Bitham screenshot 40 s after the change to 13:33 showed no trace of the previous digit. `tests/adapter.mjs` checks that the core's compiled glyphs equal the JSON glyphs for both fonts. The minute burst timing on the physical watch and its battery effect are not measured yet.
 
 Machine-readable results and comparison images are in `public/reports/`. These are also linked from the local Web UI. Source for all numerical checks is under `tests/`.
 

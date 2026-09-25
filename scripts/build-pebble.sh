@@ -1,11 +1,11 @@
 #!/bin/sh
 # Build both watchface modes with the Pebble SDK and keep their .pbw, .elf,
 # and stack-usage files under build/pebble/. RD_BUILD_OPT (default -O2) and
-# RD_BUILD_PROFILE=1 are passed through to pebble/wscript. The load size of
+# RD_BUILD_PROFILE=1 and RD_BUILD_FONT are passed through to pebble/wscript. The load size of
 # each ELF (text + data + bss, which all live in the 128 KiB app region next
 # to the core allocation) must stay within LOAD_LIMIT bytes.
 set -eu
-LOAD_LIMIT=12288
+LOAD_LIMIT=20480
 size_tool=$(command -v arm-none-eabi-size || true)
 if [ -z "$size_tool" ]; then
   size_tool=.local/share/pebble-sdk/SDKs/4.33.1/toolchain/arm-none-eabi/bin/arm-none-eabi-size

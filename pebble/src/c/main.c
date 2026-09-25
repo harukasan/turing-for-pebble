@@ -1,23 +1,24 @@
 /*
  * Emery watchface: runs the shared core in timer slices and draws the field
- * with a LECO clock on top. The scheduling model is described in
- * docs/behavior.md:
+ * with a LECO or Bitham clock on top, whose digits the field avoids. The
+ * scheduling model is described in docs/behavior.md:
  *   - startup advances STARTUP_STEPS steps in consecutive slices of at most
  *     STARTUP_SLICE_BUDGET_MS, rescheduled SCHEDULE_NOW_MS apart, with the
  *     screen redrawn at most every WORK_FRAME_INTERVAL_MS,
- *   - every minute adds STEPS_PER_MINUTE pending steps, run the same way,
+ *   - every minute rebuilds the digit mask and raises the pending steps to
+ *     RD_MINUTE_STEPS (adds them without avoidance), run the same way,
  *   - a backlight-on event animates for at most BACKLIGHT_WINDOW_MS, at most
  *     STEPS_PER_SLICE steps within SLICE_BUDGET_MS per frame,
  *   - focus loss cancels timers and focus restore resumes pending work.
  * Timing counters are accumulated for the startup summary log; RD_PROFILE
  * adds a clock calibration loop and a periodic profile log.
  */
+#include "../../../core/clock_mask.h"
 #include "../../../core/rd.h"
 #include "config.h"
 #include <pebble.h>
 
 #define STARTUP_STEPS 1800
-#define STEPS_PER_MINUTE 16
 #define STEPS_PER_SLICE 8
 #define SLICE_BUDGET_MS 8
 #define STARTUP_SLICE_BUDGET_MS 120
@@ -34,17 +35,16 @@
 /* Iterations of the RD_PROFILE calibration loop. */
 #define CALIBRATION_ITERATIONS 1000000u
 
-/* Clock layout, shared with the Web preview. */
-#define CLOCK_Y 78
-#define CLOCK_HEIGHT 50
-#define DATE_Y 128
-#define DATE_HEIGHT 30
-
 static Window *window;
 static Layer *layer;
 static AppTimer *timer, *light_timer;
 static GFont font_clock, font_date;
+/* The time shown and masked, from the last tick. */
+static struct tm clock_time;
+static uint32_t mask_ms;
 static void *allocation, *state;
+/* Cell mask of the clock digits, rebuilt every minute. */
+static uint8_t *clock_mask;
 static bool focused = true, lit;
 static bool timing_unreliable;
 static int pending = STARTUP_STEPS;
@@ -137,18 +137,18 @@ static void draw(Layer *this_layer, GContext *ctx) {
   }
   uint32_t blit = elapsed_ms(start);
   if (RD_CLOCK) {
-    time_t now = time(NULL);
-    struct tm *local_time = localtime(&now);
+    const CmLayout *layout = cm_layout(RD_FONT);
     char text[16];
     graphics_context_set_text_color(ctx, GColorWhite);
-    strftime(text, sizeof(text), "%H:%M", local_time);
-    graphics_draw_text(ctx, text, font_clock,
-                       GRect(0, CLOCK_Y, RD_DISPLAY_WIDTH, CLOCK_HEIGHT),
-                       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
-                       NULL);
-    strftime(text, sizeof(text), "%Y.%m.%d", local_time);
+    strftime(text, sizeof(text), "%H:%M", &clock_time);
     graphics_draw_text(
-        ctx, text, font_date, GRect(0, DATE_Y, RD_DISPLAY_WIDTH, DATE_HEIGHT),
+        ctx, text, font_clock,
+        GRect(0, layout->time_top, RD_DISPLAY_WIDTH, layout->time_box),
+        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+    strftime(text, sizeof(text), "%Y.%m.%d", &clock_time);
+    graphics_draw_text(
+        ctx, text, font_date,
+        GRect(0, layout->date_top, RD_DISPLAY_WIDTH, layout->date_box),
         GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
   }
   uint32_t elapsed = elapsed_ms(start);
@@ -356,10 +356,38 @@ static void focus(bool on) {
   }
 }
 
+/* Build the mask of the digits of clock_time and install it: B is held at
+ * 0 under the digits at once, and the kill rate rises toward them. */
+static void rebuild_mask(void) {
+#if RD_CLOCK && RD_AVOID
+  uint32_t start = now_ms();
+  if (!clock_mask) {
+    clock_mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
+  }
+  if (clock_mask &&
+      cm_build(clock_mask, rd_width(state), rd_height(state), RD_FONT,
+               clock_time.tm_hour, clock_time.tm_min, clock_time.tm_year + 1900,
+               clock_time.tm_mon + 1, clock_time.tm_mday, RD_HALO) == 0) {
+    rd_mask(state, clock_mask);
+  }
+  mask_ms = elapsed_ms(start);
+#endif
+}
+
+/* A new minute: mask the new digits, and give the pattern RD_MINUTE_STEPS
+ * to refill the strokes of the old ones. The steps do not accumulate while
+ * the face is unfocused. */
 static void tick(struct tm *tick_time, TimeUnits units_changed) {
-  (void)tick_time;
   (void)units_changed;
-  pending += STEPS_PER_MINUTE;
+  clock_time = *tick_time;
+  rebuild_mask();
+  if (RD_AVOID) {
+    if (pending < RD_MINUTE_STEPS) {
+      pending = RD_MINUTE_STEPS;
+    }
+  } else {
+    pending += RD_MINUTE_STEPS;
+  }
   layer_mark_dirty(layer);
   schedule(SCHEDULE_NOW_MS);
 }
@@ -375,8 +403,11 @@ static void init(void) {
     return;
   }
   rd_params(state, RD_FEED, RD_KILL, RD_DA, RD_DB, RD_DT);
-  font_clock = fonts_get_system_font(FONT_KEY_LECO_42_NUMBERS);
-  font_date = fonts_get_system_font(FONT_KEY_LECO_20_BOLD_NUMBERS);
+  font_clock = fonts_get_system_font(cm_layout(RD_FONT)->time_key);
+  font_date = fonts_get_system_font(cm_layout(RD_FONT)->date_key);
+  time_t now = time(NULL);
+  clock_time = *localtime(&now);
+  rebuild_mask();
   window = window_create();
   layer = layer_create(GRect(0, 0, RD_DISPLAY_WIDTH, RD_DISPLAY_HEIGHT));
   layer_set_update_proc(layer, draw);
@@ -391,9 +422,9 @@ static void init(void) {
 #endif
   startup_start_ms = now_ms();
   APP_LOG(APP_LOG_LEVEL_INFO,
-          "RD init mode=%d core_bytes=%lu heap_min=%lu loop_ms=%lu", RD_MODE,
-          (unsigned long)rd_bytes(RD_MODE), (unsigned long)min_heap,
-          (unsigned long)calibration_ms);
+          "RD init mode=%d font=%d core_bytes=%lu heap_min=%lu mask_ms=%lu",
+          RD_MODE, RD_FONT, (unsigned long)rd_bytes(RD_MODE),
+          (unsigned long)min_heap, (unsigned long)mask_ms);
   schedule(SCHEDULE_NOW_MS);
 }
 
@@ -408,6 +439,7 @@ static void deinit(void) {
   if (window) {
     window_destroy(window);
   }
+  free(clock_mask);
   free(allocation);
 }
 
