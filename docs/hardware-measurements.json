@@ -2,7 +2,7 @@
   "description": "Startup measurements from the physical Pebble Time 2, one entry per mode and build, taken from the RD startup log line of `PEBBLE_PHONE=<ip> npm run device` or `device:mode1`. scripts/build-report.py copies the newest entry per mode into public/reports/comparison.json.",
   "fields": {
     "commit": "git commit of the measured build",
-    "mode": "0 or 1",
+    "mode": "0, 1, or 3",
     "date": "ISO 8601 date",
     "firmware": "watch firmware version",
     "startupWallMs": "wall_ms of the RD startup line (validated slice and gap times)",
@@ -84,6 +84,57 @@
       "clockInvalid": false,
       "interrupted": false,
       "note": "RD startup lines: steps 1816 (1800 plus one minute tick), wall_ms 28825, since_init_ms 28836, 219 slices, 110 draws."
+    },
+    {
+      "commit": "a36458c (digit avoidance with graded kill, LECO)",
+      "mode": 1,
+      "date": "2026-09-25",
+      "firmware": "unknown",
+      "startupWallMs": 28129,
+      "stepsPerSecond": 63.9,
+      "avgStepUs": 14913,
+      "maxStepMs": 39,
+      "avgDrawUs": 3914,
+      "avgTextUs": 2504,
+      "minimumFreeHeapBytes": 49624,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "note": "Baseline before the resolution work, with the digit mask active. The 300-step burst after a minute change took about 4.7 s at the logged rate."
+    },
+    {
+      "commit": "a36458c plus the uncommitted resolution changes (mode 3, interpolated rendering)",
+      "mode": 3,
+      "date": "2026-09-25",
+      "firmware": "unknown",
+      "startupWallMs": 30993,
+      "stepsPerSecond": 40.3,
+      "avgStepUs": 20932,
+      "maxStepMs": 47,
+      "avgDrawUs": 11990,
+      "avgTextUs": 2906,
+      "minimumFreeHeapBytes": 20952,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "note": "120 x 136 Q15 with RD_ROW_BILINEAR, 1,250 startup steps, LECO digit mask with one-byte levels. The 300-step burst after the next minute change ended about 7.5 s later by the periodic log."
+    },
+    {
+      "commit": "a36458c plus the uncommitted resolution and step speed-up changes",
+      "mode": 3,
+      "date": "2026-09-25",
+      "firmware": "unknown",
+      "startupWallMs": 25941,
+      "stepsPerSecond": 48.1,
+      "avgStepUs": 19068,
+      "maxStepMs": 47,
+      "avgDrawUs": 11698,
+      "avgTextUs": 2537,
+      "minimumFreeHeapBytes": 21672,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "note": "After the bit-exact step rewrites (32-bit second product of the reaction, direct nearest Q15 encoding). RD_BENCH phase timing per step: decode 1.2 ms, Laplacian 4.1 ms, reaction 7.1 ms, encoding and store 6.2 ms (18.55 ms), against 1.2, 3.85, 8.45, and 7.6 ms (21.1 ms) before."
     }
   ]
 }

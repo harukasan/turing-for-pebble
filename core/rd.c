@@ -461,7 +461,8 @@ static int cell_masked(State *state, int x, int y) {
 
 /* Round a value to the nearest multiple of 2^bits, halfway values away from
  * zero, and drop those bits. */
-static int64_t round_shift(int64_t value, int bits) {
+static inline int64_t round_shift(int64_t value, int bits) {
+  /* A branch-free form measured slower on the watch than this one. */
   int64_t half = (int64_t)1 << (bits - 1);
   return value < 0 ? -((-value + half) >> bits) : (value + half) >> bits;
 }
@@ -771,9 +772,13 @@ static inline void react_cell(int32_t a, int32_t b, int32_t lap_a,
                               int32_t lap_b, int32_t feed, int32_t decay,
                               int32_t da, int32_t db, int32_t dt, int unit_dt,
                               int32_t *next_a, int32_t *next_b) {
-  uint64_t ab = round_shift_unsigned((uint64_t)a * (uint64_t)b, RD_VALUE_BITS);
+  /* A B rounded to Q24 is at most 1.0, so the second product is a single
+   * 32 x 32 -> 64 bit multiply. */
+  uint32_t ab = (uint32_t)round_shift_unsigned(
+      (uint64_t)(uint32_t)a * (uint32_t)b, RD_VALUE_BITS);
   int64_t reaction =
-      (int64_t)round_shift_unsigned(ab * (uint64_t)b, RD_VALUE_BITS) << 15;
+      (int64_t)round_shift_unsigned((uint64_t)ab * (uint32_t)b, RD_VALUE_BITS)
+      << 15;
   int64_t rate_a =
       (int64_t)da * lap_a - reaction + (int64_t)feed * (RD_VALUE_ONE - a);
   int64_t rate_b = (int64_t)db * lap_b + reaction - (int64_t)decay * b;
@@ -849,15 +854,22 @@ static inline unsigned encode_cell(int packed, int species,
   if (value > limit) {
     value = limit;
   }
-  unsigned code = floor_code(packed, species, value);
-  int32_t low = decode(packed, species, code);
-  if (code < code_limit(packed, species)) {
+  unsigned code;
+  int32_t low;
+  if (!packed) {
+    /* The nearest Q15 code, halfway upward: the floor code plus one when
+     * the fraction is at least half a step. At the top value 1.0 this is
+     * the largest code, so no limit test is needed. */
+    code = (unsigned)(value + (1 << (Q15_SHIFT - 1))) >> Q15_SHIFT;
+    low = decode_q15(code);
+  } else {
+    code = floor_code(packed, species, value);
+    low = decode(packed, species, code);
+  }
+  if (packed && code < code_limit(packed, species)) {
     int32_t high = decode(packed, species, code + 1);
-    /* Packed codes use the dithered threshold; Q15 codes round to the
-     * nearest code, halfway upward. */
-    int up = packed ? rounds_up(packed, species, value, low, high, random)
-                    : (value - low) * 2 >= high - low;
-    if (up) {
+    /* Packed codes use the dithered threshold. */
+    if (rounds_up(packed, species, value, low, high, random)) {
       code++;
       low = high;
     }

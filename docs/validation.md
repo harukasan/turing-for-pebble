@@ -50,14 +50,33 @@ Compiler `.su` files report bounded, static frames and no application recursion.
 
 The first physical measurements were taken on 2026-09-25 through the phone's developer connection, with the scheduling, drawing, and bit-exact core changes described in [Shared C core](core.md). `docs/hardware-measurements.json` holds the raw entries and `scripts/build-report.py` copies them into `public/reports/comparison.json`.
 
-| Mode                        | Steps per second |    Step | Blit per frame | Text per frame | Minimum free heap | 2,000 startup steps |
-| --------------------------- | ---------------: | ------: | -------------: | -------------: | ----------------: | ------------------: |
-| 0                           |             11.4 |   81 ms |         3.2 ms |         2.8 ms |          21,104 B |         about 175 s |
-| 1                           |             56.2 | 16.4 ms |         3.3 ms |         2.0 ms |          68,376 B |          about 36 s |
-| 1, version 3                |             58.3 | 15.2 ms |         2.9 ms |         3.1 ms |          68,680 B |          about 34 s |
-| 1, production (1,800 steps) |             63.0 | 15.1 ms |         3.5 ms |         3.0 ms |          69,176 B |     28.8 s measured |
+| Mode                         | Steps per second |    Step | Blit per frame | Text per frame | Minimum free heap | 2,000 startup steps |
+| ---------------------------- | ---------------: | ------: | -------------: | -------------: | ----------------: | ------------------: |
+| 0                            |             11.4 |   81 ms |         3.2 ms |         2.8 ms |          21,104 B |         about 175 s |
+| 1                            |             56.2 | 16.4 ms |         3.3 ms |         2.0 ms |          68,376 B |          about 36 s |
+| 1, version 3                 |             58.3 | 15.2 ms |         2.9 ms |         3.1 ms |          68,680 B |          about 34 s |
+| 1, production (1,800 steps)  |             63.0 | 15.1 ms |         3.5 ms |         3.0 ms |          69,176 B |     28.8 s measured |
+| 1, with the digit mask       |             63.9 | 14.9 ms |         3.9 ms |         2.5 ms |          49,624 B |     28.1 s measured |
+| 3, first build (1,250 steps) |             40.3 | 20.9 ms |        12.0 ms |         2.9 ms |          20,952 B |     31.0 s measured |
+| 3, production (1,250 steps)  |             48.1 | 19.1 ms |        11.7 ms |         2.5 ms |          21,672 B |     25.9 s measured |
 
 The hardware clock was valid throughout (`clock_invalid=0`). The 1,000,000-iteration calibration loop of the profile build took 46–47 ms. A 256-step log interval reproduced the mode 0 rate as 256 steps per 22.5 s. Neither mode reached the 30 s target for 2,000 steps with bit-exact code: mode 1 needed about 18% more speed and mode 0 about six times more. Version 3 (nearest rounding for the Q15 codes, no per-cell hash in mode 1) raised mode 1 to 58.3 steps/s at 15.2 ms per step, and the startup was set to 1,800 steps with 120 ms slices and one redraw per 200 ms, which brings mode 1's startup to a measured 28.8 s for 1,816 steps (1,800 plus one minute tick) at 63.0 steps/s.
+
+### Resolution study
+
+Mode 1 shows 2 × 2 pixel blocks. The study looked for a finer grid within the same startup time, computed off the pixel grid and shown with interpolated rendering. Candidates were built with the LECO digit mask and interpolation and measured on the watch with `RD_BUILD_PROFILE=1`:
+
+| Grid      | Storage |    Step |  Redraw | Minimum free heap | Steps in 30 s |
+| --------- | ------- | ------: | ------: | ----------------: | ------------: |
+| 120 × 136 | Q15     | 21.1 ms | 11.5 ms |          20,160 B |   about 1,300 |
+| 134 × 152 | Q15     | 29.9 ms | 11.8 ms |          16,232 B |     about 900 |
+| 150 × 171 | packed  | 49.0 ms | 13.6 ms |          45,144 B |     about 570 |
+
+The 134 × 152 and 150 × 171 rows used levels derived during the step, whose cost is included. `scripts/fill.py` measured on the host when the pattern finishes growing, with the digit mask installed. With the maze preset, 100 × 114 finished at 600–800 steps, 120 × 136 at 800, 134 × 152 at 600–800, and 150 × 171 had not finished at 600. The thin-line preset needed 1,250–1,500 steps on 100 × 114 and 1,000–1,250 on 120 × 136. More initial disks (48 to 192) or smaller radii did not finish earlier, so the core keeps its 24 disks. 150 × 171 cannot finish in 30 s. 134 × 152 left less than 16 KiB of heap. 120 × 136 was chosen: its stripes are 83% as wide as mode 1's, and its startup of 1,250 steps measured 31.0 s. The Float32 error of mode 3 after 1,000 steps (B MAE 0.00002–0.00005) is at the level of mode 1.
+
+A watch build with `RD_BUILD_DEFINES=RD_BENCH` logs the time of each phase of a step (`core/rd_bench.c`). In mode 3 the first build spent 1.2 ms decoding rows, 3.85 ms on the Laplacians, 8.45 ms on the reaction, and 7.6 ms encoding and storing, 21.1 ms in total. Three rewrites that change no result brought the step to 18.55 ms: the second product of the reaction as one 32 × 32 → 64 bit multiply, the nearest Q15 code computed directly, and keeping the branching form of the 64-bit rounding, which measured faster than a branch-free form. Compiling for `-mcpu=cortex-m33` gave no gain. The production startup then measured 25.9 s.
+
+After a minute change the 300 burst steps took about 7.5 s in mode 3, against about 4.7 s in mode 1. On the host the old digits left no trace after 100 steps, so a shorter burst is possible. The battery effect of the bursts is not measured.
 
 ## Timing limitation
 
@@ -74,7 +93,7 @@ Backlight windows use a separate five-second AppTimer, so they do not depend on 
 - Validate full stack headroom including OS and library contributions.
 - Compare perceived flicker, legibility, and pattern quality on the physical display.
 
-Mode 1 is the production build: it is the only candidate that completes its startup in about 30 s on the physical watch, so `pebble/src/c/config.h`, the build default, and the Web's initial selection use it. Mode 0 remains available as the high-resolution comparison build.
+Mode 3 (120 × 136, interpolated) is the production build: `pebble/src/c/config.h`, the build default, `npm run device`, and the Web's initial selection use it. Mode 1 remains available as the previous build, and mode 0 as the high-resolution comparison build.
 
 ## Emulator rendering after startup
 

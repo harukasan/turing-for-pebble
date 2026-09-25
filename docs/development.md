@@ -73,15 +73,17 @@ Exclusions:
 mise run build-pebble
 ```
 
-This builds both modes and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. The sources are compiled with `-O3` after the SDK's own flags (`RD_BUILD_OPT` overrides it; `-O3` measured 6% faster steps than `-O2` on the watch), `RD_BUILD_PROFILE=1` adds the clock calibration loop and the periodic profile log, and the script fails if an ELF's load size exceeds 20,480 bytes (mode 1 is about 17.3 KB with the digit mask, whose row loop is duplicated so that rows away from the digits keep the loop without the mask levels), because code shares the 128 KiB app region with the core allocation. The shared UUID means installing the second mode replaces the first in an emulator or watch.
+This builds modes 0, 1, and 3 and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. The sources are compiled with `-O3` after the SDK's own flags (`RD_BUILD_OPT` overrides it; `-O3` measured 6% faster steps than `-O2` on the watch), `RD_BUILD_PROFILE=1` adds the clock calibration loop and the periodic profile log, and the script fails if an ELF's load size exceeds 20,480 bytes (modes 1 and 3 are about 19.4 KB with the digit mask and interpolated rendering; the row loop is duplicated so that rows away from the digits keep the loop without the mask levels), because code shares the 128 KiB app region with the core allocation. `RD_BUILD_RENDER` overrides the `rd_row_rgb2` flags, and `RD_BUILD_DEFINES` adds space-separated defines such as `RD_STARTUP_STEPS=1000` for study builds. The shared UUID means installing one mode replaces another in an emulator or watch.
 
 ```sh
-npm run emulator              # build if needed, then install mode 0
+npm run emulator              # build if needed, then install mode 3
+npm run emulator:mode0        # the same for mode 0
 npm run emulator:mode1        # the same for mode 1
 npm run emulator:screenshot   # build/emery.png
 npm run emulator:logs         # stream the watchface logs, Ctrl-C to stop
 npm run emulator:kill         # stop the emulator
-PEBBLE_PHONE=<ip> npm run device             # install mode 0 on the watch and stream its logs
+PEBBLE_PHONE=<ip> npm run device             # install mode 3 on the watch and stream its logs
+PEBBLE_PHONE=<ip> npm run device:mode0       # the same for mode 0
 PEBBLE_PHONE=<ip> npm run device:mode1       # the same for mode 1
 PEBBLE_PHONE=<ip> npm run device:logs        # stream watch logs
 PEBBLE_PHONE=<ip> npm run device:screenshot  # build/watch.png
@@ -90,13 +92,17 @@ PEBBLE_PHONE=<ip> npm run device:screenshot  # build/watch.png
 These run `scripts/emulator.sh`, which re-executes itself under `mise exec` when `pebble` is not on `PATH`. The `device` commands use the phone's Pebble app developer connection (`--phone`), so enable it in the app and set `PEBBLE_PHONE` to the IP it shows. Start `npm run device` before the face launches so the startup summary is captured. The underlying commands are:
 
 ```sh
-mise exec -- pebble install --emulator emery --vnc build/pebble/mode-0.pbw
+mise exec -- pebble install --emulator emery --vnc build/pebble/mode-3.pbw
 mise exec -- pebble screenshot --emulator emery --vnc --no-open build/emery.png
 ```
 
 Keep `--vnc` consistent across emulator commands. Changing emulator launch options can restart it and interrupt the current log connection.
 
-Mode 0 is 200 × 228 with 8-bit storage. Mode 1 is 100 × 114 with 16-bit storage. The build script sets `RD_BUILD_MODE` explicitly. To build the mode selected in an exported `config.h`, copy it to `pebble/src/c/config.h` and run `mise exec -- pebble build --sdk 4.33.1` from `pebble/` after setting the corresponding `RD_BUILD_MODE`. The mode override used for the two-mode comparison takes precedence over the header's default.
+Mode 0 is 200 × 228 with 8-bit storage. Mode 1 is 100 × 114 and mode 3, the default, 120 × 136, both with 16-bit storage. The build script sets `RD_BUILD_MODE` explicitly. To build the mode selected in an exported `config.h`, copy it to `pebble/src/c/config.h` and run `mise exec -- pebble build --sdk 4.33.1` from `pebble/` after setting the corresponding `RD_BUILD_MODE`. The mode override takes precedence over the header's default.
+
+`RD_BUILD_DEFINES=RD_BENCH` builds a watchface that logs `RD bench` with the time of each phase of a step 3 s after launch. `cc -O3 -std=c11 -DRD_MODE=3 tests/bench.c -o build/bench && build/bench 3` runs the same timing on the host.
+
+`mise exec -- python scripts/fill.py grids` and `fill.py seeds` rerun the growth comparison of the resolution study (`tests/fill.c`) and write contact sheets under `build/fill/`.
 
 ## Regenerating comparison artifacts
 
