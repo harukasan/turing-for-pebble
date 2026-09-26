@@ -14,18 +14,23 @@ type ClockFontData = {
   sets: { name: string; time: Line; date: Line }[];
 };
 /** Font sets, in the order of CM_FONT_* in core/clock_mask.h. */
-export const CLOCK_FONTS = ['leco', 'bitham'] as const;
+export const CLOCK_FONTS = ["leco", "bitham"] as const;
 export type ClockFont = (typeof CLOCK_FONTS)[number];
 export const fontIndex = (font: ClockFont) => CLOCK_FONTS.indexOf(font);
 let data: ClockFontData | undefined;
-let loading: Promise<void> | undefined;
-export function loadFonts() {
-  return (loading ??= fetch('/fonts/clock-fonts.json').then(async (r) => {
-    if (!r.ok) throw new Error('Clock font load failed');
+const loading = new Map<string, Promise<void>>();
+export function loadFonts(url = "/fonts/clock-fonts.json") {
+  const existing = loading.get(url);
+  if (existing) return existing;
+  const request = fetch(url).then(async (r) => {
+    if (!r.ok) throw new Error("Clock font load failed");
     data = await r.json();
-  }));
+  });
+  loading.set(url, request);
+  request.catch(() => loading.delete(url));
+  return request;
 }
-const pad = (value: number) => String(value).padStart(2, '0');
+const pad = (value: number) => String(value).padStart(2, "0");
 /** The time and date strings of the watch: HH:MM and YYYY.MM.DD. */
 export const clockText = (date: Date) => [
   `${pad(date.getHours())}:${pad(date.getMinutes())}`,
@@ -35,7 +40,7 @@ export const clockText = (date: Date) => [
 export function clockPixels(
   date: Date,
   font: ClockFont,
-  visit: (x: number, y: number) => void,
+  visit: (x: number, y: number) => void
 ) {
   if (!data) return false;
   const set = data.sets[fontIndex(font)];
@@ -52,7 +57,7 @@ export function clockPixels(
       const g = glyphs[c];
       for (let y = 0; y < g.height; y++)
         for (let col = 0; col < g.width; col++)
-          if (g.bits[y * g.width + col] === '1')
+          if (g.bits[y * g.width + col] === "1")
             visit(x + g.left_offset + col, line.top + g.top_offset + y);
       x += g.advance;
     }
@@ -62,8 +67,8 @@ export function clockPixels(
 export function drawClock(
   ctx: CanvasRenderingContext2D,
   date: Date,
-  font: ClockFont,
+  font: ClockFont
 ) {
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = "#fff";
   clockPixels(date, font, (x, y) => ctx.fillRect(x, y, 1, 1));
 }

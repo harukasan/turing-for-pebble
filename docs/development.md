@@ -2,7 +2,7 @@
 
 ## Project-local environment
 
-`mise.toml` pins Python 3.13.15 and Node 24.19.0. `requirements-tools.lock` pins the Python environment, including pebble-tool 5.0.40. The SDK installation task installs Pebble SDK 4.33.1, which includes Emery and BacklightService.
+`mise.toml` pins Python 3.13.15, Node 24.19.0, and pnpm 10.33.0. `requirements-tools.lock` pins the Python environment, including pebble-tool 5.0.40. The SDK installation task installs Pebble SDK 4.33.1, which includes Emery and BacklightService.
 
 ```sh
 mise trust
@@ -10,7 +10,7 @@ mise install
 mise run setup
 mise run sdk-install
 mise exec -- pebble sdk list
-npm ci
+pnpm install --frozen-lockfile
 ```
 
 | Location                   | Content                                         |
@@ -21,7 +21,7 @@ npm ci
 | `requirements-tools.lock`  | Resolved Python dependencies                    |
 | `.tools/`                  | Earlier bootstrap environment, no longer used   |
 
-The project allowlists only Python, Node, ruff, shellcheck, and shfmt in mise, preventing unrelated globally configured tools from being installed for project tasks. Mise trusted-config registration remains in its user state directory. Runtime installations follow mise's data directory, including the active XDG environment. Existing runtime installations can be reused. This arrangement isolates Python dependencies and Pebble state. It is not a container or an operating-system sandbox. Pebble's legacy `~/.pebble-sdk` path takes precedence over `XDG_DATA_HOME` if it exists. Verify the resolved path on another machine before installing:
+The project allowlists only Python, Node, pnpm, ruff, shellcheck, and shfmt in mise, preventing unrelated globally configured tools from being installed for project tasks. Mise trusted-config registration remains in its user state directory. Runtime installations follow mise's data directory, including the active XDG environment. Existing runtime installations can be reused. This arrangement isolates Python dependencies and Pebble state. It is not a container or an operating-system sandbox. Pebble's legacy `~/.pebble-sdk` path takes precedence over `XDG_DATA_HOME` if it exists. Verify the resolved path on another machine before installing:
 
 ```sh
 mise exec -- python -c 'from pebble_tool.util import get_persist_dir; print(get_persist_dir())'
@@ -35,16 +35,16 @@ The build uses the existing Emscripten installation on `PATH`. Its cache must be
 
 ```sh
 mise run build-wasm
-npm run typecheck
-npm test
+pnpm run typecheck
+pnpm test
 mise run test-core
-npm run build
-npm run dev -- --host 127.0.0.1
+pnpm run build
+pnpm run dev --host 127.0.0.1
 ```
 
-The local URL is normally `http://localhost:3000/`. No deployment is required. The development server is not an on-watch performance benchmark.
+The local URL is normally `http://127.0.0.1:5173/`. No deployment is required. The development server is not an on-watch performance benchmark. The standalone Web build uses Vite and Panda CSS. `panda.config.ts` is a copy of harukasan-dev's configuration with the source include changed to `src/`. `pnpm run typecheck`, `pnpm run dev`, and `pnpm run build` regenerate ignored `styled-system/` with `panda codegen`. See [Web core and demo](web.md).
 
-`mise run test-core` runs `tests/core.c` at `-O2`, then under AddressSanitizer and UndefinedBehaviorSanitizer, then `tests/wasm.mjs` (native versus Wasm field hashes and rendered rows) and `tests/adapter.mjs` (the TypeScript adapters and the clock masks). `npm run test:optimization` (`scripts/check-optimization.sh`) compiles the core at `-O0` and `-O3` and compares every field hash with `tests/golden-hashes.txt`, whose lines hold mode, steps, hash, and optionally the seven clock-mask arguments of `build/core-test`. `npm run compare:float` (`scripts/compare-float.mjs`) measures the Wasm core against the Float32 reference at the effective parameters and writes `docs/float-precision.json`.
+`mise run test-core` runs `tests/core.c` at `-O2`, then under AddressSanitizer and UndefinedBehaviorSanitizer, then `tests/wasm.mjs` (native versus Wasm field hashes and rendered rows) and `tests/adapter.mjs` (the TypeScript adapters and the clock masks). `pnpm run test:optimization` (`scripts/check-optimization.sh`) compiles the core at `-O0` and `-O3` and compares every field hash with `tests/golden-hashes.txt`, whose lines hold mode, steps, hash, and optionally the seven clock-mask arguments of `build/core-test`. `pnpm run compare:float` (`scripts/compare-float.mjs`) measures the Wasm core against the Float32 reference at the effective parameters and writes `docs/float-precision.json`.
 
 ## Lint and format
 
@@ -52,7 +52,7 @@ The local URL is normally `http://localhost:3000/`. No deployment is required. T
 
 | Task                    | Tool                                                 | Scope                                       |
 | ----------------------- | ---------------------------------------------------- | ------------------------------------------- |
-| `lint-js` / `format-js` | oxlint 1.76 and oxfmt 0.61 (npm)                     | TypeScript, JavaScript, CSS, JSON, Markdown |
+| `lint-js` / `format-js` | ESLint and Prettier, aligned with harukasan-dev       | Web TypeScript, JavaScript, CSS, Markdown   |
 | `lint-c` / `format-c`   | clang-format (system) and `cc -Wall -Wextra -Werror` | `core/`, `pebble/src/c/`, `tests/*.c`       |
 | `lint-py` / `format-py` | ruff 0.16.8 (mise)                                   | `scripts/*.py`                              |
 | `lint-sh` / `format-sh` | shellcheck 0.11.0 and shfmt 3.14.1 (mise)            | `scripts/*.sh`                              |
@@ -61,12 +61,12 @@ The local URL is normally `http://localhost:3000/`. No deployment is required. T
 
 ruff, shellcheck, and shfmt are installed by `mise install`. clang-format is not managed by mise. Install it from the system package manager. The `.clang-format` configuration needs clang-format 15 or newer for `InsertBraces`, and the sources were formatted with 22.1.8. Other major versions may place braces or blank lines slightly differently.
 
-Style settings live in `.editorconfig`, `.clang-format`, `ruff.toml`, `.oxlintrc.json`, and `.oxfmtrc.json`. The shfmt tasks pass `-i 2 -ci` explicitly, so keep `.editorconfig` in sync with those flags. C sources keep the LLVM base style with blank lines between definitions and braces on every control statement. Include order is never sorted, because `pebble/src/c/core.c` relies on `config.h` preceding its textual include of `core/rd.c`.
+Style settings live in `.editorconfig`, `.clang-format`, `ruff.toml`, `.prettierrc`, `.prettierignore`, and `eslint.config.mjs`. The shfmt tasks pass `-i 2 -ci` explicitly, so keep `.editorconfig` in sync with those flags. C sources keep the LLVM base style with blank lines between definitions and braces on every control statement. Include order is never sorted, because `pebble/src/c/core.c` relies on `config.h` preceding its textual include of `core/rd.c`.
 
 Exclusions:
 
-- `components/ui/` is vendored shadcn output. oxlint skips it, oxfmt still formats it.
-- oxfmt skips `public/reports/` and `public/fonts/clock-fonts.json`. Generated files: `public/reports/` (`scripts/compare.py` and `scripts/build-report.py`), `public/fonts/clock-fonts.json` (`scripts/extract-fonts.py`), `core/clock_glyphs.h` (`scripts/gen-clock-glyphs.py`), `public/wasm/rd.wasm` (`mise run build-wasm`), and `docs/float-precision.json` (`npm run compare:float`). `docs/hardware-measurements.json` is the hand-maintained input of the report builder.
+- `styled-system/` is generated by Panda CSS and ignored by ESLint and Prettier.
+- Generated files are `public/reports/` (`scripts/compare.py` and `scripts/build-report.py`), `public/fonts/clock-fonts.json` (`scripts/extract-fonts.py`), `core/clock_glyphs.h` (`scripts/gen-clock-glyphs.py`), `public/wasm/rd.wasm` (`mise run build-wasm`), and `docs/float-precision.json` (`pnpm run compare:float`). Prettier skips the generated reports and font JSON. `docs/hardware-measurements.json` is the hand-maintained input of the report builder.
 - `pebble/wscript` is the SDK build template. ruff skips it.
 
 ## Emery builds
@@ -78,20 +78,20 @@ mise run build-pebble
 This builds modes 0, 1, and 3 and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. The sources are compiled with `-O3` after the SDK's own flags (`RD_BUILD_OPT` overrides it; `-O3` measured 6% faster steps than `-O2` on the watch), `RD_BUILD_PROFILE=1` adds the clock calibration loop and the periodic profile log, and the script fails if an ELF's load size exceeds 20,480 bytes (mode 3 is about 15.6 KB without logs: the row passes are duplicated so that rows away from the digits run without the mask levels, while the glyph traversal, the renderer, and the rare color fallback are kept out of line), because code shares the 128 KiB app region with the core allocation. Production builds leave out the diagnostic logs. `RD_BUILD_LOG=1` keeps them (the `RD init`, `RD startup`, `RD light`, and progress lines used for measurements), and `RD_BUILD_PROFILE=1`, `RD_BENCH`, and `RD_FRAME_BENCH` builds include them too. `RD_BUILD_MODE` selects the mode (default 3), `RD_BUILD_FONT` the clock font set (0 LECO, 1 Bitham), `RD_BUILD_RENDER` overrides the `rd_row_rgb2` flags (2 interpolates, the default for mode 3 and 0 for the others), and `RD_BUILD_DEFINES` adds space-separated defines such as `RD_STARTUP_MS=20000` for study builds. The shared UUID means installing one mode replaces another in an emulator or watch.
 
 ```sh
-npm run emulator              # build if needed, then install mode 3
-npm run emulator:mode0        # the same for mode 0
-npm run emulator:mode1        # the same for mode 1
-npm run emulator:screenshot   # build/emery.png
-npm run emulator:logs         # stream the watchface logs, Ctrl-C to stop
-npm run emulator:kill         # stop the emulator
-PEBBLE_PHONE=<ip> npm run device             # install mode 3 on the watch and stream its logs
-PEBBLE_PHONE=<ip> npm run device:mode0       # the same for mode 0
-PEBBLE_PHONE=<ip> npm run device:mode1       # the same for mode 1
-PEBBLE_PHONE=<ip> npm run device:logs        # stream watch logs
-PEBBLE_PHONE=<ip> npm run device:screenshot  # build/watch.png
+pnpm run emulator              # build if needed, then install mode 3
+pnpm run emulator:mode0        # the same for mode 0
+pnpm run emulator:mode1        # the same for mode 1
+pnpm run emulator:screenshot   # build/emery.png
+pnpm run emulator:logs         # stream the watchface logs, Ctrl-C to stop
+pnpm run emulator:kill         # stop the emulator
+PEBBLE_PHONE=<ip> pnpm run device             # install mode 3 on the watch and stream its logs
+PEBBLE_PHONE=<ip> pnpm run device:mode0       # the same for mode 0
+PEBBLE_PHONE=<ip> pnpm run device:mode1       # the same for mode 1
+PEBBLE_PHONE=<ip> pnpm run device:logs        # stream watch logs
+PEBBLE_PHONE=<ip> pnpm run device:screenshot  # build/watch.png
 ```
 
-These run `scripts/emulator.sh`, which re-executes itself under `mise exec` when `pebble` is not on `PATH`. `screenshot` and `device-screenshot` take an output path as a second argument, and `device-install` streams the watch logs after the install. The `device` commands use the phone's Pebble app developer connection (`--phone`), so enable it in the app and set `PEBBLE_PHONE` to the IP it shows. Start `npm run device` before the face launches so the startup summary is captured. The underlying commands are:
+These run `scripts/emulator.sh`, which re-executes itself under `mise exec` when `pebble` is not on `PATH`. `screenshot` and `device-screenshot` take an output path as a second argument, and `device-install` streams the watch logs after the install. The `device` commands use the phone's Pebble app developer connection (`--phone`), so enable it in the app and set `PEBBLE_PHONE` to the IP it shows. Start `pnpm run device` before the face launches so the startup summary is captured. The underlying commands are:
 
 ```sh
 mise exec -- pebble install --emulator emery --vnc build/pebble/mode-3.pbw

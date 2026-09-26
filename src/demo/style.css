@@ -1,0 +1,29 @@
+@layer reset, base, tokens, recipes, utilities;
+@import "@fontsource-variable/roboto";
+@import "@fontsource-variable/roboto-mono";
+
+:root {
+  --font-sans-serif:
+    "Roboto Variable", "BIZ UDPGothic", "Helvetica Neue", Arial, Meiryo,
+    sans-serif;
+  --font-roboto-mono: "Roboto Mono Variable", monospace;
+}
+
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+#pebble-turing-demo canvas {
+  touch-action: none;
+  image-rendering: pixelated;
+}

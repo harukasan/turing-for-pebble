@@ -6,11 +6,11 @@ export type Parameters = {
   dt: number;
 };
 export const presets = [
-  { name: '迷路', feed: 0.029, kill: 0.057 },
-  { name: '珊瑚', feed: 0.0545, kill: 0.062 },
-  { name: '細胞分裂', feed: 0.0367, kill: 0.0649 },
-  { name: '斑点', feed: 0.035, kill: 0.065 },
-  { name: '細線', feed: 0.023, kill: 0.052 },
+  { name: "迷路", feed: 0.029, kill: 0.057 },
+  { name: "珊瑚", feed: 0.0545, kill: 0.062 },
+  { name: "細胞分裂", feed: 0.0367, kill: 0.0649 },
+  { name: "斑点", feed: 0.035, kill: 0.065 },
+  { name: "細線", feed: 0.023, kill: 0.052 },
 ];
 export class Simulation {
   a: Float32Array;
@@ -21,7 +21,7 @@ export class Simulation {
   constructor(
     public width: number,
     public height: number,
-    seed = 42,
+    seed = 42
   ) {
     const n = width * height;
     this.a = new Float32Array(n).fill(1);
@@ -92,7 +92,7 @@ export class Simulation {
           const reaction = a * b * b;
           this.nextA[i] = Math.max(
             0,
-            Math.min(1, a + (p.da * lapA - reaction + p.feed * (1 - a)) * p.dt),
+            Math.min(1, a + (p.da * lapA - reaction + p.feed * (1 - a)) * p.dt)
           );
           this.nextB[i] = Math.max(
             0,
@@ -102,8 +102,8 @@ export class Simulation {
                 (p.db * lapB +
                   reaction -
                   ((kills?.[i] ?? p.kill) + p.feed) * b) *
-                  p.dt,
-            ),
+                  p.dt
+            )
           );
         }
       }
