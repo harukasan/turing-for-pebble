@@ -16,83 +16,81 @@
     <title>Turing の設定</title>
   </head>
   <body>
-    <div class="scroll">
-      <main class="page">
-        <section class="preview" aria-label="文字盤のプレビュー">
-          <div class="bezel">
-            <canvas id="preview" width="200" height="228"></canvas>
+    <main class="page">
+      <section class="preview" aria-label="文字盤のプレビュー">
+        <div class="bezel">
+          <canvas id="preview" width="200" height="228"></canvas>
+        </div>
+        <p id="progress" class="progress" aria-live="polite">
+          プレビューを読み込んでいます
+        </p>
+      </section>
+      <form id="form" class="form">
+        <fieldset>
+          <legend>パターン</legend>
+          <div id="presets" class="chips"></div>
+          <div id="pattern-sliders" class="sliders"></div>
+        </fieldset>
+        <fieldset>
+          <legend>模様の太さ（拡散と時間刻み）</legend>
+          <div id="diffusion-presets" class="chips"></div>
+          <div id="diffusion-sliders" class="sliders"></div>
+        </fieldset>
+        <fieldset>
+          <legend>配色</legend>
+          <div id="palettes" class="palettes"></div>
+          <div id="custom-palette" class="custom-palette" hidden>
+            <div id="custom-count" class="chips"></div>
+            <div id="custom-stops" class="stops"></div>
+            <div id="color-picker" class="colors" hidden></div>
           </div>
-          <p id="progress" class="progress" aria-live="polite">
-            プレビューを読み込んでいます
-          </p>
-        </section>
-        <form id="form" class="form">
-          <fieldset>
-            <legend>パターン</legend>
-            <div id="presets" class="chips"></div>
-            <div id="pattern-sliders" class="sliders"></div>
-          </fieldset>
-          <fieldset>
-            <legend>模様の太さ（拡散と時間刻み）</legend>
-            <div id="diffusion-presets" class="chips"></div>
-            <div id="diffusion-sliders" class="sliders"></div>
-          </fieldset>
-          <fieldset>
-            <legend>配色</legend>
-            <div id="palettes" class="palettes"></div>
-            <div id="custom-palette" class="custom-palette" hidden>
-              <div id="custom-count" class="chips"></div>
-              <div id="custom-stops" class="stops"></div>
-              <div id="color-picker" class="colors" hidden></div>
-            </div>
-          </fieldset>
-          <fieldset>
-            <legend>時計</legend>
-            <div id="fonts" class="chips"></div>
-            <label class="switch">
-              時刻・日付を表示
-              <input type="checkbox" id="clock" role="switch" />
+        </fieldset>
+        <fieldset>
+          <legend>時計</legend>
+          <div id="fonts" class="chips"></div>
+          <label class="switch">
+            時刻・日付を表示
+            <input type="checkbox" id="clock" role="switch" />
+          </label>
+          <label class="switch">
+            数字を避ける
+            <input type="checkbox" id="avoid" role="switch" />
+          </label>
+        </fieldset>
+        <fieldset>
+          <legend>設定ファイル</legend>
+          <div class="file-actions">
+            <button type="button" id="export">書き出す</button>
+            <button type="button" id="copy">コピー</button>
+            <label class="file-button">
+              ファイル
+              <input
+                type="file"
+                id="import"
+                class="visually-hidden"
+                accept="application/json,.json"
+              />
             </label>
-            <label class="switch">
-              数字を避ける
-              <input type="checkbox" id="avoid" role="switch" />
-            </label>
-          </fieldset>
-          <fieldset>
-            <legend>設定ファイル</legend>
-            <div class="file-actions">
-              <button type="button" id="export">書き出す</button>
-              <button type="button" id="copy">コピー</button>
-              <label class="file-button">
-                ファイル
-                <input
-                  type="file"
-                  id="import"
-                  class="visually-hidden"
-                  accept="application/json,.json"
-                />
-              </label>
-            </div>
-            <textarea
-              id="file-text"
-              class="file-text"
-              rows="4"
-              spellcheck="false"
-              aria-label="設定の JSON"
-              placeholder="書き出した設定がここに出ます。設定の JSON を貼り付けて読み込むこともできます。"
-            ></textarea>
-            <div class="file-actions">
-              <button type="button" id="import-text">テキストを読み込む</button>
-            </div>
-            <p id="file-status" class="hint" aria-live="polite"></p>
-          </fieldset>
-        </form>
-        <footer class="actions">
-          <button type="button" id="cancel">キャンセル</button>
-          <button type="button" id="save" class="primary">保存</button>
-        </footer>
-      </main>
-    </div>
+          </div>
+          <textarea
+            id="file-text"
+            class="file-text"
+            rows="4"
+            spellcheck="false"
+            aria-label="設定の JSON"
+            placeholder="書き出した設定がここに出ます。設定の JSON を貼り付けて読み込むこともできます。"
+          ></textarea>
+          <div class="file-actions">
+            <button type="button" id="import-text">テキストを読み込む</button>
+          </div>
+          <p id="file-status" class="hint" aria-live="polite"></p>
+        </fieldset>
+      </form>
+      <footer class="actions">
+        <button type="button" id="cancel">キャンセル</button>
+        <button type="button" id="save" class="primary">保存</button>
+      </footer>
+    </main>
     <script type="application/json" id="settings">
       __SETTINGS__
     </script>

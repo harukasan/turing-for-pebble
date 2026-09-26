@@ -461,18 +461,6 @@ element("cancel").addEventListener("click", () => {
   location.href = returnTo ?? "pebblejs://close";
 });
 
-/** The page scrolls inside .scroll over a document that stays still. When
- * the keyboard opens, iOS scrolls that document to the focused field, and
- * it does not always scroll back when the keyboard closes, which left the
- * page shifted with a short scroll area. So the document returns to the top
- * once no field has the focus. */
-function resetDocument() {
-  const active = document.activeElement;
-  if (!active || active === document.body) window.scrollTo(0, 0);
-}
-window.visualViewport?.addEventListener("resize", resetDocument);
-document.addEventListener("focusout", () => setTimeout(resetDocument, 100));
-
 update();
 view
   ?.load(wasmUrl, fontsUrl)
