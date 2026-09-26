@@ -1,9 +1,10 @@
 [settings]
-enable_tools = ["python", "node", "ruff", "shellcheck", "shfmt"]
+enable_tools = ["python", "node", "pnpm", "ruff", "shellcheck", "shfmt"]
 
 [tools]
 python = "3.13.15"
 node = "24.19.0"
+pnpm = "10.33.0"
 ruff = "0.16.8"
 shellcheck = "0.11.0"
 shfmt = "3.14.1"
@@ -35,8 +36,8 @@ run = "sh scripts/build-wasm.sh"
 run = "sh scripts/build-pebble.sh"
 
 [tasks.lint-js]
-description = "oxlint (type-aware) and oxfmt --check"
-run = ["npm run lint", "npm run format:check"]
+description = "ESLint and Prettier check"
+run = ["pnpm run lint", "pnpm run format:check"]
 
 [tasks.lint-c]
 description = "clang-format check and cc -Wall -Wextra -Werror syntax check"
@@ -55,8 +56,8 @@ description = "All lint and format checks"
 depends = ["lint-js", "lint-c", "lint-py", "lint-sh"]
 
 [tasks.format-js]
-description = "Format JS/TS/CSS/JSON/Markdown with oxfmt"
-run = "npm run format"
+description = "Format Web sources with Prettier"
+run = "pnpm run format"
 
 [tasks.format-c]
 description = "Format C sources with clang-format"

@@ -6,8 +6,8 @@ The fixed-point implementation does **not** retain the same cell-by-cell numeric
 
 ```sh
 mise run build-wasm
-npm run test:optimization
-npm run compare:float
+pnpm run test:optimization
+pnpm run compare:float
 ```
 
 `scripts/compare-float.mjs` loads the production Wasm compiled with `emcc -O3` and runs the existing `lib/simulation.ts` class. For each mode, five presets including the thin-line case, and seeds 42 and 1234, it starts Float32 fields from the exact Q24 concentrations returned by `rd_get`. It uses the same grid size and the same Q15-effective feed, kill, diffusion, and timestep parameters. This removes seed placement, grid resolution, and parameter rounding as independent causes of the reported error. Both fields advance one step at a time through checkpoints 0, 1, 10, 100, and 1,000.

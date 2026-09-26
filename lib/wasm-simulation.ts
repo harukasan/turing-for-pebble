@@ -1,4 +1,4 @@
-import type { Parameters } from './simulation';
+import type { Parameters } from "./simulation";
 type API = {
   memory: WebAssembly.Memory;
   malloc(n: number): number;
@@ -12,7 +12,7 @@ type API = {
     k: number,
     a: number,
     b: number,
-    t: number,
+    t: number
   ): number;
   rd_seed(p: number, x: number, y: number, r: number): number;
   rd_step(p: number, n: number): number;
@@ -34,7 +34,7 @@ type API = {
     year: number,
     month: number,
     day: number,
-    halo: number,
+    halo: number
   ): number;
 };
 export type CoreAPI = API;
@@ -46,11 +46,11 @@ export function buildMask(
   height: number,
   font: number,
   date: Date,
-  halo: number,
+  halo: number
 ) {
   const bytes = api.cm_bytes(width, height);
   const pointer = api.malloc(bytes);
-  if (!pointer) throw new Error('Wasm allocation failed');
+  if (!pointer) throw new Error("Wasm allocation failed");
   try {
     if (
       api.cm_build(
@@ -63,10 +63,10 @@ export function buildMask(
         date.getFullYear(),
         date.getMonth() + 1,
         date.getDate(),
-        halo,
+        halo
       )
     )
-      throw new Error('Invalid clock mask');
+      throw new Error("Invalid clock mask");
     return new Uint8Array(api.memory.buffer, pointer, bytes).slice();
   } finally {
     api.free(pointer);
@@ -105,26 +105,31 @@ export const maskBit = (
   mask: Uint8Array,
   width: number,
   x: number,
-  y: number,
+  y: number
 ) => (mask[y * ((width + 7) >> 3) + (x >> 3)] >> (x & 7)) & 1;
-let loaded: Promise<API> | undefined;
-export function loadCore() {
-  return (loaded ??= fetch('/wasm/rd.wasm').then(async (r) => {
+const loaded = new Map<string, Promise<API>>();
+export function loadCore(url = "/wasm/rd.wasm") {
+  const existing = loaded.get(url);
+  if (existing) return existing;
+  const request = fetch(url).then(async (r) => {
     if (!r.ok) throw new Error(`Wasm HTTP ${r.status}`);
     const wasmModule = await WebAssembly.compile(await r.arrayBuffer());
     const instance = await WebAssembly.instantiate(wasmModule, {
       wasi_snapshot_preview1: {
         proc_exit() {
-          throw new Error('Wasm terminated');
+          throw new Error("Wasm terminated");
         },
       },
     });
     return instance.exports as API;
-  }));
+  });
+  loaded.set(url, request);
+  request.catch(() => loaded.delete(url));
+  return request;
 }
 export const effective = (p: Parameters) =>
   Object.fromEntries(
-    Object.entries(p).map(([k, v]) => [k, Math.round(v * 32768) / 32768]),
+    Object.entries(p).map(([k, v]) => [k, Math.round(v * 32768) / 32768])
   );
 export class WasmSimulation {
   private allocation: number;
@@ -137,25 +142,25 @@ export class WasmSimulation {
   constructor(
     private api: API,
     public mode: number,
-    seed: number,
+    seed: number
   ) {
     this.bytes = api.rd_bytes(mode);
     this.components = Array.from({ length: 6 }, (_, i) =>
-      api.rd_memory(mode, i),
+      api.rd_memory(mode, i)
     );
     this.allocation = api.malloc(this.bytes);
-    if (!this.allocation) throw new Error('Wasm allocation failed');
+    if (!this.allocation) throw new Error("Wasm allocation failed");
     this.state = api.rd_init(this.allocation, this.bytes, mode, seed);
     if (!this.state) {
       api.free(this.allocation);
-      throw new Error('Invalid simulation configuration');
+      throw new Error("Invalid simulation configuration");
     }
     this.width = api.rd_width(this.state);
     this.height = api.rd_height(this.state);
     this.row = new Uint8Array(
       api.memory.buffer,
       api.rd_row(this.state, 0, 0, 1),
-      800,
+      800
     );
   }
   dispose() {
@@ -177,19 +182,19 @@ export class WasmSimulation {
         Math.round(p.kill * 32768),
         Math.round(p.da * 32768),
         Math.round(p.db * 32768),
-        Math.round(p.dt * 32768),
+        Math.round(p.dt * 32768)
       )
     )
-      throw new Error('Invalid parameters');
+      throw new Error("Invalid parameters");
     if (this.api.rd_step(this.state, count))
-      throw new Error('Invalid step count');
+      throw new Error("Invalid step count");
   }
   seedAt(x: number, y: number, radius = 6) {
     this.api.rd_seed(
       this.state,
       Math.floor((x * 200) / this.width),
       Math.floor((y * 228) / this.height),
-      radius,
+      radius
     );
   }
   /** Hold B at 0 in the cells of a mask (or none) and raise the kill rate
@@ -200,7 +205,7 @@ export class WasmSimulation {
       return;
     }
     const pointer = this.api.malloc(mask.length);
-    if (!pointer) throw new Error('Wasm allocation failed');
+    if (!pointer) throw new Error("Wasm allocation failed");
     new Uint8Array(this.api.memory.buffer, pointer, mask.length).set(mask);
     this.api.rd_mask(this.state, pointer);
     this.api.free(pointer);
@@ -217,15 +222,15 @@ export class WasmSimulation {
     pixels: ImageData,
     palette: string,
     quantize: boolean,
-    interpolate = false,
+    interpolate = false
   ) {
     const flags = Number(quantize) | (interpolate ? 2 : 0);
     for (let y = 0; y < 228; y++) {
       this.api.rd_row(
         this.state,
         y,
-        palette === 'green' ? 0 : palette === 'blue' ? 1 : 2,
-        flags,
+        palette === "green" ? 0 : palette === "blue" ? 1 : 2,
+        flags
       );
       pixels.data.set(this.row, y * 800);
     }

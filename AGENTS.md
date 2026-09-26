@@ -19,12 +19,15 @@ This repository is a local Gray–Scott reaction-diffusion experiment for Pebble
 | `public/wasm/rd.wasm`                          | Generated WebAssembly binary from the shared core         |
 | `lib/wasm-simulation.ts`                       | Web adapter for the C core                                |
 | `lib/simulation.ts`, `lib/float-simulation.ts` | Float32 reference and Web comparison adapter              |
-| `app/page.tsx`                                 | Local Web controls, rendering, downloads, and reports     |
+| `src/core/`                                    | Reusable Canvas, Wasm, and playback API                   |
+| `src/demo/`                                    | React demo UI, Panda styles, and downloads                |
 | `tests/`, `scripts/`                           | Core, adapter, numerical comparison, and build checks     |
 | `public/reports/`                              | Generated images and build or emulator measurements       |
 | `docs/`                                        | Detailed design, setup, validation, and numerical results |
 
 The Web offers 200 × 228 8-bit Wasm, 120 × 136 Q15 Wasm (mode 3, the watch build, shown with interpolated rendering), 100 × 114 Q15 Wasm, and Float32 at each of these grid sizes. Mode 2 in the C core is a diagnostic 100 × 114 8-bit configuration. Mode switching resets to the same seed. The Float32 implementation is a reference, not a Pebble build. The `細線` preset is intended to expose narrow-band differences. See [docs/behavior.md](docs/behavior.md) and [docs/float-precision.md](docs/float-precision.md).
+
+The standalone Web demo uses React, Vite, and Panda CSS. `panda.config.ts` was copied from harukasan-dev for the standalone build. pnpm 10.33.0 is pinned in `mise.toml` and `package.json`. Regenerate the ignored `styled-system/` directory with `pnpm run typecheck` or `pnpm run build`. The reusable Web API and demo boundary are in [docs/web.md](docs/web.md). Web TypeScript, JavaScript, CSS, and Markdown use harukasan-dev's Prettier style. C, Python, and shell keep their existing formatters.
 
 ## Environment and checks
 
@@ -35,17 +38,17 @@ mise trust
 mise install
 mise run setup
 mise run sdk-install
-npm ci
+pnpm install --frozen-lockfile
 mise run build-wasm
-npm run typecheck
-npm test
+pnpm run typecheck
+pnpm test
 mise run test-core
 mise run lint
-npm run build
+pnpm run build
 mise run build-pebble
 ```
 
-Run the checks relevant to each change. `mise run test-core` includes AddressSanitizer, UndefinedBehaviorSanitizer, LeakSanitizer, native-versus-Wasm checks, and the TypeScript adapters. LeakSanitizer may fail under a ptrace-based sandbox even when the core assertions pass. Record that limitation rather than reporting a full pass. The Web build is `npm run build`. A local preview is `npm run dev -- --host 127.0.0.1`.
+Run the checks relevant to each change. `mise run test-core` includes AddressSanitizer, UndefinedBehaviorSanitizer, LeakSanitizer, native-versus-Wasm checks, and the TypeScript adapters. LeakSanitizer may fail under a ptrace-based sandbox even when the core assertions pass. Record that limitation rather than reporting a full pass. The Web build is `pnpm run build`. A local preview is `pnpm run dev --host 127.0.0.1`.
 
 When changing core arithmetic or storage, keep the C API's memory query accurate, preserve invalid-input no-mutation behavior, and verify the row-buffer algorithm against the full-screen oracle. Rebuild `public/wasm/rd.wasm`, run native-versus-Wasm hash checks, and rebuild both Pebble variants if their core changed. Update the Web method selector and memory display if a new mode is exposed. Re-run same-resolution Float32 comparisons and the thin-line case. Record code size, dynamic allocation, minimum free heap, and timing with clear measured versus estimated labels. The numerical contract is in [docs/core.md](docs/core.md).
 

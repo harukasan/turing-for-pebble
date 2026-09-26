@@ -31,7 +31,7 @@ With digit avoidance (`RD_AVOID`, default on except in mode 0, and 数字を避�
 
 Interactive Web mode renders up to 30 times per second. It checks elapsed compute time after each complete step and yields after approximately 8 ms. One complete step can exceed the budget.
 
-Entering device behavior mode reinitializes the field and queues the same startup as the watch: 1,250 steps at 120 × 136 and 1,800 at the other sizes. Pending startup or minute work runs in consecutive slices of at most 120 ms on every animation frame, and the screen is painted at most every 200 ms and when the queue empties. It then runs the minute work of the watch at every wall-clock minute: at least 300 pending steps with digit avoidance, otherwise 16 more. A simulated backlight event enables animation for at most 5 seconds, up to 10 frames per second and 8 steps per frame. Blur, tab hiding, or simulated backlight-off stops that animation. Missed animation frames are not replayed.
+The Web no longer simulates the watch's startup, minute-work queue, or backlight scheduling. It remains an interactive comparison view. The watch's startup and minute-step constants remain in exported `config.h` and settings JSON.
 
 The watch uses SDK BacklightService and AppFocusService. It does not subscribe to accelerometer data. Startup advances `RD_STARTUP_STEPS` in timer slices: 1,250 steps in mode 3, which the physical Pebble Time 2 completes in 31.0 s. Minute updates rebuild the digit mask and raise the pending steps to 300 (16 more without avoidance). While work is pending, each callback runs steps until a 120 ms budget is used, checked after every complete step, then reschedules itself 1 ms later, and the layer is marked dirty at most every 200 ms and when the queue empties. Backlight animation runs at most 8 steps within 8 ms per 100 ms frame. Focus loss cancels timers. Focus restoration resumes pending work. Backlight-off cancels animation while pending startup or minute work remains eligible for timer execution. A separate five-second timer bounds each backlight animation window. The field is blitted into the framebuffer as ARGB8 rows from `rd_row_rgb2` with `RD_RENDER_FLAGS` (interpolated in mode 3) within the unobstructed bounds, and the clock fonts are loaded once at startup.
 
@@ -39,7 +39,7 @@ Timing uses the public `time_ms` API. The emulator's wall-clock seconds and tick
 
 ## Memory reporting
 
-The UI separates these categories:
+The Web UI displays a memory summary for the selected simulation mode. Detailed build and validation measurements remain in [Validation](validation.md) and `public/reports/`. Memory accounting distinguishes these categories:
 
 1. Core allocation, obtained directly from C for Wasm modes, including fields, scratch rows, control data, the output row, and alignment. Float32 instead reports four JavaScript concentration arrays.
 2. Pebble ELF code and static data, core dynamic allocation, and measured emulator minimum free heap. Runtime minimum free heap already includes allocations and must not be added to an estimate of remaining heap.

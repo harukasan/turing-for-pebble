@@ -1,14 +1,14 @@
 // Compare the released Wasm core with the original Float32 reference at the
 // same grid resolution, initial field, and Q15-effective parameters.
-import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { Simulation, presets } from '../lib/simulation.ts';
+import assert from "node:assert/strict";
+import { readFileSync, writeFileSync } from "node:fs";
+import { Simulation, presets } from "../lib/simulation.ts";
 
-const wasm = readFileSync('public/wasm/rd.wasm');
+const wasm = readFileSync("public/wasm/rd.wasm");
 const { instance } = await WebAssembly.instantiate(wasm, {
   wasi_snapshot_preview1: {
     proc_exit() {
-      throw new Error('Wasm exit');
+      throw new Error("Wasm exit");
     },
   },
 });
@@ -53,7 +53,7 @@ function metrics(reference, state, width, height) {
       }
     const covariance = sumXY - (sumX * sumY) / length;
     const denominator = Math.sqrt(
-      (sumXX - (sumX * sumX) / length) * (sumYY - (sumY * sumY) / length),
+      (sumXX - (sumX * sumX) / length) * (sumYY - (sumY * sumY) / length)
     );
     species.push({
       mae: absolute / length,
@@ -74,30 +74,27 @@ for (const mode of [0, 1, 2, 3]) {
   const height = Math.floor((width * 228) / 200);
   const bytes = api.rd_bytes(mode);
   const allocation = api.malloc(bytes);
-  assert(allocation, 'Wasm allocation failed');
+  assert(allocation, "Wasm allocation failed");
   for (const preset of presets)
     for (const seed of seeds) {
       const state = api.rd_init(allocation, bytes, mode, seed);
-      assert(state, 'Wasm initialization failed');
+      assert(state, "Wasm initialization failed");
       const requested = {
         ...requestedBase,
         feed: preset.feed,
         kill: preset.kill,
       };
       const parameters = Object.fromEntries(
-        Object.entries(requested).map(([key, value]) => [
-          key,
-          effective(value),
-        ]),
+        Object.entries(requested).map(([key, value]) => [key, effective(value)])
       );
       assert.equal(
         api.rd_params(
           state,
-          ...['feed', 'kill', 'da', 'db', 'dt'].map((key) =>
-            q15(requested[key]),
-          ),
+          ...["feed", "kill", "da", "db", "dt"].map((key) =>
+            q15(requested[key])
+          )
         ),
-        0,
+        0
       );
 
       const reference = new Simulation(width, height, seed);
@@ -137,20 +134,20 @@ for (const mode of [0, 1, 2, 3]) {
       process.stdout.write(
         `mode ${mode} ${preset.name} seed ${seed}: ` +
           `B MAE ${samples.at(-1).b.mae.toFixed(6)}, ` +
-          `r ${samples.at(-1).b.correlation?.toFixed(4) ?? 'n/a'}\n`,
+          `r ${samples.at(-1).b.correlation?.toFixed(4) ?? "n/a"}\n`
       );
     }
   api.free(allocation);
 }
 const report = {
-  source: 'public/wasm/rd.wasm versus lib/simulation.ts',
+  source: "public/wasm/rd.wasm versus lib/simulation.ts",
   coreVersion: 2,
   checkpoints,
   method:
-    'Float32 fields start from rd_get Q15 values, use the same grid and Q15-effective parameters, and run the existing Float32 Euler step. Each concentration is compared cell by cell. Mode 2 isolates storage precision at 100x114.',
+    "Float32 fields start from rd_get Q15 values, use the same grid and Q15-effective parameters, and run the existing Float32 Euler step. Each concentration is compared cell by cell. Mode 2 isolates storage precision at 100x114.",
   rows,
 };
 writeFileSync(
-  'docs/float-precision.json',
-  JSON.stringify(report, null, 2) + '\n',
+  "docs/float-precision.json",
+  JSON.stringify(report, null, 2) + "\n"
 );

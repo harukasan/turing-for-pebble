@@ -1,5 +1,5 @@
-import { Simulation, type Parameters } from './simulation.ts';
-import { MASK_KILL, MASK_RAMP, maskLevels } from './wasm-simulation.ts';
+import { Simulation, type Parameters } from "./simulation.ts";
+import { MASK_KILL, MASK_RAMP, maskLevels } from "./wasm-simulation.ts";
 
 const paletteLow = [
   [0, 30, 18],
@@ -54,7 +54,7 @@ export class FloatSimulation {
     this.seedDisplay(
       Math.floor((x * 200) / this.width),
       Math.floor((y * 228) / this.height),
-      radius,
+      radius
     );
     this.applyMask();
   }
@@ -82,8 +82,7 @@ export class FloatSimulation {
       const levels = this.levels;
       this.killMap = Float32Array.from(
         levels,
-        (level) =>
-          kill + ((MASK_KILL - kill) * (MASK_RAMP - level)) / MASK_RAMP,
+        (level) => kill + ((MASK_KILL - kill) * (MASK_RAMP - level)) / MASK_RAMP
       );
       this.killFor = kill;
     }
@@ -125,10 +124,10 @@ export class FloatSimulation {
     pixels: ImageData,
     palette: string,
     quantize: boolean,
-    interpolate = false,
+    interpolate = false
   ) {
     const data = pixels.data;
-    const paletteIndex = palette === 'green' ? 0 : 1;
+    const paletteIndex = palette === "green" ? 0 : 1;
     const { width, height } = this;
     const b = this.field.b;
     const sample = (p: number, n: number, size: number) => {
@@ -154,7 +153,7 @@ export class FloatSimulation {
         const offset = (y * 200 + x) * 4;
         for (let channel = 0; channel < 3; channel++) {
           const color =
-            palette === 'mono'
+            palette === "mono"
               ? intensity >= 0.45
                 ? 255
                 : 0
@@ -162,7 +161,7 @@ export class FloatSimulation {
                   paletteLow[paletteIndex][channel] +
                     (paletteHigh[paletteIndex][channel] -
                       paletteLow[paletteIndex][channel]) *
-                      intensity,
+                      intensity
                 );
           data[offset + channel] = quantize
             ? Math.round(color / 85) * 85

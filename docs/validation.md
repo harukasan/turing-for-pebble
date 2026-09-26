@@ -1,6 +1,6 @@
 # Validation and adoption status
 
-The implementation is available for local Web use and Emery builds. Production adoption is **pending**, because no physical Pebble Time 2 is connected and interactive Web browser verification is unavailable in this environment.
+The implementation is available for local Web use and Emery builds. Production adoption is **pending**. Physical Pebble Time 2 measurements exist for the builds identified below, but final-build acceptance remains open. The simple UI has been built and exercised in headless Chromium, while a manual visual and interaction review is still pending.
 
 ## Completed checks
 
@@ -10,13 +10,13 @@ The implementation is available for local Web use and Emery builds. Production a
 - AddressSanitizer, UndefinedBehaviorSanitizer, and LeakSanitizer passed. LeakSanitizer requires execution outside this environment's ptrace-based sandbox.
 - 300 allocation/reset cycles retain fixed Wasm linear memory. The TypeScript adapter is tested with real Wasm for loading, mode recreation, parameter conversion, stepping, seeding, RGBA output, and disposal.
 - The original Float32 reference tests passed.
-- TypeScript checking and the production Web build passed. The repository-wide `mise run lint` passes. Vendored `components/ui/` is excluded from oxlint, as described in `docs/development.md`.
+- TypeScript checking, ESLint, Prettier, the production Web build, and the Web tests passed for the simple UI worktree. `pnpm run test:core` also passed, including native-versus-Wasm hashes and the TypeScript adapters.
 - Wasm was served with HTTP 200 and `application/wasm`.
 - Both Emery `.pbw` variants were built and installed in the emulator. Mode 0 was also observed after a back-button backlight animation and subsequent minute updates without a lower minimum free heap.
 - The Emery screenshot's 2,427 white clock/date pixels exactly match the extracted PBF glyph positions and bitmap pixels. There are zero missing or extra white pixels. This verifies font geometry against the emulator, not browser Canvas interaction.
 - With digit avoidance (B held at 0 under the digits, graded kill around them) and a 1-pixel halo, mode 1 emulator screenshots matched both font sets exactly: LECO at 13:31 2026.09.25 (2,358 glyph pixels) and Bitham at 13:32 2026.09.25 (3,453 glyph pixels). Every halo pixel was black. A Bitham screenshot 40 s after the change to 13:33 showed no trace of the previous digit. `tests/adapter.mjs` checks that the core's compiled glyphs equal the JSON glyphs for both fonts. The minute burst timing on the physical watch and its battery effect are not measured yet.
 
-Machine-readable results and comparison images are in `public/reports/`. These are also linked from the local Web UI. Source for all numerical checks is under `tests/`.
+Machine-readable results and comparison images are in `public/reports/`. Source for all numerical checks is under `tests/`.
 
 ## Pattern comparison
 
@@ -88,14 +88,14 @@ Backlight windows use a separate five-second AppTimer, so they do not depend on 
 
 ## Remaining acceptance work
 
-- Verify Web mode switching, repeated initialization, pause/advance behavior, simulated backlight/focus behavior, PNG export, and configuration downloads interactively. No connected browser is available to this agent.
+- Complete a manual Web review of mode switching, repeated initialization, pause/advance behavior, pointer seeding, keyboard access, PNG export, and configuration downloads. Headless Chromium checks already covered the main controls, loading failure, lifecycle, themes, and reduced motion.
 - Observe real-device backlight-on/off and focus loss, without an accelerometer subscription.
 - Measure minimum free heap throughout startup, minute updates, and backlight animation. Require at least 16 KiB during normal operation.
-- Measure compute and draw times on a physical Emery watch with `PEBBLE_PHONE=<ip> npm run device` and `device:mode1`, record the `RD startup` line in `docs/hardware-measurements.json`, and rerun `scripts/build-report.py`. Require 2,000 startup steps within 30 s and combined animation compute and drawing within 100 ms.
+- Measure compute and draw times on a physical Emery watch with `PEBBLE_PHONE=<ip> pnpm run device` and `device:mode1`, record the `RD startup` line in `docs/hardware-measurements.json`, and rerun `scripts/build-report.py`. Require 2,000 startup steps within 30 s and combined animation compute and drawing within 100 ms.
 - Validate full stack headroom including OS and library contributions.
 - Compare perceived flicker, legibility, and pattern quality on the physical display.
 
-Mode 3 (120 × 136, interpolated) is the production build: `pebble/src/c/config.h`, the build default, `npm run device`, and the Web's initial selection use it. Mode 1 remains available as the previous build, and mode 0 as the high-resolution comparison build.
+Mode 3 (120 × 136, interpolated) is the production build: `pebble/src/c/config.h`, the build default, `pnpm run device`, and the Web's initial selection use it. Mode 1 remains available as the previous build, and mode 0 as the high-resolution comparison build.
 
 ## Emulator rendering after startup
 
