@@ -1,4 +1,8 @@
-import type { Model, Parameters } from "../../lib/simulation";
+import {
+  defaultParametersFor,
+  type Model,
+  type Parameters,
+} from "../../lib/simulation.ts";
 import type { ClockFont } from "../../lib/clock-fonts";
 
 export type Engine =
@@ -11,6 +15,19 @@ export const engineMode = (engine: Engine) =>
 export const isFloat = (engine: Engine) => engine.startsWith("float");
 export const HALO = 1;
 
+/** The models and their display names. */
+export const models: [Model, string][] = [
+  ["gray-scott", "Gray–Scott"],
+  ["fhn", "FitzHugh–Nagumo"],
+];
+
+/** Whether an engine runs a model: the packed 200 x 228 mode runs only
+ * Gray-Scott, the Q15 modes and Float32 run both. */
+export const engineSupportsModel = (engine: Engine, model: Model) =>
+  model === "gray-scott" || engine !== "u8-200";
+
+export { defaultParametersFor };
+
 type KeysOf<P> = P extends Parameters ? Exclude<keyof P, "model"> : never;
 /** The numeric parameters of a model (of every model by default), without
  * the model name. */
@@ -18,14 +35,7 @@ export type ParameterKey<M extends Model = Model> = KeysOf<
   Extract<Parameters, { model: M }>
 >;
 
-export const defaultParameters: Parameters = {
-  model: "gray-scott",
-  feed: 0.029,
-  kill: 0.057,
-  da: 1,
-  db: 0.5,
-  dt: 1,
-};
+export const defaultParameters = defaultParametersFor("gray-scott");
 
 export type PlayerSettings = {
   params: Parameters;

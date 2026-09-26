@@ -131,8 +131,10 @@ export const parameterValues = (params: Parameters) =>
   ) as Record<string, number>;
 
 /** The default parameters of a model, those of its first preset. */
-export const defaultParametersFor = (model: Model) =>
-  presetParameters(presets.find((preset) => preset.model === model)!);
+export const defaultParametersFor = <M extends Model>(model: M) =>
+  presetParameters(
+    presets.find((preset) => preset.model === model)!
+  ) as Extract<Parameters, { model: M }>;
 
 /** The parameter vector the C core takes: each value in the model's order
  * rounded to Q15 (init as it is), padded with zeros to RD_PARAM_MAX

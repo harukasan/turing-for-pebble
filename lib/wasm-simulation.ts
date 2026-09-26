@@ -1,4 +1,11 @@
-import type { Parameters } from "./simulation";
+import type { Model, Parameters } from "./simulation";
+import {
+  RD_PARAM_MAX,
+  defaultParametersFor,
+  modelIndex,
+  parameterOrder,
+  parameterVector,
+} from "./presets.ts";
 type API = {
   memory: WebAssembly.Memory;
   malloc(n: number): number;
@@ -6,6 +13,17 @@ type API = {
   rd_bytes(m: number): number;
   rd_memory(m: number, c: number): number;
   rd_init(p: number, n: number, m: number, s: number): number;
+  rd_init_model(
+    p: number,
+    n: number,
+    m: number,
+    model: number,
+    s: number,
+    params: number,
+    count: number
+  ): number;
+  rd_set_params(p: number, params: number, count: number): number;
+  rd_model(p: number): number;
   rd_params(
     p: number,
     f: number,
@@ -129,44 +147,71 @@ export function loadCore(url = "/wasm/rd.wasm") {
   request.catch(() => loaded.delete(url));
   return request;
 }
-/** The parameters the core computes with: each rounded to Q15, and in the
- * Q15 modes (1 and 3) the diffusion coefficients folded with the 1/20 of
- * the Laplacian into round(D / 20) / 20 (numerical definition version 4).
- * The model passes through unchanged. */
+/** Diffusion coefficients, folded with the 1/20 of the Laplacian in the
+ * Q15 modes, and FitzHugh-Nagumo coefficients kept in Q13. */
+const FOLDED_DIFFUSION = new Set(["da", "db", "du", "dv"]);
+const Q13_PARAMETERS = new Set(["k", "rest"]);
+/** The parameters the core computes with (numerical definition version 5):
+ * each rounded to Q15, in the Q15 modes (1 and 3) the diffusion
+ * coefficients folded with the 1/20 of the Laplacian into
+ * round(D / 20) / 20, and FitzHugh-Nagumo k and rest rounded to Q13 as
+ * floor((q + 2) / 4) / 8192. The model and init pass through unchanged. */
 export const effective = (p: Parameters, mode = 0): Parameters =>
   Object.fromEntries(
     Object.entries(p).map(([k, v]) => {
-      if (typeof v !== "number") return [k, v];
+      if (typeof v !== "number" || k === "init") return [k, v];
       const q = Math.round(v * 32768);
       const folded =
-        (mode === 1 || mode === 3) && (k === "da" || k === "db")
+        (mode === 1 || mode === 3) && FOLDED_DIFFUSION.has(k)
           ? Math.round(q / 20) * 20
-          : q;
+          : Q13_PARAMETERS.has(k)
+            ? Math.floor((q + 2) / 4) * 4
+            : q;
       return [k, folded / 32768];
     })
   ) as Parameters;
+/** The core running one model in one mode. The parameter vector lives in
+ * a small Wasm allocation reused by every step. */
 export class WasmSimulation {
   private allocation: number;
+  private vector: number;
   private state: number;
   private row: Uint8Array;
   readonly width: number;
   readonly height: number;
   readonly bytes: number;
   readonly components: number[];
+  readonly model: Model;
   constructor(
     private api: API,
     public mode: number,
-    seed: number
+    seed: number,
+    params: Parameters = defaultParametersFor("gray-scott")
   ) {
+    this.model = params.model;
     this.bytes = api.rd_bytes(mode);
     this.components = Array.from({ length: 6 }, (_, i) =>
       api.rd_memory(mode, i)
     );
     this.allocation = api.malloc(this.bytes);
-    if (!this.allocation) throw new Error("Wasm allocation failed");
-    this.state = api.rd_init(this.allocation, this.bytes, mode, seed);
+    this.vector = api.malloc(RD_PARAM_MAX * Int32Array.BYTES_PER_ELEMENT);
+    if (!this.allocation || !this.vector) {
+      api.free(this.allocation);
+      api.free(this.vector);
+      throw new Error("Wasm allocation failed");
+    }
+    this.state = api.rd_init_model(
+      this.allocation,
+      this.bytes,
+      mode,
+      modelIndex[params.model],
+      seed,
+      this.writeVector(params),
+      parameterOrder[params.model].length
+    );
     if (!this.state) {
       api.free(this.allocation);
+      api.free(this.vector);
       throw new Error("Invalid simulation configuration");
     }
     this.width = api.rd_width(this.state);
@@ -179,8 +224,17 @@ export class WasmSimulation {
   }
   dispose() {
     if (this.allocation) this.api.free(this.allocation);
+    if (this.vector) this.api.free(this.vector);
     this.allocation = 0;
+    this.vector = 0;
     this.state = 0;
+  }
+  /** Write the Q15 parameter vector into the Wasm allocation. */
+  private writeVector(params: Parameters) {
+    new Int32Array(this.api.memory.buffer, this.vector, RD_PARAM_MAX).set(
+      parameterVector(params)
+    );
+    return this.vector;
   }
   get steps() {
     return this.api.rd_steps(this.state);
@@ -189,16 +243,13 @@ export class WasmSimulation {
     return this.api.memory.buffer.byteLength;
   }
   step(p: Parameters, count = 1) {
-    if (p.model !== "gray-scott")
-      throw new Error("The core does not run this model yet");
+    if (p.model !== this.model)
+      throw new Error(`${p.model} parameters for a ${this.model} field`);
     if (
-      this.api.rd_params(
+      this.api.rd_set_params(
         this.state,
-        Math.round(p.feed * 32768),
-        Math.round(p.kill * 32768),
-        Math.round(p.da * 32768),
-        Math.round(p.db * 32768),
-        Math.round(p.dt * 32768)
+        this.writeVector(p),
+        parameterOrder[p.model].length
       )
     )
       throw new Error("Invalid parameters");
@@ -213,8 +264,8 @@ export class WasmSimulation {
       radius
     );
   }
-  /** Hold B at 0 in the cells of a mask (or none) and raise the kill rate
-   * toward it, as rd_mask of the core. */
+  /** Hold the displayed species at rest in the cells of a mask (or none)
+   * and damp the pattern toward it, as rd_mask of the core. */
   setMask(mask: Uint8Array | null) {
     if (!mask) {
       this.api.rd_mask(this.state, 0);
@@ -232,8 +283,9 @@ export class WasmSimulation {
   get(x: number, y: number, species: number) {
     return this.api.rd_get(this.state, x, y, species) / 2 ** 24;
   }
-  /** Draw the display; interpolate samples B between cells at each pixel
-   * center (RD_ROW_BILINEAR) instead of showing the covering cell. */
+  /** Draw the display; interpolate samples the displayed species between
+   * cells at each pixel center (RD_ROW_BILINEAR) instead of showing the
+   * covering cell. */
   render(
     pixels: ImageData,
     palette: string,

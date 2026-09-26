@@ -82,7 +82,10 @@ export class TuringPlayer {
     this.playing = false;
   }
 
-  async load(engine: Engine, seed: number) {
+  /** Reset the field: a new simulation of the model of params with the
+   * engine and seed. Parameters of another model set later are not
+   * stepped until the next load. */
+  async load(engine: Engine, seed: number, params: Parameters) {
     const requested = ++this.generation;
     this.sim?.dispose();
     this.sim = null;
@@ -108,8 +111,8 @@ export class TuringPlayer {
       if (this.disposed || requested !== this.generation) return;
       this.core = api;
       this.sim = isFloat(engine)
-        ? new FloatSimulation(engineWidth(engine), seed)
-        : new WasmSimulation(api, engineMode(engine), seed);
+        ? new FloatSimulation(engineWidth(engine), seed, params)
+        : new WasmSimulation(api, engineMode(engine), seed, params);
       this.events.onLoading(false);
       this.publishStats();
     } catch (error) {
@@ -207,12 +210,16 @@ export class TuringPlayer {
         this.maskSim = sim;
         this.maskKey = key;
       }
+      // Parameters of another model wait for the reload that the model
+      // change requests.
       const target =
-        this.manualPending > 0
-          ? Math.min(this.manualPending, 8)
-          : this.playing
-            ? speed
-            : 0;
+        params.model !== sim.model
+          ? 0
+          : this.manualPending > 0
+            ? Math.min(this.manualPending, 8)
+            : this.playing
+              ? speed
+              : 0;
       let steps = 0;
       while (steps < target) {
         sim.step(params);

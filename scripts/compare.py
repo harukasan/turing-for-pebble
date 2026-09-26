@@ -9,8 +9,10 @@ from PIL import Image, ImageDraw
 # the Q15 modes 1 and 3.
 MODEL_MODES = {0: [0, 1, 2, 3], 1: [1, 3]}
 MODE_LABELS = ['200x228 A7+B9', '100x114 Q15', '100x114 A7+B9', '120x136 Q15']
-# The presets of the contact sheet, one row each.
+# The presets of the contact sheets, one row each: Gray-Scott in every
+# mode, FitzHugh-Nagumo in modes 1 and 3.
 SHEET_PRESETS = ['maze', 'coral', 'mitosis', 'spots']
+FHN_SHEET_PRESETS = ['fhn-stripes', 'fhn-hex', 'fhn-spiral']
 
 presets = json.loads(
     subprocess.check_output(
@@ -63,7 +65,7 @@ cases = [
 with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
     rows = list(pool.map(run, cases))
 report = {
-    'version': 2,
+    'version': 3,
     'sdk': '4.33.1',
     'coreTests': 'passed',
     'nativeWasmHashes': 'passed',
@@ -92,4 +94,18 @@ thin = Image.new('RGB', (600, 228), '#111111')
 for i, m in enumerate([0, 1, 3]):
     thin.paste(Image.open(out / f'mode-{m}-preset-thin-line-seed-42.png'), (i * 200, 0))
 thin.save(out / 'thin-lines.png')
+fhn = Image.new('RGB', (400, len(FHN_SHEET_PRESETS) * 258), '#111111')
+draw = ImageDraw.Draw(fhn)
+for row, preset_id in enumerate(FHN_SHEET_PRESETS):
+    for column, m in enumerate([1, 3]):
+        fhn.paste(
+            Image.open(out / f'mode-{m}-preset-{preset_id}-seed-42.png'),
+            (column * 200, row * 258 + 30),
+        )
+        draw.text(
+            (column * 200 + 4, row * 258 + 8),
+            f'{MODE_LABELS[m]} / {preset_id}',
+            fill='white',
+        )
+fhn.save(out / 'fhn.png')
 print(json.dumps(report, indent=2))
