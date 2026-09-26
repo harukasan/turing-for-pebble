@@ -268,8 +268,9 @@ legend {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 4px;
+  width: 100%;
   max-width: 288px;
-  margin-top: 6px;
+  margin: 0 auto;
 }
 
 .colors button {
