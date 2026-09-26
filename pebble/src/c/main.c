@@ -10,7 +10,7 @@
  *   - a backlight-on event animates for at most BACKLIGHT_WINDOW_MS, at most
  *     STEPS_PER_SLICE steps within SLICE_BUDGET_MS per frame,
  *   - focus loss cancels timers and focus restore resumes pending work.
- * Timing counters are accumulated for the startup summary log; RD_PROFILE
+ * With RD_LOG, timing counters feed the startup summary log; RD_PROFILE
  * adds a clock calibration loop and a periodic profile log.
  */
 #include "../../../core/clock_mask.h"
@@ -21,10 +21,10 @@
 #define STARTUP_STEPS RD_STARTUP_STEPS
 #define STEPS_PER_SLICE 8
 #define SLICE_BUDGET_MS 8
-#define STARTUP_SLICE_BUDGET_MS 120
+#define STARTUP_SLICE_BUDGET_MS 30
 #define FRAME_INTERVAL_MS 100
 /* Redraw interval while startup or minute work is pending. */
-#define WORK_FRAME_INTERVAL_MS 200
+#define WORK_FRAME_INTERVAL_MS 50
 #define SCHEDULE_NOW_MS 1
 #define BACKLIGHT_WINDOW_MS 5000
 #define LOG_INTERVAL_STEPS 256
@@ -41,7 +41,6 @@ static AppTimer *timer, *light_timer;
 static GFont font_clock, font_date;
 /* The time shown and masked, from the last tick. */
 static struct tm clock_time;
-static uint32_t mask_ms;
 static void *allocation, *state;
 /* Cell mask of the clock digits, rebuilt every minute. */
 static uint8_t *clock_mask;
@@ -57,10 +56,13 @@ static bool marked;
 /* Startup accounting: validated compute and gap time, counts, and whether a
  * focus loss or long gap interrupted the startup. */
 static uint32_t busy_ms, gap_ms, blit_ms_total, text_ms_total;
-static uint32_t steps_total, slices, draws, next_log_step = LOG_INTERVAL_STEPS;
+static uint32_t steps_total, slices, draws;
 static uint32_t startup_start_ms, last_slice_end_ms;
 static bool slice_seen, interrupted, startup_logged;
-static uint32_t calibration_ms;
+#if RD_LOG
+static uint32_t next_log_step = LOG_INTERVAL_STEPS;
+static uint32_t calibration_ms, mask_ms;
+#endif
 
 static uint32_t now_ms(void) {
   time_t seconds;
@@ -103,9 +105,43 @@ static uint32_t calibrate(void) {
 }
 #endif
 
+/* The framebuffer rows the clock may draw into: the unobstructed ones. */
+typedef struct {
+  GBitmap *frame_buffer;
+  int y_first, y_end;
+} ClockRows;
+
+static uint8_t *clock_row(void *context, int y) {
+  ClockRows *rows = context;
+  if (y < rows->y_first || y >= rows->y_end) {
+    return NULL;
+  }
+  GBitmapDataRowInfo row = gbitmap_get_data_row_info(rows->frame_buffer, y);
+  return row.min_x == 0 && row.max_x >= RD_DISPLAY_WIDTH - 1 ? row.data : NULL;
+}
+
+/* Draw the clock text with the system fonts, when the framebuffer cannot be
+ * captured. */
+static void draw_system_text(GContext *ctx) {
+  const CmLayout *layout = cm_layout(RD_FONT);
+  char text[16];
+  graphics_context_set_text_color(ctx, GColorWhite);
+  strftime(text, sizeof(text), "%H:%M", &clock_time);
+  graphics_draw_text(
+      ctx, text, font_clock,
+      GRect(0, layout->time_top, RD_DISPLAY_WIDTH, layout->time_box),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  strftime(text, sizeof(text), "%Y.%m.%d", &clock_time);
+  graphics_draw_text(
+      ctx, text, font_date,
+      GRect(0, layout->date_top, RD_DISPLAY_WIDTH, layout->date_box),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+}
+
 /* Blit the field straight into the framebuffer as ARGB8 rows from the core,
- * then draw the clock over it. Only the unobstructed rows are written, so a
- * Timeline Peek keeps its area. */
+ * then draw the clock over it from the core's copy of the system font
+ * glyphs, the same pixels as graphics_draw_text and much faster. Only the
+ * unobstructed rows are written, so a Timeline Peek keeps its area. */
 static void draw(Layer *this_layer, GContext *ctx) {
   uint32_t start = now_ms();
   GRect bounds = layer_get_unobstructed_bounds(this_layer);
@@ -118,7 +154,19 @@ static void draw(Layer *this_layer, GContext *ctx) {
     const uint8_t *pixels = NULL;
     for (int y = bounds.origin.y < 0 ? 0 : bounds.origin.y; y < y_end; y++) {
       GBitmapDataRowInfo row = gbitmap_get_data_row_info(frame_buffer, y);
-#if (RD_RENDER_FLAGS & RD_ROW_BILINEAR) == 0 && (RD_MODE == 1 || RD_MODE == 2)
+      int first = row.min_x < 0 ? 0 : row.min_x;
+      int last =
+          row.max_x >= RD_DISPLAY_WIDTH ? RD_DISPLAY_WIDTH - 1 : row.max_x;
+      if (last < first) {
+        continue;
+      }
+#if RD_RENDER_FLAGS & RD_ROW_BILINEAR
+      /* Interpolated rows are written straight into the framebuffer. */
+      rd_row_rgb2_into(state, y, RD_PALETTE, RD_RENDER_FLAGS, row.data, first,
+                       last);
+      (void)pixels;
+#else
+#if RD_MODE == 1 || RD_MODE == 2
       /* Display rows 2k and 2k + 1 show the same grid row. */
       if (!pixels || (y & 1) == 0) {
         pixels = rd_row_rgb2(state, y, RD_PALETTE, RD_RENDER_FLAGS);
@@ -126,30 +174,24 @@ static void draw(Layer *this_layer, GContext *ctx) {
 #else
       pixels = rd_row_rgb2(state, y, RD_PALETTE, RD_RENDER_FLAGS);
 #endif
-      int first = row.min_x < 0 ? 0 : row.min_x;
-      int last =
-          row.max_x >= RD_DISPLAY_WIDTH ? RD_DISPLAY_WIDTH - 1 : row.max_x;
-      if (pixels && last >= first) {
+      if (pixels) {
         memcpy(row.data + first, pixels + first, (size_t)(last - first + 1));
       }
+#endif
     }
-    graphics_release_frame_buffer(ctx, frame_buffer);
   }
   uint32_t blit = elapsed_ms(start);
-  if (RD_CLOCK) {
-    const CmLayout *layout = cm_layout(RD_FONT);
-    char text[16];
-    graphics_context_set_text_color(ctx, GColorWhite);
-    strftime(text, sizeof(text), "%H:%M", &clock_time);
-    graphics_draw_text(
-        ctx, text, font_clock,
-        GRect(0, layout->time_top, RD_DISPLAY_WIDTH, layout->time_box),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
-    strftime(text, sizeof(text), "%Y.%m.%d", &clock_time);
-    graphics_draw_text(
-        ctx, text, font_date,
-        GRect(0, layout->date_top, RD_DISPLAY_WIDTH, layout->date_box),
-        GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  if (frame_buffer) {
+    if (RD_CLOCK) {
+      ClockRows rows = {frame_buffer, bounds.origin.y < 0 ? 0 : bounds.origin.y,
+                        y_end};
+      cm_draw(clock_row, &rows, GColorWhiteARGB8, RD_FONT, clock_time.tm_hour,
+              clock_time.tm_min, clock_time.tm_year + 1900,
+              clock_time.tm_mon + 1, clock_time.tm_mday);
+    }
+    graphics_release_frame_buffer(ctx, frame_buffer);
+  } else if (RD_CLOCK) {
+    draw_system_text(ctx);
   }
   uint32_t elapsed = elapsed_ms(start);
   if (elapsed > max_draw) {
@@ -165,6 +207,7 @@ static void draw(Layer *this_layer, GContext *ctx) {
 
 static void schedule(uint32_t delay);
 
+#if RD_LOG
 static void log_summary(void) {
   uint32_t steps = steps_total ? steps_total : 1;
   uint32_t frames = draws ? draws : 1;
@@ -221,6 +264,7 @@ static void log_progress(void) {
           timing_unreliable);
 #endif
 }
+#endif
 
 /* One timer slice: run pending startup or minute steps within the startup
  * budget, or animation steps while the backlight is on within the frame
@@ -275,7 +319,12 @@ static void update(void *context) {
   slices++;
   if (done) {
     int32_t since = since_ms(last_mark_ms);
-    int32_t interval = working ? WORK_FRAME_INTERVAL_MS : FRAME_INTERVAL_MS;
+    /* While work is pending, redraw once another slice would overshoot the
+     * interval, so frames come about every WORK_FRAME_INTERVAL_MS instead
+     * of every second slice. */
+    int32_t interval = working
+                           ? WORK_FRAME_INTERVAL_MS - STARTUP_SLICE_BUDGET_MS
+                           : FRAME_INTERVAL_MS;
     if (!marked || pending == 0 || since < 0 || since >= interval) {
       layer_mark_dirty(layer);
       last_mark_ms = now_ms();
@@ -290,6 +339,7 @@ static void update(void *context) {
   } else if (animate) {
     schedule(FRAME_INTERVAL_MS);
   }
+#if RD_LOG
   if (pending == 0 && !startup_logged) {
     startup_logged = true;
     log_summary();
@@ -297,6 +347,7 @@ static void update(void *context) {
     next_log_step += LOG_INTERVAL_STEPS;
     log_progress();
   }
+#endif
 }
 
 static void schedule(uint32_t delay) {
@@ -360,7 +411,9 @@ static void focus(bool on) {
  * 0 under the digits at once, and the kill rate rises toward them. */
 static void rebuild_mask(void) {
 #if RD_CLOCK && RD_AVOID
+#if RD_LOG
   uint32_t start = now_ms();
+#endif
   if (!clock_mask) {
     clock_mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
   }
@@ -370,7 +423,9 @@ static void rebuild_mask(void) {
                clock_time.tm_mon + 1, clock_time.tm_mday, RD_HALO) == 0) {
     rd_mask(state, clock_mask);
   }
+#if RD_LOG
   mask_ms = elapsed_ms(start);
+#endif
 #endif
 }
 
@@ -394,19 +449,21 @@ static void tick(struct tm *tick_time, TimeUnits units_changed) {
 
 #ifdef RD_BENCH
 void rd_bench_log(void *state, int count, uint32_t (*now)(void),
-                  uint32_t out[4]);
+                  uint32_t out[5]);
 
 /* Phase timing of 20 steps, logged as microseconds per step, once the log
  * stream has had time to attach. */
 static void bench(void *context) {
   (void)context;
-  uint32_t t[4];
+  uint32_t t[5];
   rd_bench_log(state, 20, now_ms, t);
   APP_LOG(APP_LOG_LEVEL_INFO,
           "RD bench decode=%lu lap=%lu react=%lu encode=%lu step=%lu",
           (unsigned long)(t[0] * 50), (unsigned long)((t[1] - t[0]) * 50),
           (unsigned long)((t[2] - t[1]) * 50),
           (unsigned long)((t[3] - t[2]) * 50), (unsigned long)(t[3] * 50));
+  APP_LOG(APP_LOG_LEVEL_INFO, "RD bench render_us=%lu",
+          (unsigned long)(t[4] * 50));
 }
 #endif
 
@@ -442,10 +499,14 @@ static void init(void) {
   app_timer_register(3000, bench, NULL);
 #endif
   startup_start_ms = now_ms();
+#if RD_LOG
   APP_LOG(APP_LOG_LEVEL_INFO,
           "RD init mode=%d font=%d core_bytes=%lu heap_min=%lu mask_ms=%lu",
           RD_MODE, RD_FONT, (unsigned long)rd_bytes(RD_MODE),
           (unsigned long)min_heap, (unsigned long)mask_ms);
+#else
+  (void)startup_start_ms;
+#endif
   schedule(SCHEDULE_NOW_MS);
 }
 

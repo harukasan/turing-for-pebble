@@ -27,11 +27,12 @@ int main(int argc, char **argv) {
   RdBench b;
   rd_bench(state, count, now_us, &b);
   printf("mode %d per step: decode %.1f us, laplacian %.1f us, react %.1f us, "
-         "encode+store %.1f us, step %.1f us\n",
+         "encode+store %.1f us, step %.1f us, render %.1f us per frame\n",
          mode, (double)b.decode / count,
          (double)(b.laplacian - b.decode) / count,
          (double)(b.react - b.laplacian) / count,
-         (double)(b.step - b.react) / count, (double)b.step / count);
+         (double)(b.step - b.react) / count, (double)b.step / count,
+         (double)b.render / count);
   free(mask);
   free(memory);
   return 0;

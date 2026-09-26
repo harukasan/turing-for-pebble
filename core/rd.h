@@ -61,6 +61,11 @@ uint8_t *rd_row(void *handle, int y, int palette, int flags);
 /* Display row y as RD_DISPLAY_WIDTH opaque ARGB8 bytes (2 bits per
  * channel), the quantized rd_row colors in the watch framebuffer format. */
 uint8_t *rd_row_rgb2(void *handle, int y, int palette, int flags);
+/* rd_row_rgb2 written into dst[first..last] (0 <= first <= last < 200)
+ * instead of the shared row, for example straight into a framebuffer row.
+ * Returns 0, or -1 for invalid arguments without writing. */
+int rd_row_rgb2_into(void *handle, int y, int palette, int flags, uint8_t *dst,
+                     int first, int last);
 /* Grid size of the handle's mode. */
 int rd_width(void *handle);
 int rd_height(void *handle);

@@ -6,12 +6,13 @@
  *   decode:     every stored row decoded to Q24 rows,
  *   laplacian:  the row loop of rd_step up to the Laplacians,
  *   react:      the same plus react_cell for every cell,
- *   step:       rd_step itself.
+ *   step:       rd_step itself,
+ *   render:     full interpolated frames of rd_row_rgb2 (all 228 rows).
  * Differences give the Laplacian, the reaction, and the encoding and store
  * (step - react). The field advances only in the step phase.
  */
 typedef struct {
-  uint32_t decode, laplacian, react, step;
+  uint32_t decode, laplacian, react, step, render;
 } RdBench;
 
 /* The row loop of rd_step without writing: decode, the Laplacians, and with
@@ -91,5 +92,12 @@ static void rd_bench(void *handle, int count, uint32_t (*now)(void),
   start = now();
   rd_step(state, count);
   out->step = now() - start;
+  start = now();
+  for (int i = 0; i < count; i++) {
+    for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+      sink += rd_row_rgb2(state, y, RD_PALETTE_LIME, RD_ROW_BILINEAR)[y % 200];
+    }
+  }
+  out->render = now() - start;
   (void)sink;
 }

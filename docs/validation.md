@@ -50,15 +50,19 @@ Compiler `.su` files report bounded, static frames and no application recursion.
 
 The first physical measurements were taken on 2026-09-25 through the phone's developer connection, with the scheduling, drawing, and bit-exact core changes described in [Shared C core](core.md). `docs/hardware-measurements.json` holds the raw entries and `scripts/build-report.py` copies them into `public/reports/comparison.json`.
 
-| Mode                         | Steps per second |    Step | Blit per frame | Text per frame | Minimum free heap | 2,000 startup steps |
-| ---------------------------- | ---------------: | ------: | -------------: | -------------: | ----------------: | ------------------: |
-| 0                            |             11.4 |   81 ms |         3.2 ms |         2.8 ms |          21,104 B |         about 175 s |
-| 1                            |             56.2 | 16.4 ms |         3.3 ms |         2.0 ms |          68,376 B |          about 36 s |
-| 1, version 3                 |             58.3 | 15.2 ms |         2.9 ms |         3.1 ms |          68,680 B |          about 34 s |
-| 1, production (1,800 steps)  |             63.0 | 15.1 ms |         3.5 ms |         3.0 ms |          69,176 B |     28.8 s measured |
-| 1, with the digit mask       |             63.9 | 14.9 ms |         3.9 ms |         2.5 ms |          49,624 B |     28.1 s measured |
-| 3, first build (1,250 steps) |             40.3 | 20.9 ms |        12.0 ms |         2.9 ms |          20,952 B |     31.0 s measured |
-| 3, production (1,250 steps)  |             48.1 | 19.1 ms |        11.7 ms |         2.5 ms |          21,672 B |     25.9 s measured |
+| Mode                           | Steps per second |    Step | Blit per frame | Text per frame | Minimum free heap | 2,000 startup steps |
+| ------------------------------ | ---------------: | ------: | -------------: | -------------: | ----------------: | ------------------: |
+| 0                              |             11.4 |   81 ms |         3.2 ms |         2.8 ms |          21,104 B |         about 175 s |
+| 1                              |             56.2 | 16.4 ms |         3.3 ms |         2.0 ms |          68,376 B |          about 36 s |
+| 1, version 3                   |             58.3 | 15.2 ms |         2.9 ms |         3.1 ms |          68,680 B |          about 34 s |
+| 1, production (1,800 steps)    |             63.0 | 15.1 ms |         3.5 ms |         3.0 ms |          69,176 B |     28.8 s measured |
+| 1, with the digit mask         |             63.9 | 14.9 ms |         3.9 ms |         2.5 ms |          49,624 B |     28.1 s measured |
+| 3, first build (1,250 steps)   |             40.3 | 20.9 ms |        12.0 ms |         2.9 ms |          20,952 B |     31.0 s measured |
+| 3, step rewrites (1,250)       |             48.1 | 19.1 ms |        11.7 ms |         2.5 ms |          21,672 B |     25.9 s measured |
+| 3, code rows and table (1,250) |             51.1 | 18.0 ms |        11.6 ms |         2.5 ms |          19,912 B |     24.4 s measured |
+| 3, 100 ms redraws (1,250)      |             42.4 | 18.3 ms |        11.7 ms |         2.7 ms |          19,912 B |     29.5 s measured |
+| 3, faster renderer (1,250)     |             44.5 | 18.1 ms |         9.4 ms |         2.8 ms |          20,104 B |     28.1 s measured |
+| 3, about 20 fps (1,250 steps)  |             40.4 | 18.5 ms |         6.5 ms |         0.9 ms |          20,592 B |     30.9 s measured |
 
 The hardware clock was valid throughout (`clock_invalid=0`). The 1,000,000-iteration calibration loop of the profile build took 46–47 ms. A 256-step log interval reproduced the mode 0 rate as 256 steps per 22.5 s. Neither mode reached the 30 s target for 2,000 steps with bit-exact code: mode 1 needed about 18% more speed and mode 0 about six times more. Version 3 (nearest rounding for the Q15 codes, no per-cell hash in mode 1) raised mode 1 to 58.3 steps/s at 15.2 ms per step, and the startup was set to 1,800 steps with 120 ms slices and one redraw per 200 ms, which brings mode 1's startup to a measured 28.8 s for 1,816 steps (1,800 plus one minute tick) at 63.0 steps/s.
 
@@ -76,7 +80,11 @@ The 134 × 152 and 150 × 171 rows used levels derived during the step, whose co
 
 A watch build with `RD_BUILD_DEFINES=RD_BENCH` logs the time of each phase of a step (`core/rd_bench.c`). In mode 3 the first build spent 1.2 ms decoding rows, 3.85 ms on the Laplacians, 8.45 ms on the reaction, and 7.6 ms encoding and storing, 21.1 ms in total. Three rewrites that change no result brought the step to 18.55 ms: the second product of the reaction as one 32 × 32 → 64 bit multiply, the nearest Q15 code computed directly, and keeping the branching form of the 64-bit rounding, which measured faster than a branch-free form. Compiling for `-mcpu=cortex-m33` gave no gain. The production startup then measured 25.9 s.
 
-Two further rewrites that change no result were measured only in the emulator while the watch was unavailable: stepping the Q15 modes on 16-bit codes, and a table for the error diffusion shares of Q15 codes. With `RD_BENCH` in the emulator, a mode 3 step took 1.70–1.75 ms before them, 1.30 ms with the code rows, and 1.10–1.25 ms with both. The emulator runs faster than the watch and in different proportions, so the watch gain still has to be measured. The table adds 2 KB of load size, and the emulator's minimum free heap for mode 3 became 19,912 B.
+Two further rewrites that change no result were measured only in the emulator while the watch was unavailable: stepping the Q15 modes on 16-bit codes, and a table for the error diffusion shares of Q15 codes. With `RD_BENCH` in the emulator, a mode 3 step took 1.70–1.75 ms before them, 1.30 ms with the code rows, and 1.10–1.25 ms with both. On the watch the `RD_BENCH` step then measured 17.55–17.8 ms, against 18.55 ms before both rewrites and 18.15–18.2 ms in a build without the table. The code rows save about 0.4 ms per step and the table about 0.5 ms. The table adds 2 KB of load size, and the minimum free heap of mode 3 became 19,912 B on the watch. The production startup measured 24.4 s.
+
+The first mode 3 builds redrew only every 200 ms while work was pending (about 5 frames per second, 10 steps per frame), which looked jerky on the watch. With 60 ms compute slices and a redraw whenever another slice would pass 100 ms since the last one, the startup drew 313 frames, one about every 94 ms, and took 29.5 s. Rewriting the interpolated renderer without changing its output then cut a full frame from 10.35 ms to 8.6 ms in `RD_BENCH`: pointers and table lookups hoisted out of the pixel loop, one multiply per lerp, a table of right columns, and rows written straight into the framebuffer. The production startup measured 28.1 s with 314 draws at 9.4 ms.
+
+To aim at 20 frames per second, the watch then redrew about every 50 ms with 30 ms slices, drew the clock text itself from the core's glyph tables (0.9 ms instead of 2.8 ms, with the same pixels as the system fonts in both font sets), and used a render loop specialized for 120 cells, where display pixels 5k to 5k + 4 have constant weights. A full interpolated frame took 6.05 ms in `RD_BENCH`, and a logged startup drew 623 frames, one about every 50 ms, in 30.9 s. Production builds leave out the diagnostic logs, which with the out-of-line glyph traversal, renderer, and color fallback took mode 3 from 21,317 B to 17,233 B of load size.
 
 After a minute change the 300 burst steps took about 7.5 s in mode 3, against about 4.7 s in mode 1. On the host the old digits left no trace after 100 steps, so a shorter burst is possible. The battery effect of the bursts is not measured.
 

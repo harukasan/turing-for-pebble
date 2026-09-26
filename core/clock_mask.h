@@ -40,4 +40,14 @@ int cm_font_available(int font);
  * when an argument is out of range. */
 int cm_build(uint8_t *mask, int width, int height, int font, int hour,
              int minute, int year, int month, int day, int halo);
+
+/* A writable display row y of 200 pixels, or NULL to skip the row. */
+typedef uint8_t *(*CmRow)(void *context, int y);
+
+/* Draw the time and date of a font set as the watch draws them, setting
+ * each glyph pixel of the display to color through row. The pixels are
+ * those of graphics_draw_text with the system fonts, verified against the
+ * emulator. Returns 0, or -1 for invalid arguments without drawing. */
+int cm_draw(CmRow row, void *context, uint8_t color, int font, int hour,
+            int minute, int year, int month, int day);
 #endif

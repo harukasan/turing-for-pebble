@@ -85,8 +85,12 @@ static void cm_splat(uint8_t *mask, int width, int height, int x, int y,
 
 /* Mark one line of glyph indices whose text box starts at display row
  * top. */
-static void cm_line(uint8_t *mask, int width, int height, const CmFont *font,
-                    const uint8_t *text, int length, int top, int halo) {
+/* Visit every glyph pixel of one line of glyph indices whose text box
+ * starts at display row top, centered by the sum of the advances. */
+typedef void (*CmVisit)(void *context, int x, int y);
+
+static void cm_line(const CmFont *font, const uint8_t *text, int length,
+                    int top, CmVisit visit, void *context) {
   int advance = 0;
   for (int i = 0; i < length; i++) {
     advance += font->glyphs[text[i]].advance;
@@ -98,8 +102,7 @@ static void cm_line(uint8_t *mask, int width, int height, const CmFont *font,
     for (int row = 0; row < glyph->height; row++) {
       for (int col = 0; col < glyph->width; col++, bit++) {
         if (font->bits[bit >> 3] >> (bit & 7) & 1) {
-          cm_splat(mask, width, height, pen + glyph->left + col,
-                   top + glyph->top + row, halo);
+          visit(context, pen + glyph->left + col, top + glyph->top + row);
         }
       }
     }
@@ -107,14 +110,22 @@ static void cm_line(uint8_t *mask, int width, int height, const CmFont *font,
   }
 }
 
-int cm_build(uint8_t *mask, int width, int height, int font, int hour,
-             int minute, int year, int month, int day, int halo) {
-  if (!mask || width < CM_MIN_WIDTH || width > RD_DISPLAY_WIDTH ||
-      height != width * RD_DISPLAY_HEIGHT / RD_DISPLAY_WIDTH ||
-      !cm_font_available(font) || hour < 0 || hour > 23 || minute < 0 ||
+/* Visit the glyph pixels of the time and date lines (only check the
+ * arguments when visit is NULL), or return -1 for an unavailable font or a
+ * date or time out of range. */
+#if defined(__GNUC__)
+/* Kept out of line: the mask builder and the text drawer share one copy. */
+__attribute__((noinline))
+#endif
+static int cm_visit(int font, int hour, int minute, int year, int month,
+                    int day, CmVisit visit, void *context) {
+  if (!cm_font_available(font) || hour < 0 || hour > 23 || minute < 0 ||
       minute > 59 || year < 0 || year > 9999 || month < 1 || month > 12 ||
-      day < 1 || day > 31 || halo < 0 || halo > CM_MAX_HALO) {
+      day < 1 || day > 31) {
     return -1;
+  }
+  if (!visit) {
+    return 0;
   }
   const uint8_t time[CM_TIME_LENGTH] = {
       (uint8_t)(hour / 10), (uint8_t)(hour % 10), CM_SEPARATOR,
@@ -130,10 +141,64 @@ int cm_build(uint8_t *mask, int width, int height, int font, int hour,
                                         (uint8_t)(day / 10),
                                         (uint8_t)(day % 10)};
   const CmLayout *layout = &CM_LAYOUTS[font];
-  memset(mask, 0, cm_bytes(width, height));
-  cm_line(mask, width, height, &CM_FONTS[font][CM_TIME], time, CM_TIME_LENGTH,
-          layout->time_top, halo);
-  cm_line(mask, width, height, &CM_FONTS[font][CM_DATE], date, CM_DATE_LENGTH,
-          layout->date_top, halo);
+  cm_line(&CM_FONTS[font][CM_TIME], time, CM_TIME_LENGTH, layout->time_top,
+          visit, context);
+  cm_line(&CM_FONTS[font][CM_DATE], date, CM_DATE_LENGTH, layout->date_top,
+          visit, context);
   return 0;
+}
+
+typedef struct {
+  uint8_t *mask;
+  int width, height, halo;
+} CmMaskTarget;
+
+static void cm_mask_pixel(void *context, int x, int y) {
+  CmMaskTarget *target = context;
+  cm_splat(target->mask, target->width, target->height, x, y, target->halo);
+}
+
+int cm_build(uint8_t *mask, int width, int height, int font, int hour,
+             int minute, int year, int month, int day, int halo) {
+  if (!mask || width < CM_MIN_WIDTH || width > RD_DISPLAY_WIDTH ||
+      height != width * RD_DISPLAY_HEIGHT / RD_DISPLAY_WIDTH ||
+      !cm_font_available(font) || halo < 0 || halo > CM_MAX_HALO ||
+      cm_visit(font, hour, minute, year, month, day, NULL, NULL) != 0) {
+    return -1;
+  }
+  CmMaskTarget target = {mask, width, height, halo};
+  memset(mask, 0, cm_bytes(width, height));
+  cm_visit(font, hour, minute, year, month, day, cm_mask_pixel, &target);
+  return 0;
+}
+
+typedef struct {
+  CmRow row;
+  void *context;
+  uint8_t color;
+  int y;
+  uint8_t *pixels;
+} CmDrawTarget;
+
+static void cm_draw_pixel(void *context, int x, int y) {
+  CmDrawTarget *target = context;
+  if (x < 0 || x >= RD_DISPLAY_WIDTH || y < 0 || y >= RD_DISPLAY_HEIGHT) {
+    return;
+  }
+  if (y != target->y) {
+    target->y = y;
+    target->pixels = target->row(target->context, y);
+  }
+  if (target->pixels) {
+    target->pixels[x] = target->color;
+  }
+}
+
+int cm_draw(CmRow row, void *context, uint8_t color, int font, int hour,
+            int minute, int year, int month, int day) {
+  if (!row) {
+    return -1;
+  }
+  CmDrawTarget target = {row, context, color, -1, NULL};
+  return cm_visit(font, hour, minute, year, month, day, cm_draw_pixel, &target);
 }

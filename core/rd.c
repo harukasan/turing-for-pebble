@@ -211,7 +211,7 @@ static const uint16_t ROOT_TABLE[1 << ROOT_INDEX_BITS] = {
  *   [residual rows: SPECIES_COUNT x width int32]
  *   [output row, RD_ROW_BYTES][display lookup table, LUT_BYTES]
  *   [value lookup table, LUT_BYTES, packed modes only]
- *   [column index and weight tables, 2 x RD_DISPLAY_WIDTH]
+ *   [column index, weight, and right index tables, 3 x RD_DISPLAY_WIDTH]
  *   [interpolation scratch row: width uint16]
  *   [mask levels, one byte per cell, unless MASK_SUPPORTED is 0]
  *
@@ -311,7 +311,7 @@ size_t rd_memory(int mode, int component) {
     return sizeof(State);
   case RD_COMPONENT_OUTPUT_ROW:
     return RD_ROW_BYTES + LUT_BYTES + (MODE_PLANES(mode) == 1 ? LUT_BYTES : 0) +
-           2 * RD_DISPLAY_WIDTH + (size_t)width * sizeof(uint16_t);
+           3 * RD_DISPLAY_WIDTH + (size_t)width * sizeof(uint16_t);
   case RD_COMPONENT_ALIGNMENT:
     return STATE_ALIGNMENT - 1;
   case RD_COMPONENT_MASK:
@@ -373,8 +373,13 @@ static uint8_t *column_weight(State *state) {
 }
 
 /* One grid row of interpolated Q15 B values. */
+/* The right grid column of every display column, periodic. */
+static uint8_t *column_right(State *state) {
+  return column_weight(state) + RD_DISPLAY_WIDTH;
+}
+
 static uint16_t *interpolation_row(State *state) {
-  return (uint16_t *)(column_weight(state) + RD_DISPLAY_WIDTH);
+  return (uint16_t *)(column_right(state) + RD_DISPLAY_WIDTH);
 }
 
 /* Mask levels, after the rendering area, one byte per cell in row order.
@@ -709,6 +714,8 @@ void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
     axis_sample(x, state->width, RD_DISPLAY_WIDTH, &index, &weight);
     column_index(state)[x] = (uint8_t)index;
     column_weight(state)[x] = (uint8_t)weight;
+    column_right(state)[x] =
+        (uint8_t)(index + 1 == state->width ? 0 : index + 1);
   }
   rd_params(state, DEFAULT_FEED, DEFAULT_KILL, RD_Q15_ONE, RD_Q15_ONE / 2,
             RD_Q15_ONE);
@@ -1326,7 +1333,12 @@ static void pixel_rgb(const State *state, int palette, int quantize,
             rgb);
 }
 
-/* The quantized color of a Q24 B value as an opaque ARGB8 byte. */
+/* The quantized color of a Q24 B value as an opaque ARGB8 byte. Kept out of
+ * line: the render loops call it only for the rare buckets that straddle a
+ * color step. */
+#if defined(__GNUC__)
+__attribute__((noinline))
+#endif
 static uint8_t value_argb8(int palette, int32_t value) {
   uint8_t rgb[3];
   value_rgb(palette, 1, value, rgb);
@@ -1342,6 +1354,9 @@ static uint8_t pixel_argb8(const State *state, int palette, unsigned code_b) {
 
 /* Fill a table of Q15 B values in LUT_BUCKET buckets: the color shared by
  * every value of a bucket, or 0 (never a valid pixel) where they differ. */
+#if defined(__GNUC__)
+__attribute__((noinline))
+#endif
 static void fill_value_table(uint8_t *table, int palette) {
   for (unsigned bucket = 0; bucket < LUT_ENTRIES; bucket++) {
     unsigned first = bucket << LUT_BUCKET_BITS;
@@ -1403,16 +1418,34 @@ static inline unsigned cell_b_q15(State *state, int index) {
   return plane(state, RD_SPECIES_B)[index];
 }
 
+/* Linear interpolation between two Q15 values with a weight in 256ths,
+ * rounded half up: (l (256 - w) + r w + 128) >> 8. That equals
+ * l + floor(((r - l) w + 128) / 256) with one multiply. The product is
+ * above -2^23, so adding 2^23 before the shift and taking 2^15 off after
+ * it gives the floor without shifting a negative value. */
+static inline unsigned lerp256(unsigned left, unsigned right, int weight) {
+  int t = ((int)right - (int)left) * weight + 128;
+  return (unsigned)((int)left + ((t + (1 << 23)) >> 8) - (1 << 15));
+}
+
 /* Interpolate the grid rows around display row y into the scratch row. */
 static const uint16_t *interpolate_rows(State *state, int y) {
   int width = state->width, grid_y, weight;
   axis_sample(y, state->height, RD_DISPLAY_HEIGHT, &grid_y, &weight);
   int next_y = grid_y + 1 == state->height ? 0 : grid_y + 1;
   uint16_t *row = interpolation_row(state);
+  if (!is_packed(state)) {
+    const uint16_t *top = plane(state, RD_SPECIES_B) + (size_t)grid_y * width;
+    const uint16_t *bottom =
+        plane(state, RD_SPECIES_B) + (size_t)next_y * width;
+    for (int x = 0; x < width; x++) {
+      row[x] = (uint16_t)lerp256(top[x], bottom[x], weight);
+    }
+    return row;
+  }
   for (int x = 0; x < width; x++) {
-    unsigned top = cell_b_q15(state, grid_y * width + x);
-    unsigned bottom = cell_b_q15(state, next_y * width + x);
-    row[x] = (uint16_t)((top * (256 - weight) + bottom * weight + 128) >> 8);
+    row[x] = (uint16_t)lerp256(cell_b_q15(state, grid_y * width + x),
+                               cell_b_q15(state, next_y * width + x), weight);
   }
   return row;
 }
@@ -1420,10 +1453,8 @@ static const uint16_t *interpolate_rows(State *state, int y) {
 /* Interpolated Q15 B value of display column x from the scratch row. */
 static inline unsigned interpolate_column(State *state, const uint16_t *row,
                                           int x) {
-  unsigned left = column_index(state)[x];
-  unsigned right = left + 1 == (unsigned)state->width ? 0 : left + 1;
-  unsigned weight = column_weight(state)[x];
-  return (row[left] * (256 - weight) + row[right] * weight + 128) >> 8;
+  return lerp256(row[column_index(state)[x]], row[column_right(state)[x]],
+                 column_weight(state)[x]);
 }
 
 /* Render display row y into the shared RGBA output row. Each display pixel
@@ -1459,58 +1490,111 @@ uint8_t *rd_row(void *handle, int y, int palette, int flags) {
   return output;
 }
 
-/* Render display row y as quantized ARGB8 bytes into the shared output row,
- * the value rd_row with RD_ROW_QUANTIZE and the same RD_ROW_BILINEAR flag
- * gives after packing each channel's top two bits. When a grid axis is the
- * display axis or half of it, nearest cells map to display pixels by a
- * shift. */
-uint8_t *rd_row_rgb2(void *handle, int y, int palette, int flags) {
-  State *state = checked_state(handle);
-  if (!state || y < 0 || y >= RD_DISPLAY_HEIGHT || palette < 0 ||
-      palette > RD_PALETTE_MONO ||
-      (flags & ~(RD_ROW_QUANTIZE | RD_ROW_BILINEAR))) {
-    return NULL;
-  }
-  uint8_t *output = output_row(state);
+/* Render display columns first to last of row y as quantized ARGB8 bytes
+ * into dst[first..last]. When a grid axis is the display axis or half of
+ * it, nearest cells map to display pixels by a shift. */
+#if defined(__GNUC__)
+/* Kept out of line: rd_row_rgb2 and rd_row_rgb2_into share one copy. */
+__attribute__((noinline))
+#endif
+static void render_rgb2(State *state, int y, int palette, int flags,
+                        uint8_t *dst, int first, int last) {
+#ifdef RD_RENDER_FLAGS
+  /* A watch build that fixes its flags keeps only that rendering. */
+  (void)flags;
+  flags = RD_RENDER_FLAGS;
+#endif
+  int width = state->width;
   if (flags & RD_ROW_BILINEAR) {
     ensure_value_table(state, palette);
     const uint8_t *table = value_table(state);
     const uint16_t *row = interpolate_rows(state, y);
-    for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
-      output[x] =
-          value_color(table, palette, interpolate_column(state, row, x));
+    if (width == 120 && first == 0 && last == RD_DISPLAY_WIDTH - 1) {
+      /* At 120 cells, display pixels 5k to 5k + 4 sample cells 3k - 1 to
+       * 3k + 3 with the weights 204, 102, 0, 153, and 51 (axis_sample),
+       * so the column tables reduce to constants. */
+      unsigned previous = row[119];
+      for (int k = 0; k < 40; k++) {
+        const uint16_t *cells = row + 3 * k;
+        unsigned c0 = cells[0], c1 = cells[1], c2 = cells[2];
+        unsigned c3 = k == 39 ? row[0] : cells[3];
+        uint8_t *out = dst + 5 * k;
+        out[0] = value_color(table, palette, lerp256(previous, c0, 204));
+        out[1] = value_color(table, palette, lerp256(c0, c1, 102));
+        out[2] = value_color(table, palette, c1);
+        out[3] = value_color(table, palette, lerp256(c1, c2, 153));
+        out[4] = value_color(table, palette, lerp256(c2, c3, 51));
+        previous = c2;
+      }
+      return;
     }
-    return output;
+    const uint8_t *left = column_index(state), *right = column_right(state);
+    const uint8_t *weight = column_weight(state);
+    for (int x = first; x <= last; x++) {
+      dst[x] = value_color(table, palette,
+                           lerp256(row[left[x]], row[right[x]], weight[x]));
+    }
+    return;
   }
   ensure_lookup_table(state, palette);
   const uint8_t *table = lookup_table(state);
-  int width = state->width;
   if (width != RD_DISPLAY_WIDTH && width != RD_DISPLAY_WIDTH / 2) {
     int grid_y = y * state->height / RD_DISPLAY_HEIGHT;
-    for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+    for (int x = first; x <= last; x++) {
       unsigned code_a, code_b;
       load_codes(state, grid_y * width + x * width / RD_DISPLAY_WIDTH, &code_a,
                  &code_b);
       uint8_t value =
           is_packed(state) ? table[code_b] : table[code_b >> LUT_BUCKET_BITS];
-      output[x] = value ? value : pixel_argb8(state, palette, code_b);
+      dst[x] = value ? value : pixel_argb8(state, palette, code_b);
     }
-    return output;
+    return;
   }
   int shift = width == RD_DISPLAY_WIDTH ? 0 : 1;
   int grid_y = y >> shift;
   if (is_packed(state)) {
     const uint16_t *cells = plane(state, 0) + (size_t)grid_y * width;
-    for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
-      output[x] = table[cells[x >> shift] & B_CODE_MAX];
+    for (int x = first; x <= last; x++) {
+      dst[x] = table[cells[x >> shift] & B_CODE_MAX];
     }
   } else {
     const uint16_t *cells = plane(state, RD_SPECIES_B) + (size_t)grid_y * width;
-    for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+    for (int x = first; x <= last; x++) {
       unsigned code = cells[x >> shift];
       uint8_t value = table[code >> LUT_BUCKET_BITS];
-      output[x] = value ? value : pixel_argb8(state, palette, code);
+      dst[x] = value ? value : pixel_argb8(state, palette, code);
     }
   }
+}
+
+static int rgb2_arguments_valid(State *state, int y, int palette, int flags) {
+  return state && y >= 0 && y < RD_DISPLAY_HEIGHT && palette >= 0 &&
+         palette <= RD_PALETTE_MONO &&
+         !(flags & ~(RD_ROW_QUANTIZE | RD_ROW_BILINEAR));
+}
+
+/* Render display row y as quantized ARGB8 bytes into the shared output row,
+ * the value rd_row with RD_ROW_QUANTIZE and the same RD_ROW_BILINEAR flag
+ * gives after packing each channel's top two bits. */
+uint8_t *rd_row_rgb2(void *handle, int y, int palette, int flags) {
+  State *state = checked_state(handle);
+  if (!rgb2_arguments_valid(state, y, palette, flags)) {
+    return NULL;
+  }
+  uint8_t *output = output_row(state);
+  render_rgb2(state, y, palette, flags, output, 0, RD_DISPLAY_WIDTH - 1);
   return output;
+}
+
+/* The same pixels written straight into a caller row, columns first to
+ * last, for example a framebuffer row. */
+int rd_row_rgb2_into(void *handle, int y, int palette, int flags, uint8_t *dst,
+                     int first, int last) {
+  State *state = checked_state(handle);
+  if (!rgb2_arguments_valid(state, y, palette, flags) || !dst || first < 0 ||
+      last >= RD_DISPLAY_WIDTH || first > last) {
+    return -1;
+  }
+  render_rgb2(state, y, palette, flags, dst, first, last);
+  return 0;
 }

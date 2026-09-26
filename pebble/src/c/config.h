@@ -14,6 +14,15 @@
 #define RD_RENDER_FLAGS (RD_MODE >= 3 ? 2 : 0)
 #endif
 #define RD_CLOCK 1
+/* Diagnostic logs (startup summary, progress): off in production, on with
+ * RD_BUILD_LOG=1, RD_BUILD_PROFILE=1, or an RD_BENCH build. */
+#ifndef RD_LOG
+#if defined(RD_PROFILE) || defined(RD_BENCH)
+#define RD_LOG 1
+#else
+#define RD_LOG 0
+#endif
+#endif
 /* Steps run at startup before the face settles to minute updates. */
 #ifndef RD_STARTUP_STEPS
 #define RD_STARTUP_STEPS 1250

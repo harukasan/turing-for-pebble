@@ -62,26 +62,27 @@ The initial equilibrium is A=1 and B=0. A 32-bit LCG places 24 disks in a common
 
 All functions are declared in `core/rd.h`.
 
-| Function                                   | Contract                                                                               |
-| ------------------------------------------ | -------------------------------------------------------------------------------------- |
-| `rd_bytes(mode)`                           | Caller allocation size including alignment, zero for unsupported mode                  |
-| `rd_memory(mode, component)`               | `RD_COMPONENT_*`: 0 fields, 1 row buffers, 2 control, 3 rendering, 4 alignment, 5 mask |
-| `rd_row_rgb2(state, y, palette, flags)`    | Shared 200-byte opaque ARGB8 row, the quantized `rd_row` colors at 2 bits per channel  |
-| `rd_init(memory, bytes, mode, seed)`       | Initialize and seed, returning aligned state or null                                   |
-| `rd_params(state, feed, kill, da, db, dt)` | Integer Q15 coefficients, each in [0,32768]                                            |
-| `rd_seed(state, x, y, radius)`             | Display coordinates x∈[0,199], y∈[0,227], radius∈[1,100]                               |
-| `rd_step(state, count)`                    | Advance count∈[0,1000000] synchronously                                                |
-| `rd_get(state, x, y, species)`             | Grid coordinates, species 0=A or 1=B, return Q24 (`RD_VALUE_ONE` is 1) or −1           |
-| `rd_steps(state)`                          | Unsigned step counter                                                                  |
-| `rd_hash(state)`                           | FNV-1a over canonical little-endian stored 16-bit words, residual rows excluded        |
-| `rd_row(state, y, palette, flags)`         | Shared 800-byte RGBA output for display row y∈[0,227]                                  |
-| `rd_width(state)`, `rd_height(state)`      | Grid size, or −1                                                                       |
-| `rd_mask(state, mask)`                     | Derive the mask levels from a cell bitmap (NULL clears them) and set B to 0 under it   |
-| `rd_mask_level(state, x, y)`               | Mask level 0 to 5 of grid cell (x, y), −1 for invalid coordinates                      |
+| Function                                                       | Contract                                                                               |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `rd_bytes(mode)`                                               | Caller allocation size including alignment, zero for unsupported mode                  |
+| `rd_memory(mode, component)`                                   | `RD_COMPONENT_*`: 0 fields, 1 row buffers, 2 control, 3 rendering, 4 alignment, 5 mask |
+| `rd_row_rgb2(state, y, palette, flags)`                        | Shared 200-byte opaque ARGB8 row, the quantized `rd_row` colors at 2 bits per channel  |
+| `rd_init(memory, bytes, mode, seed)`                           | Initialize and seed, returning aligned state or null                                   |
+| `rd_params(state, feed, kill, da, db, dt)`                     | Integer Q15 coefficients, each in [0,32768]                                            |
+| `rd_seed(state, x, y, radius)`                                 | Display coordinates x∈[0,199], y∈[0,227], radius∈[1,100]                               |
+| `rd_step(state, count)`                                        | Advance count∈[0,1000000] synchronously                                                |
+| `rd_get(state, x, y, species)`                                 | Grid coordinates, species 0=A or 1=B, return Q24 (`RD_VALUE_ONE` is 1) or −1           |
+| `rd_steps(state)`                                              | Unsigned step counter                                                                  |
+| `rd_hash(state)`                                               | FNV-1a over canonical little-endian stored 16-bit words, residual rows excluded        |
+| `rd_row_rgb2_into(state, y, palette, flags, dst, first, last)` | The `rd_row_rgb2` bytes of columns first to last written into `dst`, 0 or −1           |
+| `rd_row(state, y, palette, flags)`                             | Shared 800-byte RGBA output for display row y∈[0,227]                                  |
+| `rd_width(state)`, `rd_height(state)`                          | Grid size, or −1                                                                       |
+| `rd_mask(state, mask)`                                         | Derive the mask levels from a cell bitmap (NULL clears them) and set B to 0 under it   |
+| `rd_mask_level(state, x, y)`                                   | Mask level 0 to 5 of grid cell (x, y), −1 for invalid coordinates                      |
 
 A mask has one bit per grid cell in rows of `(width + 7) / 8` bytes, cell x in bit x % 8 of byte x / 8.
 
-`core/clock_mask.c` builds the mask of the clock digits, shared by the watch and the Web. `cm_build(mask, width, height, font, hour, minute, year, month, day, halo)` draws HH:MM and YYYY.MM.DD with the glyphs of font set `font` (`CM_FONT_LECO` or `CM_FONT_BITHAM`) as the watch places them, each line centered by the sum of its advances. It accepts grid widths from 50 to 200 with `height = width × 228 / 200`. Each glyph pixel is widened by a square of `halo` display pixels (at most `CM_MAX_HALO`), clipped to the display, and every grid cell holding the center of such a pixel, `floor((2x + 1)·w / 400)`, is marked. That equals the earlier `x·w / 200` rule at widths 100 and 200. It returns −1 without writing for arguments out of range. `cm_bytes`, `cm_layout` (font keys and text boxes), and `cm_font_available` complete it. The glyph tables in `core/clock_glyphs.h` are generated. A build that defines `RD_FONT` compiles only that set.
+`core/clock_mask.c` builds the mask of the clock digits, shared by the watch and the Web. `cm_build(mask, width, height, font, hour, minute, year, month, day, halo)` draws HH:MM and YYYY.MM.DD with the glyphs of font set `font` (`CM_FONT_LECO` or `CM_FONT_BITHAM`) as the watch places them, each line centered by the sum of its advances. It accepts grid widths from 50 to 200 with `height = width × 228 / 200`. Each glyph pixel is widened by a square of `halo` display pixels (at most `CM_MAX_HALO`), clipped to the display, and every grid cell holding the center of such a pixel, `floor((2x + 1)·w / 400)`, is marked. That equals the earlier `x·w / 200` rule at widths 100 and 200. It returns −1 without writing for arguments out of range. `cm_draw(row, context, color, font, hour, minute, year, month, day)` sets the same glyph pixels in a display through a row callback, which the watch uses to draw its clock text. `cm_bytes`, `cm_layout` (font keys and text boxes), and `cm_font_available` complete it. The glyph tables in `core/clock_glyphs.h` are generated. A build that defines `RD_FONT` compiles only that set.
 
 Rendering flags are `RD_ROW_QUANTIZE` (1, round each channel to the RGB2 levels, implied by `rd_row_rgb2`) and `RD_ROW_BILINEAR` (2). Without `RD_ROW_BILINEAR`, each display pixel shows the grid cell that covers it, exactly as before the flag existed, which `tests/core.c` checks against recorded hashes. With it, B is interpolated at the pixel center before coloring. Display pixel x lies at grid position u = ((2x + 1)·w − 200) / 400. With q = floor(256u), the left cell is floor(q / 256) modulo w, periodic like the field, and the right cell gets the weight q mod 256. Rows use the same rule with h and 228. The two grid rows are first lerped vertically in Q15 with rounding half up, then each pixel lerps horizontally the same way. The result is colored through a 513-entry table of 64-value Q15 buckets, with the exact color computed for the few buckets that straddle a color step. Because interpolation happens before the RGB2 quantization, the color steps that outline the stripes fall at display-pixel positions between cells, so a grid that is not dot-by-dot shows smooth stripe edges instead of uneven 1- and 2-pixel blocks.
 
@@ -101,6 +102,7 @@ These choices change no result. `tests/golden-hashes.txt` records the field hash
 - A B rounded to Q24 is at most 1.0, so the reaction's second product is a single 32 × 32 → 64 bit multiply.
 - The nearest Q15 code, halfway upward, is computed directly as `(value + 256) >> 9` instead of from the floor code and a comparison.
 - The Q15 modes step on the codes themselves (`step_codes`). The stored rows below the row being written are still old and are read in place, only the old row being rewritten is copied as 16-bit codes, and the Laplacian is summed on the codes and scaled to Q24 before the same rounding. The packed modes keep the decoded-row loop.
+- The interpolated renderer takes its column tables (left and right columns, weights) and the value table once per row, and lerps as `l + floor(((r − l)·w + 128) / 256)`, which equals the two-weight form with one multiply. `rd_row_rgb2_into` writes a row straight into a caller buffer such as a framebuffer row.
 - A Q15 rounding error lies in [−256, 255], so its right, lower-left, and lower shares come from a 512-entry table (`Q15_SHARES`, 2 KB) instead of three divisions.
 - `core/rd_bench.c` times the phases of a step on the watch (`RD_BUILD_DEFINES=RD_BENCH`) and on the host (`tests/bench.c`). Only the watch numbers decide, because the host ranks the phases differently.
 

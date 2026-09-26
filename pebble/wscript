@@ -48,6 +48,9 @@ def build(ctx):
         # RD_BUILD_DEFINES adds space-separated defines for study builds,
         # for example RD_MASK_PACKED3 or RD_STARTUP_STEPS=1000.
         cflags += ['-D' + d for d in os.environ.get('RD_BUILD_DEFINES', '').split()]
+        # RD_BUILD_LOG=1 keeps the diagnostic logs of a measurement build.
+        if os.environ.get('RD_BUILD_LOG') == '1':
+            cflags.append('-DRD_LOG=1')
         if os.environ.get('RD_BUILD_PROFILE') == '1':
             cflags.append('-DRD_PROFILE')
         ctx.pbl_build(source=ctx.path.ant_glob('src/c/**/*.c'), target=app_elf, bin_type='app', cflags=cflags)

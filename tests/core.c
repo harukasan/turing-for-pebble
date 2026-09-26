@@ -114,6 +114,26 @@ static void check_codes(void) {
       assert(round_shift(value, bits) == expected);
     }
   }
+  /* The constants of the 120-cell render loop are the axis samples. */
+  for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+    const int offsets[5] = {-1, 0, 1, 1, 2},
+              weights[5] = {204, 102, 0, 153, 51};
+    int index, weight;
+    axis_sample(x, 120, RD_DISPLAY_WIDTH, &index, &weight);
+    assert(index == (3 * (x / 5) + offsets[x % 5] + 120) % 120);
+    assert(weight == weights[x % 5]);
+  }
+  /* The one-multiply lerp equals the two-weight form for Q15 values. */
+  for (unsigned left = 0; left <= Q15_CODE_MAX; left += 257) {
+    for (unsigned right = 0; right <= Q15_CODE_MAX; right += 263) {
+      for (int weight = 0; weight < 256; weight++) {
+        assert(lerp256(left, right, weight) ==
+               (left * (256 - weight) + right * weight + 128) >> 8);
+      }
+    }
+  }
+  assert(lerp256(0, Q15_CODE_MAX, 255) == (Q15_CODE_MAX * 255 + 128) >> 8);
+  assert(lerp256(Q15_CODE_MAX, 0, 255) == (Q15_CODE_MAX + 128) >> 8);
   /* The unit dt shortcut is exact for both signs. */
   for (int64_t rate = -3000000; rate <= 3000000; rate += 7919) {
     assert(round_shift(rate * RD_Q15_ONE, RATE_SHIFT) ==
@@ -385,6 +405,25 @@ static void check_rgb2(State *state) {
              value_argb8(palette, decode_q15(value)));
     }
   }
+  /* rd_row_rgb2_into writes the same bytes into a caller row, only in
+   * the requested columns. */
+  uint8_t into[RD_DISPLAY_WIDTH + 2];
+  for (int flags = 0; flags <= RD_ROW_BILINEAR; flags += RD_ROW_BILINEAR) {
+    for (int y = 0; y < RD_DISPLAY_HEIGHT; y += 37) {
+      memcpy(copy, rd_row_rgb2(state, y, RD_PALETTE_CYAN, flags), sizeof copy);
+      memset(into, 0x5a, sizeof into);
+      assert(rd_row_rgb2_into(state, y, RD_PALETTE_CYAN, flags, into + 1, 3,
+                              150) == 0);
+      for (int x = -1; x <= RD_DISPLAY_WIDTH; x++) {
+        assert(into[x + 1] == (x >= 3 && x <= 150 ? copy[x] : 0x5a));
+      }
+    }
+  }
+  assert(rd_row_rgb2_into(state, 0, 0, 0, into, 5, 4) == -1);
+  assert(rd_row_rgb2_into(state, 0, 0, 0, into, -1, 4) == -1);
+  assert(rd_row_rgb2_into(state, 0, 0, 0, into, 0, RD_DISPLAY_WIDTH) == -1);
+  assert(rd_row_rgb2_into(state, 0, 0, 0, NULL, 0, 4) == -1);
+  assert(rd_row_rgb2_into(state, RD_DISPLAY_HEIGHT, 0, 0, into, 0, 4) == -1);
   /* Invalid arguments return NULL without building a table. */
   assert(!rd_row_rgb2(state, RD_DISPLAY_HEIGHT, 0, 0));
   assert(!rd_row_rgb2(state, 0, RD_PALETTE_MONO + 1, 0));
@@ -530,6 +569,11 @@ static void check_encode_masked(void) {
   assert(shares.carry == 0 && shares.pending == 0 && shares.wrap == 3);
 }
 
+/* Row callback of cm_draw over a 200 x 228 byte screen. */
+static uint8_t *test_row(void *context, int y) {
+  return (uint8_t *)context + y * RD_DISPLAY_WIDTH;
+}
+
 /* Clock masks: sizes, argument checks, and the pixel count of the LECO
  * clock verified against the emulator. */
 static void check_clock_mask(void) {
@@ -571,6 +615,25 @@ static void check_clock_mask(void) {
     count += __builtin_popcount(mask[i]);
   }
   assert(count == 2427);
+  /* cm_draw sets exactly the glyph pixels: the cells of the 200-wide mask
+   * at halo 0, for both fonts. */
+  for (int font = 0; font < CM_FONT_COUNT; font++) {
+    static uint8_t screen[RD_DISPLAY_HEIGHT][RD_DISPLAY_WIDTH];
+    memset(screen, 0, sizeof screen);
+    assert(cm_draw(test_row, screen, 0xff, font, 14, 50, 2026, 9, 24) == 0);
+    assert(cm_build(mask, 200, 228, font, 14, 50, 2026, 9, 24, 0) == 0);
+    int drawn = 0;
+    for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+      for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+        int bit = mask[y * 25 + x / 8] >> (x % 8) & 1;
+        assert((screen[y][x] == 0xff) == bit);
+        drawn += bit;
+      }
+    }
+    assert(font != CM_FONT_LECO || drawn == 2427);
+  }
+  assert(cm_draw(NULL, NULL, 0xff, 0, 14, 50, 2026, 9, 24) == -1);
+  assert(cm_draw(test_row, NULL, 0xff, 0, 24, 50, 2026, 9, 24) == -1);
 }
 
 int main(int argc, char **argv) {
