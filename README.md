@@ -2,6 +2,8 @@
 
 A local Gray–Scott pattern explorer and Emery watchface sharing one fixed-point C core.
 
+Web demo: <https://harukasan.github.io/turing-for-pebble/>
+
 ```sh
 mise trust
 mise install

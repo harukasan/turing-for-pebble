@@ -1,6 +1,6 @@
 # Embed only the preview
 
-`TuringPlayer` renders the watchface preview into a Canvas without the React demo, controls, or Panda CSS. It is the existing integration point for another browser page. The repository does not provide a published package or a preview-only iframe page, so the host site must bundle the TypeScript source and serve the runtime assets itself. The Web demo remains local only.
+`TuringPlayer` renders the watchface preview into a Canvas without the React demo, controls, or Panda CSS. It is the existing integration point for another browser page. The repository does not provide a published package or a preview-only iframe page, so the host site must bundle the TypeScript source and serve the runtime assets itself. The demo published on GitHub Pages is the full standalone page, not an embeddable preview.
 
 ## Add the source and assets to the host site
 

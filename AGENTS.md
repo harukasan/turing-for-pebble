@@ -6,7 +6,7 @@ This repository is a local Gray–Scott reaction-diffusion experiment for Pebble
 
 - Do not push commits or create, edit, comment on, or merge pull requests without the user's explicit approval for that specific action. Local commits are allowed when the user requests them. Do not add a `Codex-Session:` commit trailer. Keep `Co-Authored-By` only when co-authoring a commit.
 - Do not use semicolons in English or Japanese prose. Semicolons in code are fine.
-- Preserve the local-only scope. Do not deploy the Web demo unless the user explicitly changes that scope.
+- The only deployment is the standalone Web demo on GitHub Pages, built by `.github/workflows/pages.yml` from `main`. Do not add other deployments unless the user explicitly asks. The workflow does not run Emscripten, so commit the rebuilt `public/wasm/rd.wasm` with any core change that reaches `main`.
 - Before changing generated files, identify their source and regeneration command. Keep reports tied to the exact build and observation that produced them.
 - Do not treat emulator timing or heap observations as physical-device acceptance evidence. The measured acceptance status is in [docs/validation.md](docs/validation.md).
 
@@ -24,6 +24,7 @@ This repository is a local Gray–Scott reaction-diffusion experiment for Pebble
 | `tests/`, `scripts/`                           | Core, adapter, numerical comparison, and build checks     |
 | `public/reports/`                              | Generated images and build or emulator measurements       |
 | `docs/`                                        | Detailed design, setup, validation, and numerical results |
+| `.github/workflows/pages.yml`                  | GitHub Pages build and deployment of the Web demo         |
 
 The Web offers 200 × 228 packed 16-bit Wasm (A 7-bit, B 9-bit), 120 × 136 Q15 Wasm (mode 3, the watch build, shown with interpolated rendering), 100 × 114 Q15 Wasm, and Float32 at each of these grid sizes. Mode 2 in the C core is a diagnostic 100 × 114 configuration with the packed cells of mode 0. Mode switching resets to the same seed. The Float32 implementation is a reference, not a Pebble build. The `細線` preset is intended to expose narrow-band differences. See [docs/behavior.md](docs/behavior.md) and [docs/float-precision.md](docs/float-precision.md).
 
