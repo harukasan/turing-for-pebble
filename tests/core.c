@@ -451,7 +451,7 @@ static unsigned interpolated_reference(State *state, int x, int y) {
  * same byte. */
 static void check_rgb2(State *state) {
   uint8_t copy[RD_DISPLAY_WIDTH];
-  for (int palette = 0; palette <= RD_PALETTE_MONO; palette++) {
+  for (int palette = 0; palette < RD_PALETTE_COUNT; palette++) {
     for (int sampling = 0; sampling <= RD_ROW_BILINEAR;
          sampling += RD_ROW_BILINEAR) {
       for (int y = 0; y < RD_DISPLAY_HEIGHT; y += y < 8 ? 1 : 7) {
@@ -468,7 +468,7 @@ static void check_rgb2(State *state) {
           assert((copy[x] & ARGB8_OPAQUE) == ARGB8_OPAQUE);
           if (sampling) {
             unsigned value = interpolated_reference(state, x, y);
-            assert(copy[x] == value_argb8(palette, decode_q15(value)));
+            assert(copy[x] == value_argb8(state, palette, decode_q15(value)));
           }
         }
       }
@@ -484,8 +484,8 @@ static void check_rgb2(State *state) {
     }
     ensure_value_table(state, palette);
     for (unsigned value = 0; value <= Q15_CODE_MAX; value++) {
-      assert(value_color(value_table(state), palette, value) ==
-             value_argb8(palette, decode_q15(value)));
+      assert(value_color(state, value_table(state), palette, value) ==
+             value_argb8(state, palette, decode_q15(value)));
     }
   }
   /* rd_row_rgb2_into writes the same bytes into a caller row, only in
@@ -509,8 +509,93 @@ static void check_rgb2(State *state) {
   assert(rd_row_rgb2_into(state, RD_DISPLAY_HEIGHT, 0, 0, into, 0, 4) == -1);
   /* Invalid arguments return NULL without building a table. */
   assert(!rd_row_rgb2(state, RD_DISPLAY_HEIGHT, 0, 0));
-  assert(!rd_row_rgb2(state, 0, RD_PALETTE_MONO + 1, 0));
+  assert(!rd_row_rgb2(state, 0, RD_PALETTE_COUNT, 0));
+  assert(!rd_row(state, 0, RD_PALETTE_COUNT, 0) && !rd_row(state, 0, -1, 0));
   assert(!rd_row_rgb2(state, 0, 0, 4) && !rd_row(state, 0, 0, 4));
+}
+
+/* Every channel of every palette with stops is the nearest integer to the
+ * exact interpolation between its stops, halves rounded up, over the Q15
+ * codes, whose intensity is three times the code. */
+static void check_stop_interpolation(State *state) {
+  assert(sizeof PALETTE_STOP_COUNT == RD_PALETTE_CUSTOM);
+  for (int palette = 0; palette < RD_PALETTE_CUSTOM; palette++) {
+    int count = PALETTE_STOP_COUNT[palette];
+    if (palette == RD_PALETTE_MONO) {
+      assert(count == 0);
+      continue;
+    }
+    assert(count >= 2 && count <= RD_PALETTE_MAX_STOPS);
+    for (unsigned code = 0; code * 3 <= RD_Q15_ONE + 2; code++) {
+      int intensity = code * 3 > RD_Q15_ONE ? RD_Q15_ONE : (int)code * 3;
+      long position = (long)intensity * (count - 1);
+      int segment =
+          intensity == RD_Q15_ONE ? count - 2 : (int)(position / RD_Q15_ONE);
+      long fraction = position - (long)segment * RD_Q15_ONE;
+      uint8_t rgb[3];
+      value_rgb(state, palette, 0, decode_q15(code), rgb);
+      for (int c = 0; c < 3; c++) {
+        long low = PALETTE_STOPS[palette][segment][c];
+        long high = PALETTE_STOPS[palette][segment + 1][c];
+        long exact = low * RD_Q15_ONE + (high - low) * fraction;
+        long color = (long)rgb[c] * RD_Q15_ONE;
+        assert(exact >= color - RD_Q15_ONE / 2 &&
+               exact < color + RD_Q15_ONE / 2);
+      }
+    }
+  }
+}
+
+static uint8_t palette_rgb2[2][RD_DISPLAY_HEIGHT][RD_DISPLAY_WIDTH];
+static uint8_t palette_rgba[2][RD_DISPLAY_HEIGHT][RD_ROW_BYTES];
+
+/* Two palettes draw the same rows, quantized, with both sampling flags.
+ * The first is drawn first, so a stale lookup table for it would show. */
+static void check_same_palette(State *state, int first, int second) {
+  for (int flags = 0; flags <= RD_ROW_BILINEAR; flags += RD_ROW_BILINEAR) {
+    int palettes[2] = {first, second};
+    for (int k = 0; k < 2; k++) {
+      for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+        memcpy(palette_rgb2[k][y], rd_row_rgb2(state, y, palettes[k], flags),
+               RD_DISPLAY_WIDTH);
+        memcpy(palette_rgba[k][y],
+               rd_row(state, y, palettes[k], flags | RD_ROW_QUANTIZE),
+               RD_ROW_BYTES);
+      }
+    }
+    assert(!memcmp(palette_rgb2[0], palette_rgb2[1], sizeof palette_rgb2[0]));
+    assert(!memcmp(palette_rgba[0], palette_rgba[1], sizeof palette_rgba[0]));
+  }
+}
+
+/* The custom palette starts as lime, takes the stops rd_palette sets, drops
+ * lookup tables built for the old stops, rejects invalid stops without
+ * change, and belongs to its handle. Checked in a packed and a Q15 mode,
+ * which keep separate lookup tables. */
+static void check_custom_palette(void) {
+  for (int mode = 0; mode < MODE_COUNT; mode += 3) {
+    void *memory = malloc(rd_bytes(mode));
+    void *other_memory = malloc(rd_bytes(mode));
+    State *state = rd_init(memory, rd_bytes(mode), mode, 42);
+    State *other = rd_init(other_memory, rd_bytes(mode), mode, 42);
+    check_stop_interpolation(state);
+    rd_step(state, 300);
+    rd_step(other, 300);
+    check_same_palette(state, RD_PALETTE_LIME, RD_PALETTE_CUSTOM);
+    const uint8_t *viridis = PALETTE_STOPS[RD_PALETTE_VIRIDIS][0];
+    assert(rd_palette(NULL, viridis, 8) == -1);
+    assert(rd_palette(state, NULL, 8) == -1);
+    assert(rd_palette(state, viridis, 1) == -1);
+    assert(rd_palette(state, viridis, RD_PALETTE_MAX_STOPS + 1) == -1);
+    check_same_palette(state, RD_PALETTE_CUSTOM, RD_PALETTE_LIME);
+    assert(rd_palette(state, viridis, 8) == 0);
+    check_same_palette(state, RD_PALETTE_CUSTOM, RD_PALETTE_VIRIDIS);
+    assert(rd_palette(state, PALETTE_STOPS[RD_PALETTE_CYAN][0], 2) == 0);
+    check_same_palette(state, RD_PALETTE_CUSTOM, RD_PALETTE_CYAN);
+    check_same_palette(other, RD_PALETTE_CUSTOM, RD_PALETTE_LIME);
+    free(memory);
+    free(other_memory);
+  }
 }
 
 /* The nearest output of every rendering call for modes 0-2, hashed, equals
@@ -775,6 +860,7 @@ int main(int argc, char **argv) {
   check_encode_masked();
   check_clock_mask();
   check_nearest_unchanged();
+  check_custom_palette();
   for (int mode = 0; mode < MODE_COUNT; mode++) {
     size_t size = rd_bytes(mode);
     uint8_t *memory = malloc(size + 16);

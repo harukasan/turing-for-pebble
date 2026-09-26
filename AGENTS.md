@@ -19,6 +19,8 @@ This repository is a local Gray–Scott reaction-diffusion experiment for Pebble
 | `public/wasm/rd.wasm`                          | Generated WebAssembly binary from the shared core         |
 | `lib/wasm-simulation.ts`                       | Web adapter for the C core                                |
 | `lib/simulation.ts`, `lib/float-simulation.ts` | Float32 reference and Web comparison adapter              |
+| `lib/palettes.ts`, `core/palettes.h`           | Display palettes and the generated core table             |
+| `licenses/`                                    | Origins and licenses of third-party palette data          |
 | `src/core/`                                    | Reusable Canvas, Wasm, and playback API                   |
 | `src/demo/`                                    | React demo UI, Panda styles, and downloads                |
 | `tests/`, `scripts/`                           | Core, adapter, numerical comparison, and build checks     |

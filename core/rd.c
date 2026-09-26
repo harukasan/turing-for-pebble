@@ -23,6 +23,8 @@
 #include "rd.h"
 #include <string.h>
 
+#include "palettes.h"
+
 /* Modes: 0 200 x 228 packed, 1 100 x 114 Q15, 2 100 x 114 packed, and
  * 3 120 x 136 Q15, the watch grid shown with interpolation. 16-bit planes
  * per cell: one packed word, or one Q15 word per species. */
@@ -155,10 +157,10 @@ static const uint8_t MODE_WIDTH[MODE_COUNT] = {200, 100, 100, 120};
 #define ARGB8_OPAQUE 0xc0
 #define ARGB8_CHANNEL_SHIFT 6
 
-/* Palette endpoints, RGB per palette, at intensity 0 and intensity 1.0. */
-static const int PALETTE_LOW[3][3] = {{0, 30, 18}, {0, 0, 45}, {0, 0, 0}};
-static const int PALETTE_HIGH[3][3] = {
-    {210, 255, 85}, {85, 255, 255}, {255, 255, 255}};
+/* Channel differences between palette stops are at least -255, so adding
+ * PALETTE_FLOOR_BIAS << 15 keeps the interpolation numerator non-negative
+ * and its shift a floor. */
+#define PALETTE_FLOOR_BIAS 255
 
 /* decode_a: round(code * 2^24 / 127) for every 7-bit code. */
 static const int32_t A_TABLE[A_CODE_MAX + 1] = {
@@ -228,6 +230,9 @@ typedef struct {
   /* Palette the display lookup table was built for, or NO_PALETTE, and
    * the same for the value table of the packed modes. */
   int lut_palette, value_lut_palette;
+  /* Stops of RD_PALETTE_CUSTOM, set by rd_palette. */
+  uint8_t custom_stops[RD_PALETTE_MAX_STOPS][3];
+  uint8_t custom_count;
   /* Rows [mask_first, mask_end) hold every cell whose mask level is below
    * RD_MASK_RAMP; empty if equal. */
   int mask_first, mask_end;
@@ -636,6 +641,22 @@ int rd_params(void *handle, int feed, int kill, int da, int db, int dt) {
   return 0;
 }
 
+int rd_palette(void *handle, const uint8_t *rgb, int count) {
+  State *state = checked_state(handle);
+  if (!state || !rgb || count < 2 || count > RD_PALETTE_MAX_STOPS) {
+    return -1;
+  }
+  memcpy(state->custom_stops, rgb, (size_t)count * 3);
+  state->custom_count = (uint8_t)count;
+  if (state->lut_palette == RD_PALETTE_CUSTOM) {
+    state->lut_palette = NO_PALETTE;
+  }
+  if (state->value_lut_palette == RD_PALETTE_CUSTOM) {
+    state->value_lut_palette = NO_PALETTE;
+  }
+  return 0;
+}
+
 /* Shortest signed distance along one periodic display axis. */
 static int wrap_delta(int delta, int size) {
   if (delta > size / 2) {
@@ -718,6 +739,9 @@ void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
   state->height = grid_height(state->width);
   state->packed = MODE_PLANES(mode) == 1;
   state->lut_palette = state->value_lut_palette = NO_PALETTE;
+  state->custom_count = PALETTE_STOP_COUNT[RD_PALETTE_LIME];
+  memcpy(state->custom_stops, PALETTE_STOPS[RD_PALETTE_LIME],
+         sizeof state->custom_stops);
   for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
     int index, weight;
     axis_sample(x, state->width, RD_DISPLAY_WIDTH, &index, &weight);
@@ -1393,23 +1417,43 @@ uint32_t rd_hash(void *handle) {
 }
 
 /* The three color channels of a Q24 B value: intensity is B times
- * DISPLAY_GAIN clamped to 1.0, mapped between the palette endpoints, or a
- * monochrome threshold, and optionally quantized to RGB2 levels. */
-static void value_rgb(int palette, int quantize, int32_t value,
-                      uint8_t rgb[3]) {
+ * DISPLAY_GAIN clamped to 1.0, interpolated between the equally spaced
+ * stops of the palette, or a monochrome threshold, and optionally
+ * quantized to RGB2 levels. Each channel is the nearest integer to the
+ * exact interpolation, halves rounded up, so intensity 0 and 1.0 give the
+ * end stops. With two stops this is the former endpoint formula low +
+ * ((high - low) * intensity + 2^14) / 2^15. */
+static void value_rgb(const State *state, int palette, int quantize,
+                      int32_t value, uint8_t rgb[3]) {
   int intensity = (int)round_shift((int64_t)value * DISPLAY_GAIN, Q15_SHIFT);
   if (intensity > RD_Q15_ONE) {
     intensity = RD_Q15_ONE;
   }
+  if (palette == RD_PALETTE_MONO) {
+    uint8_t color =
+        intensity * 100 >= MONO_THRESHOLD_PERCENT * RD_Q15_ONE ? 255 : 0;
+    rgb[0] = rgb[1] = rgb[2] = color;
+    return;
+  }
+  int custom = palette == RD_PALETTE_CUSTOM;
+  const uint8_t (*stops)[3] =
+      custom ? state->custom_stops : PALETTE_STOPS[palette];
+  int count = custom ? state->custom_count : PALETTE_STOP_COUNT[palette];
+  /* The segment between two stops and the Q15 position inside it. */
+  int position = intensity * (count - 1);
+  int segment = position >> 15;
+  int fraction = position & (RD_Q15_ONE - 1);
+  if (segment == count - 1) {
+    segment--;
+    fraction = RD_Q15_ONE;
+  }
   for (int channel = 0; channel < 3; channel++) {
-    int color;
-    if (palette == RD_PALETTE_MONO) {
-      color = intensity * 100 >= MONO_THRESHOLD_PERCENT * RD_Q15_ONE ? 255 : 0;
-    } else {
-      int low = PALETTE_LOW[palette][channel];
-      int high = PALETTE_HIGH[palette][channel];
-      color = low + ((high - low) * intensity + RD_Q15_ONE / 2) / RD_Q15_ONE;
-    }
+    int low = stops[segment][channel];
+    int high = stops[segment + 1][channel];
+    int color = low - PALETTE_FLOOR_BIAS +
+                (((high - low) * fraction + RD_Q15_ONE / 2 +
+                  (PALETTE_FLOOR_BIAS << 15)) >>
+                 15);
     rgb[channel] =
         (uint8_t)(quantize ? (color + RGB2_STEP / 2) / RGB2_STEP * RGB2_STEP
                            : color);
@@ -1419,8 +1463,8 @@ static void value_rgb(int palette, int quantize, int32_t value,
 /* The colors of one B code. */
 static void pixel_rgb(const State *state, int palette, int quantize,
                       unsigned code_b, uint8_t rgb[3]) {
-  value_rgb(palette, quantize, decode(is_packed(state), RD_SPECIES_B, code_b),
-            rgb);
+  value_rgb(state, palette, quantize,
+            decode(is_packed(state), RD_SPECIES_B, code_b), rgb);
 }
 
 /* The quantized color of a Q24 B value as an opaque ARGB8 byte. Kept out of
@@ -1429,9 +1473,9 @@ static void pixel_rgb(const State *state, int palette, int quantize,
 #if defined(__GNUC__)
 __attribute__((noinline))
 #endif
-static uint8_t value_argb8(int palette, int32_t value) {
+static uint8_t value_argb8(const State *state, int palette, int32_t value) {
   uint8_t rgb[3];
-  value_rgb(palette, 1, value, rgb);
+  value_rgb(state, palette, 1, value, rgb);
   return (uint8_t)(ARGB8_OPAQUE | (rgb[0] >> ARGB8_CHANNEL_SHIFT) << 4 |
                    (rgb[1] >> ARGB8_CHANNEL_SHIFT) << 2 |
                    (rgb[2] >> ARGB8_CHANNEL_SHIFT));
@@ -1439,7 +1483,8 @@ static uint8_t value_argb8(int palette, int32_t value) {
 
 /* The quantized color of one B code as an opaque ARGB8 byte. */
 static uint8_t pixel_argb8(const State *state, int palette, unsigned code_b) {
-  return value_argb8(palette, decode(is_packed(state), RD_SPECIES_B, code_b));
+  return value_argb8(state, palette,
+                     decode(is_packed(state), RD_SPECIES_B, code_b));
 }
 
 /* Fill a table of Q15 B values in LUT_BUCKET buckets: the color shared by
@@ -1447,16 +1492,16 @@ static uint8_t pixel_argb8(const State *state, int palette, unsigned code_b) {
 #if defined(__GNUC__)
 __attribute__((noinline))
 #endif
-static void fill_value_table(uint8_t *table, int palette) {
+static void fill_value_table(const State *state, uint8_t *table, int palette) {
   for (unsigned bucket = 0; bucket < LUT_ENTRIES; bucket++) {
     unsigned first = bucket << LUT_BUCKET_BITS;
     unsigned last = first + LUT_BUCKET - 1;
     if (last > Q15_CODE_MAX) {
       last = Q15_CODE_MAX;
     }
-    uint8_t value = value_argb8(palette, decode_q15(first));
+    uint8_t value = value_argb8(state, palette, decode_q15(first));
     for (unsigned code = first + 1; code <= last; code++) {
-      if (value_argb8(palette, decode_q15(code)) != value) {
+      if (value_argb8(state, palette, decode_q15(code)) != value) {
         value = 0;
         break;
       }
@@ -1476,7 +1521,7 @@ static void ensure_lookup_table(State *state, int palette) {
       table[code] = pixel_argb8(state, palette, code);
     }
   } else {
-    fill_value_table(table, palette);
+    fill_value_table(state, table, palette);
   }
   state->lut_palette = palette;
 }
@@ -1486,16 +1531,16 @@ static void ensure_value_table(State *state, int palette) {
   if (!is_packed(state)) {
     ensure_lookup_table(state, palette);
   } else if (state->value_lut_palette != palette) {
-    fill_value_table(value_table(state), palette);
+    fill_value_table(state, value_table(state), palette);
     state->value_lut_palette = palette;
   }
 }
 
 /* The quantized color of a Q15 B value through the value table. */
-static inline uint8_t value_color(const uint8_t *table, int palette,
-                                  unsigned value) {
+static inline uint8_t value_color(const State *state, const uint8_t *table,
+                                  int palette, unsigned value) {
   uint8_t color = table[value >> LUT_BUCKET_BITS];
-  return color ? color : value_argb8(palette, decode_q15(value));
+  return color ? color : value_argb8(state, palette, decode_q15(value));
 }
 
 /* B of a grid cell as a Q15 value: the code itself in the Q15 modes, and
@@ -1553,7 +1598,7 @@ static inline unsigned interpolate_column(State *state, const uint16_t *row,
 uint8_t *rd_row(void *handle, int y, int palette, int flags) {
   State *state = checked_state(handle);
   if (!state || y < 0 || y >= RD_DISPLAY_HEIGHT || palette < 0 ||
-      palette > RD_PALETTE_MONO ||
+      palette >= RD_PALETTE_COUNT ||
       (flags & ~(RD_ROW_QUANTIZE | RD_ROW_BILINEAR))) {
     return NULL;
   }
@@ -1562,7 +1607,7 @@ uint8_t *rd_row(void *handle, int y, int palette, int flags) {
   if (flags & RD_ROW_BILINEAR) {
     const uint16_t *row = interpolate_rows(state, y);
     for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
-      value_rgb(palette, quantize,
+      value_rgb(state, palette, quantize,
                 decode_q15(interpolate_column(state, row, x)),
                 output + x * BYTES_PER_PIXEL);
       output[x * BYTES_PER_PIXEL + 3] = 255; /* opaque alpha */
@@ -1609,11 +1654,11 @@ static void render_rgb2(State *state, int y, int palette, int flags,
         unsigned c0 = cells[0], c1 = cells[1], c2 = cells[2];
         unsigned c3 = k == 39 ? row[0] : cells[3];
         uint8_t *out = dst + 5 * k;
-        out[0] = value_color(table, palette, lerp256(previous, c0, 204));
-        out[1] = value_color(table, palette, lerp256(c0, c1, 102));
-        out[2] = value_color(table, palette, c1);
-        out[3] = value_color(table, palette, lerp256(c1, c2, 153));
-        out[4] = value_color(table, palette, lerp256(c2, c3, 51));
+        out[0] = value_color(state, table, palette, lerp256(previous, c0, 204));
+        out[1] = value_color(state, table, palette, lerp256(c0, c1, 102));
+        out[2] = value_color(state, table, palette, c1);
+        out[3] = value_color(state, table, palette, lerp256(c1, c2, 153));
+        out[4] = value_color(state, table, palette, lerp256(c2, c3, 51));
         previous = c2;
       }
       return;
@@ -1621,7 +1666,7 @@ static void render_rgb2(State *state, int y, int palette, int flags,
     const uint8_t *left = column_index(state), *right = column_right(state);
     const uint8_t *weight = column_weight(state);
     for (int x = first; x <= last; x++) {
-      dst[x] = value_color(table, palette,
+      dst[x] = value_color(state, table, palette,
                            lerp256(row[left[x]], row[right[x]], weight[x]));
     }
     return;
@@ -1659,7 +1704,7 @@ static void render_rgb2(State *state, int y, int palette, int flags,
 
 static int rgb2_arguments_valid(State *state, int y, int palette, int flags) {
   return state && y >= 0 && y < RD_DISPLAY_HEIGHT && palette >= 0 &&
-         palette <= RD_PALETTE_MONO &&
+         palette < RD_PALETTE_COUNT &&
          !(flags & ~(RD_ROW_QUANTIZE | RD_ROW_BILINEAR));
 }
 

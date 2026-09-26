@@ -1,14 +1,6 @@
+import { floatColor, paletteIndex } from "./palettes.ts";
 import { Simulation, type Parameters } from "./simulation.ts";
 import { MASK_KILL, MASK_RAMP, maskLevels } from "./wasm-simulation.ts";
-
-const paletteLow = [
-  [0, 30, 18],
-  [0, 0, 45],
-];
-const paletteHigh = [
-  [210, 255, 85],
-  [85, 255, 255],
-];
 
 /** Float32 reference with the same display-coordinate seed layout as the C core. */
 export class FloatSimulation {
@@ -127,7 +119,7 @@ export class FloatSimulation {
     interpolate = false
   ) {
     const data = pixels.data;
-    const paletteIndex = palette === "green" ? 0 : 1;
+    const index = paletteIndex(palette);
     const { width, height } = this;
     const b = this.field.b;
     const sample = (p: number, n: number, size: number) => {
@@ -149,20 +141,10 @@ export class FloatSimulation {
           (b[gy * width + gx] * (1 - wx) + b[gy * width + gx1] * wx) *
             (1 - wy) +
           (b[gy1 * width + gx] * (1 - wx) + b[gy1 * width + gx1] * wx) * wy;
-        const intensity = Math.min(1, value * 3);
+        const rgb = floatColor(index, Math.min(1, value * 3));
         const offset = (y * 200 + x) * 4;
         for (let channel = 0; channel < 3; channel++) {
-          const color =
-            palette === "mono"
-              ? intensity >= 0.45
-                ? 255
-                : 0
-              : Math.round(
-                  paletteLow[paletteIndex][channel] +
-                    (paletteHigh[paletteIndex][channel] -
-                      paletteLow[paletteIndex][channel]) *
-                      intensity
-                );
+          const color = rgb[channel];
           data[offset + channel] = quantize
             ? Math.round(color / 85) * 85
             : color;

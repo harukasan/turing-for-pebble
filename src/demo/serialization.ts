@@ -1,6 +1,7 @@
 import type { Parameters } from "../../lib/simulation.ts";
 import { effective } from "../../lib/wasm-simulation.ts";
 import { fontIndex, type ClockFont } from "../../lib/clock-fonts.ts";
+import { paletteIndex } from "../../lib/palettes.ts";
 import {
   engineMode,
   engineWidth,
@@ -81,5 +82,5 @@ export function makeHeader(input: SettingsInput) {
     throw new Error("Float32 cannot produce Pebble config.h");
   const q = effective(input.params);
   const { engine, seed, palette, interpolate, clock, font, avoid } = input;
-  return `/* Generated configuration, core v4 */\n#ifndef RD_MODE\n#define RD_MODE ${engineMode(engine)}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === "green" ? 0 : palette === "blue" ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n#ifndef RD_STARTUP_MS\n#define RD_STARTUP_MS 30000\n#endif\n#define RD_STARTUP_STEPS_MAX 2500\n#ifndef RD_RENDER_FLAGS\n#define RD_RENDER_FLAGS ${interpolate ? 2 : 0}\n#endif\n#ifndef RD_FONT\n#define RD_FONT ${fontIndex(font)}\n#endif\n#ifndef RD_AVOID\n#define RD_AVOID ${Number(avoid)}\n#endif\n#define RD_HALO ${HALO}\n#define RD_MINUTE_STEPS (RD_AVOID ? ${DEVICE_MINUTE_STEPS} : ${DEVICE_MINUTE_STEPS_PLAIN})\n`;
+  return `/* Generated configuration, core v4 */\n#ifndef RD_MODE\n#define RD_MODE ${engineMode(engine)}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${paletteIndex(palette)}\n#define RD_CLOCK ${Number(clock)}\n#ifndef RD_STARTUP_MS\n#define RD_STARTUP_MS 30000\n#endif\n#define RD_STARTUP_STEPS_MAX 2500\n#ifndef RD_RENDER_FLAGS\n#define RD_RENDER_FLAGS ${interpolate ? 2 : 0}\n#endif\n#ifndef RD_FONT\n#define RD_FONT ${fontIndex(font)}\n#endif\n#ifndef RD_AVOID\n#define RD_AVOID ${Number(avoid)}\n#endif\n#define RD_HALO ${HALO}\n#define RD_MINUTE_STEPS (RD_AVOID ? ${DEVICE_MINUTE_STEPS} : ${DEVICE_MINUTE_STEPS_PLAIN})\n`;
 }
