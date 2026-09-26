@@ -5,7 +5,6 @@ import { PALETTE_COUNT } from "../../lib/palettes.ts";
 import { presets } from "../../lib/simulation.ts";
 import {
   DEFAULT_SETTINGS,
-  EMBEDDED_PLACEHOLDER,
   fromEmbedded,
   fromQuery,
   initialSettings,
@@ -80,7 +79,7 @@ test("embedded settings come first, then the query string, then the defaults", (
   const query = { ...DEFAULT_SETTINGS, palette: 5 };
   const search = `?${toQuery(query)}&return_to=x`;
   assert.deepEqual(initialSettings(toJson(embedded), search), embedded);
-  assert.deepEqual(initialSettings(EMBEDDED_PLACEHOLDER, search), query);
+  assert.deepEqual(initialSettings("__SETTINGS__", search), query);
   assert.deepEqual(initialSettings("{", search), query);
   assert.deepEqual(initialSettings(null, "?return_to=x"), DEFAULT_SETTINGS);
 });

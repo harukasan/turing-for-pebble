@@ -55,9 +55,6 @@ export const DEFAULT_SETTINGS: WatchSettings = {
   clock: 1,
 };
 
-/** The placeholder the phone replaces with the current settings. */
-export const EMBEDDED_PLACEHOLDER = "__SETTINGS__";
-
 export function validate(value: unknown): WatchSettings | null {
   if (!value || typeof value !== "object") return null;
   const settings = {} as WatchSettings;
@@ -93,13 +90,14 @@ export function fromEmbedded(text: string) {
   }
 }
 
-/** The settings embedded in the page by the phone, else those of the query
- * string of a hosted page, else the defaults. */
+/** The settings the phone embedded in the page, else those of the query
+ * string of a hosted page, else the defaults. The page's placeholder is not
+ * JSON, so a page without embedded settings falls through. The page keeps
+ * the placeholder text in its settings element only, where the phone
+ * replaces the first occurrence. */
 export function initialSettings(embedded: string | null, search: string) {
   return (
-    (embedded && embedded.trim() !== EMBEDDED_PLACEHOLDER
-      ? fromEmbedded(embedded)
-      : null) ??
+    (embedded ? fromEmbedded(embedded) : null) ??
     fromQuery(new URLSearchParams(search)) ?? { ...DEFAULT_SETTINGS }
   );
 }
