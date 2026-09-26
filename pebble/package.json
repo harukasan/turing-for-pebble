@@ -14,6 +14,22 @@
     "watchapp": {
       "watchface": true
     },
+    "capabilities": [
+      "configurable"
+    ],
+    "messageKeys": [
+      "FEED",
+      "KILL",
+      "DA",
+      "DB",
+      "DT",
+      "PALETTE",
+      "LOW",
+      "HIGH",
+      "FONT",
+      "AVOID",
+      "CLOCK"
+    ],
     "resources": {
       "media": []
     }

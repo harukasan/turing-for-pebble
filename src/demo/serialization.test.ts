@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   makeHeader,
@@ -39,17 +40,59 @@ test("settings keep the watch build identity and are not a field snapshot", () =
   });
 });
 
-test("config.h uses the watch mode, fixed-point parameters and clock options", () => {
-  const header = makeHeader(input);
-  assert.match(header, /#define RD_MODE 3\n/);
-  assert.match(header, /#define RD_SEED 42u\n/);
-  assert.match(header, /#define RD_FEED 950\n/);
-  assert.match(header, /#define RD_KILL 1868\n/);
-  assert.match(header, /#define RD_RENDER_FLAGS 2\n/);
-  assert.match(header, /#define RD_STARTUP_MS 30000\n/);
-  assert.match(header, /#define RD_STARTUP_STEPS_MAX 2500\n/);
-  assert.match(header, /#define RD_MINUTE_STEPS \(RD_AVOID \? 300 : 16\)\n/);
+/** The #define names of a header and the last value of each. */
+const defines = (text: string) =>
+  new Map(
+    [...text.matchAll(/^#define (\w+) (.*)$/gm)].map((m) => [m[1], m[2]])
+  );
+
+test("config.h defines what pebble/src/c/config.h defines, with its defaults", () => {
+  const header = defines(makeHeader(input));
+  const watch = defines(
+    readFileSync(
+      new URL("../../pebble/src/c/config.h", import.meta.url),
+      "utf8"
+    )
+  );
+  assert.deepEqual([...header.keys()].sort(), [...watch.keys()].sort());
+  for (const [name, value] of watch)
+    if (name !== "RD_RENDER_FLAGS") assert.equal(header.get(name), value, name);
+  assert.equal(header.get("RD_RENDER_FLAGS"), "2");
   assert.throws(() => makeHeader({ ...input, engine: "float-120" }));
+});
+
+test("config.h carries the demo's settings as the watch defaults", () => {
+  const header = defines(
+    makeHeader({
+      ...input,
+      engine: "q15-100",
+      params: { feed: 0.035, kill: 0.065, da: 0.8, db: 0.3, dt: 0.9 },
+      palette: "magma",
+      interpolate: false,
+      font: "bitham",
+      avoid: false,
+      clock: false,
+    })
+  );
+  assert.equal(header.get("RD_MODE"), "1");
+  assert.equal(header.get("RD_RENDER_FLAGS"), "0");
+  assert.equal(
+    header.get("RD_DEFAULT_FEED"),
+    String(Math.round(0.035 * 32768))
+  );
+  assert.equal(
+    header.get("RD_DEFAULT_KILL"),
+    String(Math.round(0.065 * 32768))
+  );
+  assert.equal(header.get("RD_DEFAULT_DA"), String(Math.round(0.8 * 32768)));
+  assert.equal(header.get("RD_DEFAULT_DB"), String(Math.round(0.3 * 32768)));
+  assert.equal(header.get("RD_DEFAULT_DT"), String(Math.round(0.9 * 32768)));
+  assert.equal(header.get("RD_DEFAULT_PALETTE"), "4");
+  assert.equal(header.get("RD_DEFAULT_LOW"), "0x000004");
+  assert.equal(header.get("RD_DEFAULT_HIGH"), "0xfcfdbf");
+  assert.equal(header.get("RD_DEFAULT_FONT"), "1");
+  assert.equal(header.get("RD_DEFAULT_AVOID"), "0");
+  assert.equal(header.get("RD_DEFAULT_CLOCK"), "0");
 });
 
 test("Float32 settings use requested coefficients without Q15 rounding", () => {

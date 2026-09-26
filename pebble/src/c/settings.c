@@ -1,0 +1,182 @@
+/*
+ * Settings from the phone. The phone sends every setting as an integer
+ * tuple under the message keys of pebble/package.json. A message is applied
+ * only if every value it carries is in range, and the settings are stored as
+ * one persist blob that is checked the same way when it is read back.
+ */
+#include "settings.h"
+#include "../../../core/clock_mask.h"
+#include "../../../core/rd.h"
+#include "config.h"
+#include <pebble.h>
+
+/* Settings code runs at launch and when the phone sends settings, so it is
+ * compiled for size instead of the -O3 of the step loop. */
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC optimize("Os")
+#endif
+
+#define SETTINGS_VERSION 1
+#define SETTINGS_PERSIST_KEY 1
+/* The phone sends eleven integers: dict_calc_buffer_size for eleven 4-byte
+ * values is 1 + 11 * (7 + 4) = 122 bytes. Nothing is sent to the phone. */
+#define SETTINGS_INBOX_BYTES 128
+#define SETTINGS_OUTBOX_BYTES 16
+#define RGB_MAX 0xffffff
+
+static uint32_t *const KEYS[SETTING_COUNT] = {
+    &MESSAGE_KEY_FEED,  &MESSAGE_KEY_KILL, &MESSAGE_KEY_DA,
+    &MESSAGE_KEY_DB,    &MESSAGE_KEY_DT,   &MESSAGE_KEY_PALETTE,
+    &MESSAGE_KEY_LOW,   &MESSAGE_KEY_HIGH, &MESSAGE_KEY_FONT,
+    &MESSAGE_KEY_AVOID, &MESSAGE_KEY_CLOCK};
+
+/* Every setting is an integer from 0 to its maximum. */
+static const int32_t MAXIMUM[SETTING_COUNT] = {
+    RD_Q15_ONE, RD_Q15_ONE, RD_Q15_ONE,
+    RD_Q15_ONE, RD_Q15_ONE, RD_PALETTE_COUNT - 1,
+    RGB_MAX,    RGB_MAX,    CM_FONT_COUNT - 1,
+    1,          1};
+
+static const uint8_t CHANGE[SETTING_COUNT] = {
+    SETTINGS_CHANGED_PATTERN, SETTINGS_CHANGED_PATTERN,
+    SETTINGS_CHANGED_PATTERN, SETTINGS_CHANGED_PATTERN,
+    SETTINGS_CHANGED_PATTERN, SETTINGS_CHANGED_PALETTE,
+    SETTINGS_CHANGED_PALETTE, SETTINGS_CHANGED_PALETTE,
+    SETTINGS_CHANGED_FONT,    SETTINGS_CHANGED_MASK,
+    SETTINGS_CHANGED_MASK};
+
+/* The persist blob. */
+typedef struct {
+  int32_t version;
+  int32_t value[SETTING_COUNT];
+} Stored;
+
+static Stored current;
+static SettingsChanged on_change;
+
+static bool valid(const int32_t value[SETTING_COUNT]) {
+  for (int i = 0; i < SETTING_COUNT; i++) {
+    if (value[i] < 0 || value[i] > MAXIMUM[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/* A non-negative integer tuple of 1 to 4 bytes, signed or unsigned, or -1.
+ * The value bytes are little endian. */
+static int32_t tuple_int(const Tuple *t) {
+  if ((t->type != TUPLE_INT && t->type != TUPLE_UINT) || t->length < 1 ||
+      t->length > 4) {
+    return -1;
+  }
+  uint32_t v = 0;
+  for (int i = t->length - 1; i >= 0; i--) {
+    v = v << 8 | t->value->data[i];
+  }
+  if ((t->type == TUPLE_INT && v >> (8 * t->length - 1)) || v > INT32_MAX) {
+    return -1;
+  }
+  return (int32_t)v;
+}
+
+#if RD_LOG
+/* Where the settings came from: d defaults, p persist, m message. */
+static void log_settings(char source) {
+  const int32_t *v = current.value;
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD settings feed=%ld kill=%ld da=%ld db=%ld dt=%ld src=%c",
+          (long)v[SETTING_FEED], (long)v[SETTING_KILL], (long)v[SETTING_DA],
+          (long)v[SETTING_DB], (long)v[SETTING_DT], source);
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD settings pal=%ld low=%06lx high=%06lx font=%ld avoid=%ld "
+          "clock=%ld",
+          (long)v[SETTING_PALETTE], (unsigned long)v[SETTING_LOW],
+          (unsigned long)v[SETTING_HIGH], (long)v[SETTING_FONT],
+          (long)v[SETTING_AVOID], (long)v[SETTING_CLOCK]);
+}
+
+static void dropped(AppMessageResult reason, void *context) {
+  (void)context;
+  APP_LOG(APP_LOG_LEVEL_INFO, "RD settings dropped reason=%d", (int)reason);
+}
+#else
+#define log_settings(source) ((void)(source))
+#endif
+
+static void inbox(DictionaryIterator *iterator, void *context) {
+  (void)context;
+  int32_t next[SETTING_COUNT];
+  memcpy(next, current.value, sizeof next);
+  for (Tuple *t = dict_read_first(iterator); t; t = dict_read_next(iterator)) {
+    for (int i = 0; i < SETTING_COUNT; i++) {
+      if (t->key == *KEYS[i]) {
+        next[i] = tuple_int(t);
+      }
+    }
+  }
+  if (!valid(next)) {
+#if RD_LOG
+    APP_LOG(APP_LOG_LEVEL_INFO, "RD settings rejected");
+#endif
+    return;
+  }
+  unsigned changed = 0;
+  for (int i = 0; i < SETTING_COUNT; i++) {
+    if (next[i] != current.value[i]) {
+      changed |= CHANGE[i];
+    }
+  }
+  if (!changed) {
+    return;
+  }
+  memcpy(current.value, next, sizeof next);
+  persist_write_data(SETTINGS_PERSIST_KEY, &current, sizeof current);
+  log_settings('m');
+  if (on_change) {
+    on_change(changed);
+  }
+}
+
+int32_t setting(int field) { return current.value[field]; }
+
+void settings_load(void) {
+  if (persist_read_data(SETTINGS_PERSIST_KEY, &current, sizeof current) ==
+          (int)sizeof current &&
+      current.version == SETTINGS_VERSION && valid(current.value)) {
+    log_settings('p');
+    return;
+  }
+  static const Stored defaults = {
+      SETTINGS_VERSION,
+      {RD_DEFAULT_FEED, RD_DEFAULT_KILL, RD_DEFAULT_DA, RD_DEFAULT_DB,
+       RD_DEFAULT_DT, RD_DEFAULT_PALETTE, RD_DEFAULT_LOW, RD_DEFAULT_HIGH,
+       RD_DEFAULT_FONT, RD_DEFAULT_AVOID, RD_DEFAULT_CLOCK}};
+  current = defaults;
+  log_settings('d');
+}
+
+void settings_open(SettingsChanged changed) {
+  on_change = changed;
+  app_message_register_inbox_received(inbox);
+#if RD_LOG
+  app_message_register_inbox_dropped(dropped);
+#endif
+  app_message_open(SETTINGS_INBOX_BYTES, SETTINGS_OUTBOX_BYTES);
+}
+
+void settings_close(void) { app_message_deregister_callbacks(); }
+
+bool settings_avoiding(void) {
+  return RD_AVOID && current.value[SETTING_AVOID] &&
+         current.value[SETTING_CLOCK];
+}
+
+int settings_font(void) {
+#ifdef RD_FONT
+  return RD_FONT;
+#else
+  int font = (int)current.value[SETTING_FONT];
+  return cm_font_available(font) ? font : RD_DEFAULT_FONT;
+#endif
+}

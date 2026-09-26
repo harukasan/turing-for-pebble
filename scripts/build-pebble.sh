@@ -4,9 +4,11 @@
 # RD_BUILD_PROFILE, RD_BUILD_FONT, RD_BUILD_RENDER, RD_BUILD_DEFINES, and
 # RD_BUILD_LOG pass through to pebble/wscript. The load size of
 # each ELF (text + data + bss, which all live in the 128 KiB app region next
-# to the core allocation) must stay within LOAD_LIMIT bytes.
+# to the core allocation) must stay within LOAD_LIMIT bytes. A measurement
+# build with RD_BUILD_LOG=1 carries about 2.9 KB of logs and may raise the
+# limit with RD_BUILD_LOAD_LIMIT. Production builds keep the default.
 set -eu
-LOAD_LIMIT=20480
+LOAD_LIMIT=${RD_BUILD_LOAD_LIMIT:-20480}
 size_tool=$(command -v arm-none-eabi-size || true)
 if [ -z "$size_tool" ]; then
   size_tool=.local/share/pebble-sdk/SDKs/4.33.1/toolchain/arm-none-eabi/bin/arm-none-eabi-size
