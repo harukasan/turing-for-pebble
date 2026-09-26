@@ -21,7 +21,7 @@ int main(int argc, char **argv) {
   void *state = rd_init(memory, rd_bytes(mode), mode, 42);
   uint8_t *mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
   cm_build(mask, rd_width(state), rd_height(state), CM_FONT_LECO, 13, 57, 2046,
-           8, 29, 1);
+           8, 29, 1, 1);
   rd_mask(state, mask);
   rd_step(state, 300);
   RdBench b;

@@ -110,11 +110,19 @@ const times = [
 ];
 for (const font of CLOCK_FONTS)
   for (const width of [100, 200])
-    for (const halo of [0, 2, 3])
+    for (const [halo, showDate] of [
+      [0, true],
+      [2, true],
+      [3, true],
+      [1, false],
+    ])
       for (const date of times) {
         const height = (width * 228) / 200;
         const expected = new Uint8Array(((width + 7) >> 3) * height);
-        clockPixels(date, font, (px, py) => {
+        clockPixels(
+          date,
+          font,
+          (px, py) => {
           for (
             let y = Math.max(0, py - halo);
             y <= Math.min(227, py + halo);
@@ -129,12 +137,22 @@ for (const font of CLOCK_FONTS)
                 gy = Math.floor((y * height) / 228);
               expected[gy * ((width + 7) >> 3) + (gx >> 3)] |= 1 << (gx & 7);
             }
-        });
-        const mask = buildMask(api, width, height, fontIndex(font), date, halo);
+          },
+          showDate,
+        );
+        const mask = buildMask(
+          api,
+          width,
+          height,
+          fontIndex(font),
+          date,
+          halo,
+          showDate,
+        );
         assert.deepEqual(
           mask,
           expected,
-          `${font} ${width} ${halo} ${date.toISOString()}`,
+          `${font} ${width} ${halo} ${showDate} ${date.toISOString()}`,
         );
       }
 

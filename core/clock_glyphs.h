@@ -20,10 +20,11 @@
  */
 /* clang-format off */
 
-/* System font keys and text boxes of each set, for the watch. */
+/* System font keys and text boxes of each set, for the watch, and the
+ * time line top that centers the time alone on the display. */
 static const CmLayout CM_LAYOUTS[CM_FONT_COUNT] = {
-    {"RESOURCE_ID_LECO_42_NUMBERS", "RESOURCE_ID_LECO_20_BOLD_NUMBERS", 78, 50, 128, 30}, /* leco */
-    {"RESOURCE_ID_BITHAM_42_BOLD", "RESOURCE_ID_BITHAM_30_BLACK", 79, 50, 122, 40}, /* bitham */
+    {"RESOURCE_ID_LECO_42_NUMBERS", "RESOURCE_ID_LECO_20_BOLD_NUMBERS", 78, 50, 128, 30, 86}, /* leco */
+    {"RESOURCE_ID_BITHAM_42_BOLD", "RESOURCE_ID_BITHAM_30_BLACK", 79, 50, 122, 40, 87}, /* bitham */
 };
 
 #if !defined(RD_FONT) || RD_FONT == 0

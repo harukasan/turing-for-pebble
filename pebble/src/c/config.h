@@ -51,7 +51,7 @@
  * time step, the palette (RD_PALETTE_*), the dark and light stops of the
  * custom palette as 0xRRGGBB, its number of stops and the middle stops at
  * a third and two thirds of the way from dark to light, the clock font
- * set, digit avoidance, and the clock. */
+ * set, digit avoidance, the clock, and the date line. */
 #define RD_DEFAULT_FEED 950
 #define RD_DEFAULT_KILL 1868
 #define RD_DEFAULT_DA 22938
@@ -66,3 +66,4 @@
 #define RD_DEFAULT_FONT 0
 #define RD_DEFAULT_AVOID 1
 #define RD_DEFAULT_CLOCK 1
+#define RD_DEFAULT_DATE 1

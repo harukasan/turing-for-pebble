@@ -94,10 +94,11 @@ const legacy = { ...DEFAULT_SETTINGS, palette: 9, low: 0x110000, high: 0xffee00 
 delete legacy.stops;
 delete legacy.mid1;
 delete legacy.mid2;
+delete legacy.date;
 old.storage.set('settings', JSON.stringify(legacy));
 old.listeners.ready();
 assert.deepEqual(old.sent, [
-  message({ ...legacy, stops: 2, mid1: 0x110000, mid2: 0xffee00 }),
+  message({ ...legacy, stops: 2, mid1: 0x110000, mid2: 0xffee00, date: 1 }),
 ]);
 
 // At launch the stored copy is sent again.

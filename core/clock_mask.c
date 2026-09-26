@@ -110,15 +110,22 @@ static void cm_line(const CmFont *font, const uint8_t *text, int length,
   }
 }
 
-/* Visit the glyph pixels of the time and date lines (only check the
- * arguments when visit is NULL), or return -1 for an unavailable font or a
- * date or time out of range. */
+int cm_time_top(int font, int date) {
+  if (!cm_font_available(font)) {
+    return -1;
+  }
+  return date ? CM_LAYOUTS[font].time_top : CM_LAYOUTS[font].time_alone_top;
+}
+
+/* Visit the glyph pixels of the time line and, with date, the date line
+ * (only check the arguments when visit is NULL), or return -1 for an
+ * unavailable font or a date or time out of range. */
 #if defined(__GNUC__)
 /* Kept out of line: the mask builder and the text drawer share one copy. */
 __attribute__((noinline))
 #endif
 static int cm_visit(int font, int hour, int minute, int year, int month,
-                    int day, CmVisit visit, void *context) {
+                    int day, int date, CmVisit visit, void *context) {
   if (!cm_font_available(font) || hour < 0 || hour > 23 || minute < 0 ||
       minute > 59 || year < 0 || year > 9999 || month < 1 || month > 12 ||
       day < 1 || day > 31) {
@@ -130,21 +137,23 @@ static int cm_visit(int font, int hour, int minute, int year, int month,
   const uint8_t time[CM_TIME_LENGTH] = {
       (uint8_t)(hour / 10), (uint8_t)(hour % 10), CM_SEPARATOR,
       (uint8_t)(minute / 10), (uint8_t)(minute % 10)};
-  const uint8_t date[CM_DATE_LENGTH] = {(uint8_t)(year / 1000),
-                                        (uint8_t)(year / 100 % 10),
-                                        (uint8_t)(year / 10 % 10),
-                                        (uint8_t)(year % 10),
-                                        CM_SEPARATOR,
-                                        (uint8_t)(month / 10),
-                                        (uint8_t)(month % 10),
-                                        CM_SEPARATOR,
-                                        (uint8_t)(day / 10),
-                                        (uint8_t)(day % 10)};
+  const uint8_t digits[CM_DATE_LENGTH] = {(uint8_t)(year / 1000),
+                                          (uint8_t)(year / 100 % 10),
+                                          (uint8_t)(year / 10 % 10),
+                                          (uint8_t)(year % 10),
+                                          CM_SEPARATOR,
+                                          (uint8_t)(month / 10),
+                                          (uint8_t)(month % 10),
+                                          CM_SEPARATOR,
+                                          (uint8_t)(day / 10),
+                                          (uint8_t)(day % 10)};
   const CmLayout *layout = &CM_LAYOUTS[font];
-  cm_line(&CM_FONTS[font][CM_TIME], time, CM_TIME_LENGTH, layout->time_top,
-          visit, context);
-  cm_line(&CM_FONTS[font][CM_DATE], date, CM_DATE_LENGTH, layout->date_top,
-          visit, context);
+  cm_line(&CM_FONTS[font][CM_TIME], time, CM_TIME_LENGTH,
+          cm_time_top(font, date), visit, context);
+  if (date) {
+    cm_line(&CM_FONTS[font][CM_DATE], digits, CM_DATE_LENGTH, layout->date_top,
+            visit, context);
+  }
   return 0;
 }
 
@@ -159,16 +168,16 @@ static void cm_mask_pixel(void *context, int x, int y) {
 }
 
 int cm_build(uint8_t *mask, int width, int height, int font, int hour,
-             int minute, int year, int month, int day, int halo) {
+             int minute, int year, int month, int day, int halo, int date) {
   if (!mask || width < CM_MIN_WIDTH || width > RD_DISPLAY_WIDTH ||
       height != width * RD_DISPLAY_HEIGHT / RD_DISPLAY_WIDTH ||
       !cm_font_available(font) || halo < 0 || halo > CM_MAX_HALO ||
-      cm_visit(font, hour, minute, year, month, day, NULL, NULL) != 0) {
+      cm_visit(font, hour, minute, year, month, day, date, NULL, NULL) != 0) {
     return -1;
   }
   CmMaskTarget target = {mask, width, height, halo};
   memset(mask, 0, cm_bytes(width, height));
-  cm_visit(font, hour, minute, year, month, day, cm_mask_pixel, &target);
+  cm_visit(font, hour, minute, year, month, day, date, cm_mask_pixel, &target);
   return 0;
 }
 
@@ -195,10 +204,11 @@ static void cm_draw_pixel(void *context, int x, int y) {
 }
 
 int cm_draw(CmRow row, void *context, uint8_t color, int font, int hour,
-            int minute, int year, int month, int day) {
+            int minute, int year, int month, int day, int date) {
   if (!row) {
     return -1;
   }
   CmDrawTarget target = {row, context, color, -1, NULL};
-  return cm_visit(font, hour, minute, year, month, day, cm_draw_pixel, &target);
+  return cm_visit(font, hour, minute, year, month, day, date, cm_draw_pixel,
+                  &target);
 }

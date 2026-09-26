@@ -608,7 +608,7 @@ static void check_nearest_unchanged(void) {
     void *state = rd_init(memory, rd_bytes(mode), mode, 42);
     uint8_t *mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
     cm_build(mask, rd_width(state), rd_height(state), CM_FONT_BITHAM, 13, 57,
-             2046, 8, 29, 1);
+             2046, 8, 29, 1, 1);
     rd_mask(state, mask);
     rd_step(state, 300);
     uint32_t hash = FNV_OFFSET_BASIS;
@@ -768,10 +768,10 @@ static void check_clock_mask(void) {
                          {100, 114, 0, 14, 50, 2026, 9, 24, CM_MAX_HALO + 1}};
   for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
     const int *b = bad[i];
-    assert(cm_build(mask, b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
-                    b[8]) == -1);
+    assert(cm_build(mask, b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8],
+                    1) == -1);
   }
-  assert(cm_build(NULL, 100, 114, 0, 14, 50, 2026, 9, 24, 0) == -1);
+  assert(cm_build(NULL, 100, 114, 0, 14, 50, 2026, 9, 24, 0, 1) == -1);
   for (size_t i = 0; i < sizeof mask; i++) {
     assert(mask[i] == 0xa5);
   }
@@ -780,31 +780,49 @@ static void check_clock_mask(void) {
     assert(cm_font_available(font) && cm_layout(font));
   }
   assert(!cm_font_available(CM_FONT_COUNT));
-  assert(cm_build(mask, 200, 228, CM_FONT_LECO, 14, 50, 2026, 9, 24, 0) == 0);
+  assert(cm_build(mask, 200, 228, CM_FONT_LECO, 14, 50, 2026, 9, 24, 0, 1) ==
+         0);
   int count = 0;
   for (size_t i = 0; i < 5700; i++) {
     count += __builtin_popcount(mask[i]);
   }
   assert(count == 2427);
   /* cm_draw sets exactly the glyph pixels: the cells of the 200-wide mask
-   * at halo 0, for both fonts. */
+   * at halo 0, for both fonts, with and without the date. Without it the
+   * time's ink is centered on the display, the digits 1, 4, 5, and 0
+   * spanning the full ink height of the time glyphs. */
+  assert(cm_time_top(-1, 1) == -1 && cm_time_top(CM_FONT_COUNT, 0) == -1);
   for (int font = 0; font < CM_FONT_COUNT; font++) {
-    static uint8_t screen[RD_DISPLAY_HEIGHT][RD_DISPLAY_WIDTH];
-    memset(screen, 0, sizeof screen);
-    assert(cm_draw(test_row, screen, 0xff, font, 14, 50, 2026, 9, 24) == 0);
-    assert(cm_build(mask, 200, 228, font, 14, 50, 2026, 9, 24, 0) == 0);
-    int drawn = 0;
-    for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
-      for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
-        int bit = mask[y * 25 + x / 8] >> (x % 8) & 1;
-        assert((screen[y][x] == 0xff) == bit);
-        drawn += bit;
+    assert(cm_time_top(font, 1) == cm_layout(font)->time_top);
+    for (int date = 0; date <= 1; date++) {
+      static uint8_t screen[RD_DISPLAY_HEIGHT][RD_DISPLAY_WIDTH];
+      memset(screen, 0, sizeof screen);
+      assert(cm_draw(test_row, screen, 0xff, font, 14, 50, 2026, 9, 24, date) ==
+             0);
+      assert(cm_build(mask, 200, 228, font, 14, 50, 2026, 9, 24, 0, date) == 0);
+      int drawn = 0, first = RD_DISPLAY_HEIGHT, last = -1;
+      for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+        for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+          int bit = mask[y * 25 + x / 8] >> (x % 8) & 1;
+          assert((screen[y][x] == 0xff) == bit);
+          drawn += bit;
+          if (bit) {
+            first = y < first ? y : first;
+            last = y;
+          }
+        }
+      }
+      assert(font != CM_FONT_LECO || !date || drawn == 2427);
+      if (!date) {
+        /* The ink rows first to last sit centered, to a pixel. */
+        int above = first, below = RD_DISPLAY_HEIGHT - 1 - last;
+        assert(above - below >= -1 && above - below <= 1);
+        assert(first > cm_layout(font)->time_top);
       }
     }
-    assert(font != CM_FONT_LECO || drawn == 2427);
   }
-  assert(cm_draw(NULL, NULL, 0xff, 0, 14, 50, 2026, 9, 24) == -1);
-  assert(cm_draw(test_row, NULL, 0xff, 0, 24, 50, 2026, 9, 24) == -1);
+  assert(cm_draw(NULL, NULL, 0xff, 0, 14, 50, 2026, 9, 24, 1) == -1);
+  assert(cm_draw(test_row, NULL, 0xff, 0, 24, 50, 2026, 9, 24, 1) == -1);
 }
 
 int main(int argc, char **argv) {
@@ -841,7 +859,7 @@ int main(int argc, char **argv) {
       }
       uint8_t *mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
       if (cm_build(mask, rd_width(state), rd_height(state), v[0], v[1], v[2],
-                   v[3], v[4], v[5], v[6]) ||
+                   v[3], v[4], v[5], v[6], 1) ||
           rd_mask(state, mask)) {
         fprintf(stderr, "invalid mask arguments\n");
         return 1;

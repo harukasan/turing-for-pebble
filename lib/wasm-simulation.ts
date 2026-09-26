@@ -37,19 +37,22 @@ type API = {
     year: number,
     month: number,
     day: number,
-    halo: number
+    halo: number,
+    date: number
   ): number;
 };
 export type CoreAPI = API;
 /** The clock mask of a grid (cm_build in core/clock_mask.c), one bit per
- * cell in rows of (width + 7) / 8 bytes. */
+ * cell in rows of (width + 7) / 8 bytes, the date line only with
+ * showDate. */
 export function buildMask(
   api: API,
   width: number,
   height: number,
   font: number,
   date: Date,
-  halo: number
+  halo: number,
+  showDate = true
 ) {
   const bytes = api.cm_bytes(width, height);
   const pointer = api.malloc(bytes);
@@ -66,7 +69,8 @@ export function buildMask(
         date.getFullYear(),
         date.getMonth() + 1,
         date.getDate(),
-        halo
+        halo,
+        showDate ? 1 : 0
       )
     )
       throw new Error("Invalid clock mask");

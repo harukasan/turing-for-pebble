@@ -40,7 +40,15 @@ export class PreviewField {
     sim.setPalette(customStops(settings));
     sim.setMask(
       settings.clock && settings.avoid
-        ? buildMask(this.api, sim.width, sim.height, settings.font, date, HALO)
+        ? buildMask(
+            this.api,
+            sim.width,
+            sim.height,
+            settings.font,
+            date,
+            HALO,
+            settings.date === 1
+          )
         : null
     );
   }
@@ -142,7 +150,12 @@ export class PreviewView {
     this.field.render(this.pixels);
     this.ctx.putImageData(this.pixels, 0, 0);
     if (this.settings.clock)
-      drawClock(this.ctx, new Date(), CLOCK_FONTS[this.settings.font]);
+      drawClock(
+        this.ctx,
+        new Date(),
+        CLOCK_FONTS[this.settings.font],
+        this.settings.date === 1
+      );
     this.onProgress(this.field.steps);
   }
 }

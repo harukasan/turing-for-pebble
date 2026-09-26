@@ -31,7 +31,8 @@
       "MID2",
       "FONT",
       "AVOID",
-      "CLOCK"
+      "CLOCK",
+      "DATE"
     ],
     "resources": {
       "media": []

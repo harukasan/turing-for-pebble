@@ -135,5 +135,6 @@ export function makeHeader(input: SettingsInput) {
 #define RD_DEFAULT_FONT ${fontIndex(font)}
 #define RD_DEFAULT_AVOID ${Number(avoid)}
 #define RD_DEFAULT_CLOCK ${Number(clock)}
+#define RD_DEFAULT_DATE 1
 `;
 }

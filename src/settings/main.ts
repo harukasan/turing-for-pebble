@@ -337,6 +337,11 @@ const setFont = chips(
 );
 const clock = element<HTMLInputElement>("clock");
 const avoid = element<HTMLInputElement>("avoid");
+const dateSwitch = element<HTMLInputElement>("date");
+dateSwitch.addEventListener("change", () => {
+  settings.date = Number(dateSwitch.checked);
+  changed("field");
+});
 clock.addEventListener("change", () => {
   settings.clock = Number(clock.checked);
   changed("field");
@@ -367,6 +372,8 @@ function update() {
   clock.checked = settings.clock === 1;
   avoid.checked = settings.avoid === 1;
   avoid.disabled = !clock.checked;
+  dateSwitch.checked = settings.date === 1;
+  dateSwitch.disabled = !clock.checked;
 }
 
 const fileStatus = element("file-status");

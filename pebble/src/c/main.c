@@ -182,13 +182,18 @@ static uint8_t *clock_row(void *context, int y) {
  * captured. */
 static void draw_system_text(GContext *ctx) {
   const CmLayout *layout = cm_layout(settings_font());
+  bool date = settings_date();
   char text[16];
   graphics_context_set_text_color(ctx, GColorWhite);
   strftime(text, sizeof(text), "%H:%M", &clock_time);
-  graphics_draw_text(
-      ctx, text, font_clock,
-      GRect(0, layout->time_top, RD_DISPLAY_WIDTH, layout->time_box),
-      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  graphics_draw_text(ctx, text, font_clock,
+                     GRect(0, cm_time_top(settings_font(), date),
+                           RD_DISPLAY_WIDTH, layout->time_box),
+                     GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter,
+                     NULL);
+  if (!date) {
+    return;
+  }
   strftime(text, sizeof(text), "%Y.%m.%d", &clock_time);
   graphics_draw_text(
       ctx, text, font_date,
@@ -253,7 +258,7 @@ static void draw(Layer *this_layer, GContext *ctx) {
                         y_end};
       cm_draw(clock_row, &rows, GColorWhiteARGB8, settings_font(),
               clock_time.tm_hour, clock_time.tm_min, clock_time.tm_year + 1900,
-              clock_time.tm_mon + 1, clock_time.tm_mday);
+              clock_time.tm_mon + 1, clock_time.tm_mday, settings_date());
     }
     graphics_release_frame_buffer(ctx, frame_buffer);
   } else if (clock) {
@@ -536,7 +541,8 @@ static void rebuild_mask(void) {
   if (clock_mask &&
       cm_build(clock_mask, rd_width(state), rd_height(state), settings_font(),
                clock_time.tm_hour, clock_time.tm_min, clock_time.tm_year + 1900,
-               clock_time.tm_mon + 1, clock_time.tm_mday, RD_HALO) == 0) {
+               clock_time.tm_mon + 1, clock_time.tm_mday, RD_HALO,
+               settings_date()) == 0) {
     rd_mask(state, clock_mask);
     mask_installed = true;
   }
@@ -646,13 +652,15 @@ static void restart(void) {
 
 /* Apply what a settings message changed. A removed mask leaves an empty
  * area where the digits were that minute steps would take hours to fill,
- * so it restarts the field like new coefficients do. */
+ * and showing or hiding the date moves the time and changes the mask as
+ * much, so both restart the field like new coefficients do. */
 static void apply_settings(unsigned changed) {
   if (changed & SETTINGS_CHANGED_FONT) {
     load_fonts();
   }
   if ((changed & SETTINGS_CHANGED_PATTERN) ||
-      (mask_installed && !settings_avoiding())) {
+      (mask_installed && !settings_avoiding()) ||
+      ((changed & SETTINGS_CHANGED_LAYOUT) && settings_avoiding())) {
     restart();
     return;
   }
