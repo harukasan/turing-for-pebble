@@ -32,8 +32,16 @@
   display: none !important;
 }
 
+/* The page background also covers what the web view shows past the ends
+ * of the page, and the page does not bounce past them. */
+html {
+  background: var(--bg);
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--text);
   font:
