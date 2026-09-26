@@ -74,7 +74,9 @@ function chips(
     inputs.forEach((input, i) => (input.checked = i === index));
 }
 
-/** A labeled slider for a Q15 coefficient. */
+/** A slider for a Q15 coefficient with its value in a number field. The
+ * field takes any value from 0 to 1, the range the watch accepts, also
+ * outside the slider's range, and applies it when the entry is committed. */
 function slider(
   container: HTMLElement,
   key: keyof Parameters,
@@ -83,7 +85,7 @@ function slider(
   onInput: () => void
 ) {
   const [min, max, step] = parameterBounds[key];
-  const row = document.createElement("label");
+  const row = document.createElement("div");
   row.className = "slider";
   const name = document.createElement("span");
   name.textContent = label;
@@ -92,18 +94,40 @@ function slider(
   input.min = String(min);
   input.max = String(max);
   input.step = String(step);
-  const output = document.createElement("output");
-  row.append(name, input, output);
+  input.setAttribute("aria-label", label);
+  const field = document.createElement("input");
+  field.type = "number";
+  field.inputMode = "decimal";
+  field.min = "0";
+  field.max = "1";
+  field.step = "any";
+  field.setAttribute("aria-label", `${label}の値`);
+  row.append(name, input, field);
   container.append(row);
+  const show = () => {
+    const value = settings[key] / 32768;
+    input.value = String(value);
+    if (document.activeElement !== field) field.value = value.toFixed(digits);
+  };
   input.addEventListener("input", () => {
     settings[key] = q15(Number(input.value));
     onInput();
   });
-  return () => {
-    const value = settings[key] / 32768;
-    input.value = String(value);
-    output.textContent = value.toFixed(digits);
-  };
+  field.addEventListener("focus", () => field.select());
+  field.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") field.blur();
+  });
+  field.addEventListener("change", () => {
+    const value = Number(field.value);
+    if (field.value.trim() !== "" && Number.isFinite(value)) {
+      settings[key] = q15(Math.min(1, Math.max(0, value)));
+      onInput();
+    }
+    field.blur();
+    show();
+  });
+  field.addEventListener("blur", show);
+  return show;
 }
 
 /** An 8 × 8 grid of the watch's 64 colors for one custom stop. */

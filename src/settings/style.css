@@ -130,14 +130,34 @@ legend {
   gap: 8px;
 }
 
-.slider input {
+.slider input[type="range"] {
   width: 100%;
   accent-color: var(--accent);
 }
 
-.slider output {
+.slider input[type="number"] {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
   font-variant-numeric: tabular-nums;
   text-align: right;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.slider input[type="number"]::-webkit-inner-spin-button,
+.slider input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.slider input[type="number"]:focus {
+  border-color: var(--accent);
+  outline: none;
 }
 
 .palettes {
