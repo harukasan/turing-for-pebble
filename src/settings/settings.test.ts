@@ -15,6 +15,10 @@ import {
   q15,
   SETTING_KEYS,
   SETTING_MAX,
+  settingMin,
+  stopKeys,
+  customStops,
+  withStops,
   toJson,
   toQuery,
   validate,
@@ -46,7 +50,11 @@ test("validation accepts integers up to each maximum and nothing else", () => {
   assert.deepEqual(validate(SETTING_MAX), SETTING_MAX);
   assert.deepEqual(validate(DEFAULT_SETTINGS), DEFAULT_SETTINGS);
   for (const key of SETTING_KEYS) {
-    assert.equal(validate({ ...DEFAULT_SETTINGS, [key]: -1 }), null, key);
+    assert.equal(
+      validate({ ...DEFAULT_SETTINGS, [key]: settingMin(key) - 1 }),
+      null,
+      key
+    );
     assert.equal(
       validate({ ...DEFAULT_SETTINGS, [key]: SETTING_MAX[key] + 1 }),
       null,
@@ -105,6 +113,34 @@ test("stripe widths are found by their Q15 Da and Db", () => {
     )
   );
   assert.equal(diffusionPresetOf({ ...DEFAULT_SETTINGS, da: 32767 }), -1);
+});
+
+test("the custom palette uses 2 to 4 stops, dark to light", () => {
+  const s = {
+    ...DEFAULT_SETTINGS,
+    low: 0x000000,
+    mid1: 0x0000ff,
+    mid2: 0x00ff00,
+    high: 0xffffff,
+  };
+  assert.deepEqual(stopKeys(s), ["low", "high"]);
+  assert.deepEqual(customStops({ ...s, stops: 3 }), [
+    [0, 0, 0],
+    [0, 0, 255],
+    [255, 255, 255],
+  ]);
+  assert.deepEqual(stopKeys({ ...s, stops: 4 }), [
+    "low",
+    "mid1",
+    "mid2",
+    "high",
+  ]);
+  const gray = withStops({ ...s, stops: 2 }, 4);
+  assert.equal(gray.stops, 4);
+  assert.equal(gray.mid1, 0x555555);
+  assert.equal(gray.mid2, 0xaaaaaa);
+  assert.equal(withStops(s, 3).mid1, 0x808080);
+  assert.equal(withStops({ ...s, stops: 4 }, 2).mid1, s.mid1);
 });
 
 test("the color picker offers the 64 watch colors", () => {

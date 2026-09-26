@@ -26,6 +26,9 @@
       "PALETTE",
       "LOW",
       "HIGH",
+      "STOPS",
+      "MID1",
+      "MID2",
       "FONT",
       "AVOID",
       "CLOCK"

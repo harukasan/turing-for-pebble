@@ -49,8 +49,9 @@
 
 /* Settings defaults: the Q15 feed, kill, diffusion rates of A and B, and
  * time step, the palette (RD_PALETTE_*), the dark and light stops of the
- * custom palette as 0xRRGGBB, the clock font set, digit avoidance, and the
- * clock. */
+ * custom palette as 0xRRGGBB, its number of stops and the middle stops at
+ * a third and two thirds of the way from dark to light, the clock font
+ * set, digit avoidance, and the clock. */
 #define RD_DEFAULT_FEED 950
 #define RD_DEFAULT_KILL 1868
 #define RD_DEFAULT_DA 22938
@@ -59,6 +60,9 @@
 #define RD_DEFAULT_PALETTE 0
 #define RD_DEFAULT_LOW 0x001e12
 #define RD_DEFAULT_HIGH 0xd2ff55
+#define RD_DEFAULT_STOPS 2
+#define RD_DEFAULT_MID1 0x466928
+#define RD_DEFAULT_MID2 0x8cb43f
 #define RD_DEFAULT_FONT 0
 #define RD_DEFAULT_AVOID 1
 #define RD_DEFAULT_CLOCK 1

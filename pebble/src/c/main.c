@@ -589,14 +589,19 @@ static void load_fonts(void) {
   font_date = fonts_get_system_font(layout->date_key);
 }
 
-/* The custom palette's stops from the settings. */
+/* The custom palette's stops from the settings: the dark stop, the middle
+ * stops in use, and the light stop last. */
 static void apply_palette(void) {
-  uint8_t stops[6];
-  for (int i = 0; i < 6; i++) {
-    int32_t rgb = setting(i < 3 ? SETTING_LOW : SETTING_HIGH);
-    stops[i] = (uint8_t)(rgb >> (16 - 8 * (i % 3)));
+  static const uint8_t ORDER[3] = {SETTING_LOW, SETTING_MID1, SETTING_MID2};
+  int count = (int)setting(SETTING_STOPS);
+  uint8_t stops[4 * 3];
+  for (int i = 0; i < count; i++) {
+    int32_t rgb = setting(i == count - 1 ? SETTING_HIGH : ORDER[i]);
+    for (int c = 0; c < 3; c++) {
+      stops[i * 3 + c] = (uint8_t)(rgb >> (16 - 8 * c));
+    }
   }
-  rd_palette(state, stops, 2);
+  rd_palette(state, stops, count);
 }
 
 /* The pattern coefficients from the settings. */

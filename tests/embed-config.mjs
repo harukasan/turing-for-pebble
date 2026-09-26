@@ -10,6 +10,7 @@ import {
   DEFAULT_SETTINGS,
   SETTING_KEYS,
   SETTING_MAX,
+  settingMin,
   toJson,
 } from '../src/settings/settings.ts';
 
@@ -76,12 +77,28 @@ for (const response of ['', '{', '%7B', 'null'])
   p.listeners.webviewclosed({ response });
 p.listeners.webviewclosed({});
 for (const key of SETTING_KEYS) {
-  for (const value of [-1, SETTING_MAX[key] + 1, 0.5])
+  for (const value of [settingMin(key) - 1, SETTING_MAX[key] + 1, 0.5])
     p.listeners.webviewclosed({ response: toJson({ ...DEFAULT_SETTINGS, [key]: value }) });
   p.listeners.webviewclosed({ response: toJson({ ...DEFAULT_SETTINGS, [key]: SETTING_MAX[key] }) });
 }
 assert.equal(p.sent.length, 2 + SETTING_KEYS.length);
 assert.deepEqual(p.sent.at(-1), message({ ...DEFAULT_SETTINGS, clock: SETTING_MAX.clock }));
+
+// The number of stops starts at 2.
+p.listeners.webviewclosed({ response: toJson({ ...DEFAULT_SETTINGS, stops: 1 }) });
+assert.equal(p.sent.length, 2 + SETTING_KEYS.length);
+
+// Settings stored before the stop count get two stops at launch.
+const old = phone();
+const legacy = { ...DEFAULT_SETTINGS, palette: 9, low: 0x110000, high: 0xffee00 };
+delete legacy.stops;
+delete legacy.mid1;
+delete legacy.mid2;
+old.storage.set('settings', JSON.stringify(legacy));
+old.listeners.ready();
+assert.deepEqual(old.sent, [
+  message({ ...legacy, stops: 2, mid1: 0x110000, mid2: 0xffee00 }),
+]);
 
 // At launch the stored copy is sent again.
 const stored = p.storage;

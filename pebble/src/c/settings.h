@@ -11,8 +11,9 @@
 
 /* The settings, in the order of the message keys of pebble/package.json:
  * the Q15 coefficients of rd_params, the palette (RD_PALETTE_*), the dark
- * and light stops of RD_PALETTE_CUSTOM as 0xRRGGBB, the clock font set
- * (CM_FONT_*), and digit avoidance and the clock as 0 or 1. */
+ * and light stops of RD_PALETTE_CUSTOM as 0xRRGGBB, its number of stops (2
+ * to 4) and the stops between them, the clock font set (CM_FONT_*), and
+ * digit avoidance and the clock as 0 or 1. */
 enum {
   SETTING_FEED,
   SETTING_KILL,
@@ -22,6 +23,9 @@ enum {
   SETTING_PALETTE,
   SETTING_LOW,
   SETTING_HIGH,
+  SETTING_STOPS,
+  SETTING_MID1,
+  SETTING_MID2,
   SETTING_FONT,
   SETTING_AVOID,
   SETTING_CLOCK,

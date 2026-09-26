@@ -13,7 +13,8 @@
 
 var STORAGE_KEY = "settings";
 /* The settings and their largest values, in the order of the message keys
- * of package.json. A message key is the setting name in capitals. */
+ * of package.json. A message key is the setting name in capitals. Every
+ * value is from 0, or 2 for the number of stops, to its largest. */
 var SETTINGS = [
   ["feed", 32768],
   ["kill", 32768],
@@ -23,6 +24,9 @@ var SETTINGS = [
   ["palette", 9],
   ["low", 0xffffff],
   ["high", 0xffffff],
+  ["stops", 4],
+  ["mid1", 0xffffff],
+  ["mid2", 0xffffff],
   ["font", 1],
   ["avoid", 1],
   ["clock", 1],
@@ -36,16 +40,26 @@ function settingsOf(value) {
   for (var i = 0; i < SETTINGS.length; i++) {
     var name = SETTINGS[i][0];
     var v = value[name];
-    if (typeof v !== "number" || v % 1 !== 0 || v < 0 || v > SETTINGS[i][1])
+    var min = name === "stops" ? 2 : 0;
+    if (typeof v !== "number" || v % 1 !== 0 || v < min || v > SETTINGS[i][1])
       return null;
     settings[name] = v;
   }
   return settings;
 }
 
+/* Settings stored before the custom palette had more than two stops lack
+ * the number of stops and the middle stops: two stops, and middles that
+ * are only used once the page adds stops. */
 function load() {
   try {
-    return settingsOf(JSON.parse(localStorage.getItem(STORAGE_KEY)));
+    var value = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (value && typeof value === "object" && !("stops" in value)) {
+      value.stops = 2;
+      value.mid1 = value.low;
+      value.mid2 = value.high;
+    }
+    return settingsOf(value);
   } catch (e) {
     return null;
   }

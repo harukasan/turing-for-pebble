@@ -14,18 +14,25 @@ export const SETTING_KEYS = [
   "palette",
   "low",
   "high",
+  "stops",
+  "mid1",
+  "mid2",
   "font",
   "avoid",
   "clock",
 ] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
-/** Q15 coefficients, the palette index, the custom stops as 0xRRGGBB, the
+/** Q15 coefficients, the palette index, the dark and light custom stops as
+ * 0xRRGGBB, the number of custom stops (2 to 4) and the middle stops, the
  * clock font index, and avoidance and the clock as 0 or 1. */
 export type WatchSettings = Record<SettingKey, number>;
 
 const Q15 = 32768;
 
-/** Every setting is an integer from 0 to its maximum. */
+/** Every setting is an integer from its minimum, 0 except for the number
+ * of stops, to its maximum. */
+export const settingMin = (key: SettingKey) => (key === "stops" ? 2 : 0);
+
 export const SETTING_MAX: WatchSettings = {
   feed: Q15,
   kill: Q15,
@@ -35,6 +42,9 @@ export const SETTING_MAX: WatchSettings = {
   palette: PALETTE_COUNT - 1,
   low: 0xffffff,
   high: 0xffffff,
+  stops: 4,
+  mid1: 0xffffff,
+  mid2: 0xffffff,
   font: CLOCK_FONTS.length - 1,
   avoid: 1,
   clock: 1,
@@ -50,6 +60,9 @@ export const DEFAULT_SETTINGS: WatchSettings = {
   palette: 0,
   low: 0x001e12,
   high: 0xd2ff55,
+  stops: 2,
+  mid1: 0x466928,
+  mid2: 0x8cb43f,
   font: 0,
   avoid: 1,
   clock: 1,
@@ -63,7 +76,7 @@ export function validate(value: unknown): WatchSettings | null {
     if (
       typeof v !== "number" ||
       !Number.isInteger(v) ||
-      v < 0 ||
+      v < settingMin(key) ||
       v > SETTING_MAX[key]
     )
       return null;
@@ -150,11 +163,39 @@ export const rgbOf = (value: number): Rgb => [
 
 export const valueOf = (rgb: Rgb) => (rgb[0] << 16) | (rgb[1] << 8) | rgb[2];
 
+/** The keys of the custom stops in use, dark to light. */
+export const stopKeys = (settings: WatchSettings) =>
+  (
+    [
+      ["low", "high"],
+      ["low", "mid1", "high"],
+      ["low", "mid1", "mid2", "high"],
+    ] as const
+  )[settings.stops - 2];
+
 /** The stops of the custom palette. */
-export const customStops = (settings: WatchSettings): Rgb[] => [
-  rgbOf(settings.low),
-  rgbOf(settings.high),
-];
+export const customStops = (settings: WatchSettings): Rgb[] =>
+  stopKeys(settings).map((key) => rgbOf(settings[key]));
+
+/** Middle stops for a new number of stops: points on the line from the
+ * dark to the light stop, so the palette keeps its look until a middle stop
+ * is changed. */
+export function withStops(
+  settings: WatchSettings,
+  stops: number
+): WatchSettings {
+  const low = rgbOf(settings.low);
+  const high = rgbOf(settings.high);
+  const at = (t: number) =>
+    valueOf(
+      low.map((c, i) => Math.round(c + (high[i] - c) * t)) as unknown as Rgb
+    );
+  return stops === 3
+    ? { ...settings, stops, mid1: at(1 / 2) }
+    : stops === 4
+      ? { ...settings, stops, mid1: at(1 / 3), mid2: at(2 / 3) }
+      : { ...settings, stops };
+}
 
 /** The 64 colors of the watch display, two bits per channel. */
 export const PEBBLE_COLORS: Rgb[] = Array.from({ length: 64 }, (_, i) => [

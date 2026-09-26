@@ -17,6 +17,8 @@ import { parameterBounds } from "../core/modes.ts";
 import { PREVIEW_STEPS, PreviewView } from "./preview.ts";
 import {
   customStops,
+  stopKeys,
+  withStops,
   DIFFUSION_PRESETS,
   diffusionPresetOf,
   initialSettings,
@@ -132,12 +134,15 @@ function slider(
 
 const STOPS = [
   { key: "low", label: "暗い色" },
+  { key: "mid1", label: "中間 1" },
+  { key: "mid2", label: "中間 2" },
   { key: "high", label: "明るい色" },
 ] as const;
+type StopKey = (typeof STOPS)[number]["key"];
 
 const hex = (value: number) => `#${value.toString(16).padStart(6, "0")}`;
 
-/** The two stops of the custom palette as buttons showing their colors.
+/** The stops of the custom palette in use as buttons showing their colors.
  * A button opens the watch's 64 colors for its stop, and picking a color
  * closes them. */
 function customPicker(
@@ -145,7 +150,7 @@ function customPicker(
   picker: HTMLElement,
   onPick: () => void
 ) {
-  let picking: "low" | "high" | null = null;
+  let picking: StopKey | null = null;
   const buttons = STOPS.map(({ key, label }) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -177,7 +182,10 @@ function customPicker(
     return button;
   });
   function show() {
+    const used: readonly string[] = stopKeys(settings);
+    if (picking && !used.includes(picking)) picking = null;
     for (const { key, button, chip } of buttons) {
+      button.hidden = !used.includes(key);
       chip.style.background = hex(settings[key]);
       button.setAttribute("aria-expanded", String(picking === key));
     }
@@ -285,6 +293,15 @@ const paletteList = element("palettes");
   paletteInputs.push(input);
 });
 const customPalette = element("custom-palette");
+const setStops = chips(
+  element("custom-count"),
+  "stops",
+  ["2 色", "3 色", "4 色"],
+  (index) => {
+    Object.assign(settings, withStops(settings, index + 2));
+    changed("palette");
+  }
+);
 const showCustom = customPicker(
   element("custom-stops"),
   element("color-picker"),
@@ -326,6 +343,7 @@ function update() {
     customSwatch.replaceChildren(
       ...swatch(paletteSwatch(customStops(settings))).children
     );
+  setStops(settings.stops - 2);
   showCustom();
   setFont(settings.font);
   clock.checked = settings.clock === 1;

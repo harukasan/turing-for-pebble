@@ -16,24 +16,29 @@
 #pragma GCC optimize("Os")
 #endif
 
-#define SETTINGS_VERSION 1
+/* Version 2 added the number of custom stops and the two middle stops. */
+#define SETTINGS_VERSION 2
 #define SETTINGS_PERSIST_KEY 1
-/* The phone sends eleven integers: dict_calc_buffer_size for eleven 4-byte
- * values is 1 + 11 * (7 + 4) = 122 bytes. Nothing is sent to the phone. */
-#define SETTINGS_INBOX_BYTES 128
+/* The phone sends fourteen integers: dict_calc_buffer_size for fourteen
+ * 4-byte values is 1 + 14 * (7 + 4) = 155 bytes. Nothing is sent to the
+ * phone. */
+#define SETTINGS_INBOX_BYTES 160
 #define SETTINGS_OUTBOX_BYTES 16
 #define RGB_MAX 0xffffff
 
 static uint32_t *const KEYS[SETTING_COUNT] = {
     &MESSAGE_KEY_FEED,  &MESSAGE_KEY_KILL, &MESSAGE_KEY_DA,
     &MESSAGE_KEY_DB,    &MESSAGE_KEY_DT,   &MESSAGE_KEY_PALETTE,
-    &MESSAGE_KEY_LOW,   &MESSAGE_KEY_HIGH, &MESSAGE_KEY_FONT,
+    &MESSAGE_KEY_LOW,   &MESSAGE_KEY_HIGH, &MESSAGE_KEY_STOPS,
+    &MESSAGE_KEY_MID1,  &MESSAGE_KEY_MID2, &MESSAGE_KEY_FONT,
     &MESSAGE_KEY_AVOID, &MESSAGE_KEY_CLOCK};
 
-/* Every setting is an integer from 0 to its maximum. */
+/* Every setting is an integer from 0, or 2 for the number of stops, to its
+ * maximum. */
 static const int32_t MAXIMUM[SETTING_COUNT] = {
     RD_Q15_ONE, RD_Q15_ONE, RD_Q15_ONE,
     RD_Q15_ONE, RD_Q15_ONE, RD_PALETTE_COUNT - 1,
+    RGB_MAX,    RGB_MAX,    4,
     RGB_MAX,    RGB_MAX,    CM_FONT_COUNT - 1,
     1,          1};
 
@@ -42,8 +47,9 @@ static const uint8_t CHANGE[SETTING_COUNT] = {
     SETTINGS_CHANGED_PATTERN, SETTINGS_CHANGED_PATTERN,
     SETTINGS_CHANGED_PATTERN, SETTINGS_CHANGED_PALETTE,
     SETTINGS_CHANGED_PALETTE, SETTINGS_CHANGED_PALETTE,
-    SETTINGS_CHANGED_FONT,    SETTINGS_CHANGED_MASK,
-    SETTINGS_CHANGED_MASK};
+    SETTINGS_CHANGED_PALETTE, SETTINGS_CHANGED_PALETTE,
+    SETTINGS_CHANGED_PALETTE, SETTINGS_CHANGED_FONT,
+    SETTINGS_CHANGED_MASK,    SETTINGS_CHANGED_MASK};
 
 /* The persist blob. */
 typedef struct {
@@ -56,7 +62,7 @@ static SettingsChanged on_change;
 
 static bool valid(const int32_t value[SETTING_COUNT]) {
   for (int i = 0; i < SETTING_COUNT; i++) {
-    if (value[i] < 0 || value[i] > MAXIMUM[i]) {
+    if (value[i] < (i == SETTING_STOPS ? 2 : 0) || value[i] > MAXIMUM[i]) {
       return false;
     }
   }
@@ -94,6 +100,9 @@ static void log_settings(char source) {
           (long)v[SETTING_PALETTE], (unsigned long)v[SETTING_LOW],
           (unsigned long)v[SETTING_HIGH], (long)v[SETTING_FONT],
           (long)v[SETTING_AVOID], (long)v[SETTING_CLOCK]);
+  APP_LOG(APP_LOG_LEVEL_INFO, "RD settings stops=%ld mid1=%06lx mid2=%06lx",
+          (long)v[SETTING_STOPS], (unsigned long)v[SETTING_MID1],
+          (unsigned long)v[SETTING_MID2]);
 }
 
 static void dropped(AppMessageResult reason, void *context) {
@@ -151,7 +160,8 @@ void settings_load(void) {
       SETTINGS_VERSION,
       {RD_DEFAULT_FEED, RD_DEFAULT_KILL, RD_DEFAULT_DA, RD_DEFAULT_DB,
        RD_DEFAULT_DT, RD_DEFAULT_PALETTE, RD_DEFAULT_LOW, RD_DEFAULT_HIGH,
-       RD_DEFAULT_FONT, RD_DEFAULT_AVOID, RD_DEFAULT_CLOCK}};
+       RD_DEFAULT_STOPS, RD_DEFAULT_MID1, RD_DEFAULT_MID2, RD_DEFAULT_FONT,
+       RD_DEFAULT_AVOID, RD_DEFAULT_CLOCK}};
   current = defaults;
   log_settings('d');
 }
