@@ -64,8 +64,9 @@ static bool marked;
 static uint32_t busy_ms, gap_ms, blit_ms_total, text_ms_total;
 static uint32_t steps_total, slices, draws;
 static uint32_t startup_start_ms, last_slice_end_ms;
-static bool slice_seen, interrupted, startup_logged;
+static bool slice_seen, interrupted;
 #if RD_LOG
+static bool startup_logged;
 static uint32_t next_log_step = LOG_INTERVAL_STEPS;
 static uint32_t calibration_ms, mask_ms;
 #endif
