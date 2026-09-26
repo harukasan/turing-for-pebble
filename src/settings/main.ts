@@ -17,6 +17,9 @@ import { parameterBounds } from "../core/modes.ts";
 import { PREVIEW_STEPS, PreviewView } from "./preview.ts";
 import {
   customStops,
+  fromFileJson,
+  SETTINGS_FILE_NAME,
+  toFileJson,
   stopKeys,
   withStops,
   DIFFUSION_PRESETS,
@@ -364,6 +367,70 @@ function update() {
   avoid.checked = settings.avoid === 1;
   avoid.disabled = !clock.checked;
 }
+
+const fileStatus = element("file-status");
+
+/** The settings file through the share sheet where the web view offers one,
+ * as the Pebble app on the iPhone does, else as a download. */
+element("export").addEventListener("click", async () => {
+  const file = new File([toFileJson(settings)], SETTINGS_FILE_NAME, {
+    type: "application/json",
+  });
+  try {
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file] });
+      fileStatus.textContent = "書き出しました。";
+      return;
+    }
+  } catch (error) {
+    if ((error as Error).name === "AbortError") return;
+  }
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = SETTINGS_FILE_NAME;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  fileStatus.textContent = `${SETTINGS_FILE_NAME} を書き出しました。保存されない場合は「コピー」を使ってください。`;
+});
+
+/** The settings file's text to the clipboard, through a selected text area
+ * where the Clipboard API is unavailable. */
+element("copy").addEventListener("click", async () => {
+  const text = toFileJson(settings);
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.className = "visually-hidden";
+    document.body.append(area);
+    area.select();
+    const copied = document.execCommand("copy");
+    area.remove();
+    if (!copied) {
+      fileStatus.textContent = "コピーできませんでした。";
+      return;
+    }
+  }
+  fileStatus.textContent = "設定をコピーしました。";
+});
+
+const importInput = element<HTMLInputElement>("import");
+importInput.addEventListener("change", async () => {
+  const file = importInput.files?.[0];
+  importInput.value = "";
+  if (!file) return;
+  const loaded = fromFileJson(await file.text());
+  if (!loaded) {
+    fileStatus.textContent = `${file.name} は設定ファイルとして読み込めませんでした。`;
+    return;
+  }
+  Object.assign(settings, loaded);
+  changed("field");
+  fileStatus.textContent = `${file.name} を読み込みました。保存を押すと watch に送ります。`;
+});
 
 element("save").addEventListener("click", () => {
   location.href =

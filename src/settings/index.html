@@ -58,6 +58,23 @@
               <input type="checkbox" id="avoid" role="switch" />
             </label>
           </fieldset>
+          <fieldset>
+            <legend>設定ファイル</legend>
+            <div class="file-actions">
+              <button type="button" id="export">書き出す</button>
+              <button type="button" id="copy">コピー</button>
+              <label class="file-button">
+                読み込む
+                <input
+                  type="file"
+                  id="import"
+                  class="visually-hidden"
+                  accept="application/json,.json"
+                />
+              </label>
+            </div>
+            <p id="file-status" class="hint" aria-live="polite"></p>
+          </fieldset>
         </form>
         <footer class="actions">
           <button type="button" id="cancel">キャンセル</button>

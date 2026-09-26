@@ -123,6 +123,38 @@ export const toJson = (settings: WatchSettings) =>
     Object.fromEntries(SETTING_KEYS.map((key) => [key, settings[key]]))
   );
 
+/** The settings file: a named, versioned wrapper around the settings. */
+export const SETTINGS_FILE_FORMAT = "turing-pattern-watchface-settings";
+export const SETTINGS_FILE_NAME = "turing-settings.json";
+
+export const toFileJson = (settings: WatchSettings) =>
+  JSON.stringify(
+    {
+      format: SETTINGS_FILE_FORMAT,
+      version: 1,
+      settings: JSON.parse(toJson(settings)),
+    },
+    null,
+    2
+  ) + "\n";
+
+/** The settings of a settings file, or of the bare JSON the page returns,
+ * or null. */
+export function fromFileJson(text: string) {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!value || typeof value !== "object") return null;
+  const file = value as Record<string, unknown>;
+  if (!("format" in file)) return validate(value);
+  return file.format === SETTINGS_FILE_FORMAT && file.version === 1
+    ? validate(file.settings)
+    : null;
+}
+
 export const q15 = (value: number) => Math.round(value * Q15);
 
 /** Stripe widths: Da and Db in the ratio 2:1. Smaller rates draw thinner

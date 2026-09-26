@@ -22,6 +22,8 @@ import {
   toJson,
   toQuery,
   validate,
+  fromFileJson,
+  toFileJson,
 } from "./settings.ts";
 
 const read = (path: string) =>
@@ -141,6 +143,20 @@ test("the custom palette uses 2 to 4 stops, dark to light", () => {
   assert.equal(gray.mid2, 0xaaaaaa);
   assert.equal(withStops(s, 3).mid1, 0x808080);
   assert.equal(withStops({ ...s, stops: 4 }, 2).mid1, s.mid1);
+});
+
+test("settings files round-trip and take the page's bare JSON", () => {
+  const settings = { ...DEFAULT_SETTINGS, palette: 9, stops: 4 };
+  const text = toFileJson(settings);
+  assert.equal(JSON.parse(text).format, "turing-pattern-watchface-settings");
+  assert.deepEqual(fromFileJson(text), settings);
+  assert.deepEqual(fromFileJson(toJson(settings)), settings);
+  const file = JSON.parse(text);
+  assert.equal(fromFileJson(JSON.stringify({ ...file, version: 2 })), null);
+  assert.equal(fromFileJson(JSON.stringify({ ...file, format: "x" })), null);
+  file.settings.stops = 5;
+  assert.equal(fromFileJson(JSON.stringify(file)), null);
+  assert.equal(fromFileJson("not json"), null);
 });
 
 test("the color picker offers the 64 watch colors", () => {
