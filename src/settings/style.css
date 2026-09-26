@@ -435,3 +435,44 @@ legend {
     monospace;
   resize: vertical;
 }
+
+/* A collapsible section in the look of the fieldsets, closed until its
+ * heading is tapped. */
+.section {
+  margin: 20px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.section summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.section summary::-webkit-details-marker {
+  display: none;
+}
+
+.section summary::after {
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg);
+  transition: transform 0.2s;
+  content: "";
+}
+
+.section[open] summary {
+  margin-bottom: 12px;
+}
+
+.section[open] summary::after {
+  transform: rotate(-135deg);
+}
