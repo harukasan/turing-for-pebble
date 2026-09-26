@@ -125,9 +125,13 @@ legend {
 
 .slider {
   display: grid;
-  grid-template-columns: 3.5em 1fr 6.5em;
+  grid-template-columns: 2.5em minmax(0, 1fr) 5.5em;
   align-items: center;
   gap: 8px;
+}
+
+.slider > * {
+  min-width: 0;
 }
 
 .slider input[type="range"] {
@@ -143,6 +147,8 @@ legend {
   background: var(--bg);
   color: var(--text);
   font: inherit;
+  /* iOS zooms into a focused field whose text is below 16px. */
+  font-size: 16px;
   font-variant-numeric: tabular-nums;
   text-align: right;
   appearance: textfield;
