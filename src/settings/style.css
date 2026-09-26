@@ -80,7 +80,7 @@ body {
 
 /* The watch's black bezel around a nearly square-cornered display. */
 .bezel {
-  width: min(100%, 320px);
+  width: min(80%, 272px);
   padding: 7% 6%;
   border-radius: 30px;
   background: #000;
