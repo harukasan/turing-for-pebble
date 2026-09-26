@@ -2,6 +2,7 @@
   "name": "turing-watch",
   "version": "1.0.0",
   "private": true,
+  "license": "MIT",
   "pebble": {
     "displayName": "Turing Lab",
     "uuid": "c9f7a341-6a8f-4adf-b23a-05bc21712021",
