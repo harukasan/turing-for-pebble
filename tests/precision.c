@@ -10,7 +10,7 @@
  *
  * usage: precision <config> <preset 0-4> <seed> <checkpoint>...
  * config: comma-separated key=value pairs
- *   g=200|100       grid 200x228 or 100x114, seeded like rd_init
+ *   g=200|120|100   grid 200x228, 120x136, or 100x114, seeded like rd_init
  *   a=CODEC b=CODEC storage of each species:
  *                   lin<bits>[@max]        linear codes over [0, max]
  *                   pow<bits>:<gamma>[@max] value = max * (s / N)^gamma
@@ -21,6 +21,12 @@
  *                   Floyd-Steinberg rounding
  *   i=q15|q<P>|exact   version 1 Q15 arithmetic, version 2 integer
  *                   arithmetic with P fraction bits, or double
+ *   i=q15x32c1|q15x32c2|q15x32c3
+ *                   version 4 candidates, 32-bit arithmetic on Q15 codes
+ *                   (a=q15,b=q15 only): c1 rounds the Laplacian and A B to
+ *                   Q15, c2 folds the diffusion coefficients with 1/20 into
+ *                   round(D / 20) and keeps the reaction exact, c3 rounds
+ *                   the Laplacian like c1 with the exact reaction of c2
  *   d=<0..16>       threshold dither of near, ed1, and fs rounding in
  *                   sixteenths: 0 is nearest, 16 fully stochastic
  */
@@ -49,7 +55,7 @@ static const uint32_t SPECIES_SALT[2] = {0x63d83595u, 0xa511e9b3u};
 
 enum { R_STO, R_NEAR, R_ED1, R_FS };
 
-enum { I_Q15, I_QP, I_EXACT };
+enum { I_Q15, I_QP, I_EXACT, I_X32C1, I_X32C2, I_X32C3 };
 
 /* Fraction bits of the integer arithmetic path. */
 static int P = 24;
@@ -294,7 +300,22 @@ typedef struct {
   double *resd_a, *resd_b; /* same for the double path */
   const Config *cfg;
   int feed, kill, da, db, dt; /* Q15 */
+  /* Version 4 c2: round(da / 20) and round(db / 20), so that
+   * coefficient times the 20-fold Laplacian sum is the Q30 rate term. */
+  int cda, cdb;
 } Cand;
+
+/* Version 4 rate: a 32-bit Q30 value; the exact sum saturates at the
+ * int32 range, which the core reaches with one saturating final add. */
+static int32_t saturate32(int64_t x) {
+  return x > INT32_MAX ? INT32_MAX : x < INT32_MIN ? INT32_MIN : (int32_t)x;
+}
+
+/* Version 4 update of one species: the Q15 code plus the Q30 rate rounded
+ * half up to Q24, as a Q24 value for the version 3 encoder. */
+static int64_t update_x32(int code, int32_t rate) {
+  return ((int64_t)code << 9) + ((rate >> 6) + ((rate >> 5) & 1));
+}
 
 /* Nine-point Laplacian sum (20 times the Laplacian) of decoded values. */
 #define LAP_SUM(D, codes, x, y, w, h)                                          \
@@ -372,7 +393,35 @@ static void cand_step(Cand *s) {
       }
       int64_t res_a = rounding == R_FS ? carry_a + s->res_a[x + 1] : carry_a,
               res_b = rounding == R_FS ? carry_b + s->res_b[x + 1] : carry_b;
-      if (cfg->inter == I_Q15) {
+      if (cfg->inter >= I_X32C1) {
+        /* Version 4 candidates on Q15 codes with 32-bit products. */
+        const int *da_ = cfg->a.dec15, *db_ = cfg->b.dec15;
+        int a = da_[s->ca[i]], b = db_[s->cb[i]];
+        int32_t sum_a = LAP_SUM(da_, s->ca, x, y, w, h);
+        int32_t sum_b = LAP_SUM(db_, s->cb, x, y, w, h);
+        int32_t lap_term_a, lap_term_b, reaction;
+        if (cfg->inter == I_X32C2) {
+          lap_term_a = s->cda * sum_a;
+          lap_term_b = s->cdb * sum_b;
+        } else {
+          lap_term_a = s->da * round_div20(sum_a);
+          lap_term_b = s->db * round_div20(sum_b);
+        }
+        if (cfg->inter == I_X32C1) {
+          reaction = ((a * b + (1 << 14)) >> 15) * b;
+        } else {
+          uint32_t ab = (uint32_t)a * (uint32_t)b;
+          reaction = (int32_t)((ab >> 15) * b + (((ab & 32767) * b) >> 15));
+        }
+        int32_t rate_a = saturate32((int64_t)lap_term_a - reaction +
+                                    (int64_t)s->feed * (Q15_ONE - a));
+        int32_t rate_b = saturate32((int64_t)lap_term_b + reaction -
+                                    (int64_t)(s->kill + s->feed) * b);
+        s->nca[i] =
+            encodep(&cfg->a, update_x32(a, rate_a), rounding, ra, &res_a);
+        s->ncb[i] =
+            encodep(&cfg->b, update_x32(b, rate_b), rounding, rb, &res_b);
+      } else if (cfg->inter == I_Q15) {
         /* Version 1: every product rounded to Q15. */
         const int *da_ = cfg->a.dec15, *db_ = cfg->b.dec15;
         int a = da_[s->ca[i]], b = db_[s->cb[i]];
@@ -540,6 +589,15 @@ static void parse_config(Config *cfg, const char *text) {
         cfg->inter = I_Q15;
       } else if (!strcmp(val, "exact")) {
         cfg->inter = I_EXACT;
+      } else if (!strcmp(val, "q15x32c1")) {
+        cfg->inter = I_X32C1;
+        P = 24;
+      } else if (!strcmp(val, "q15x32c2")) {
+        cfg->inter = I_X32C2;
+        P = 24;
+      } else if (!strcmp(val, "q15x32c3")) {
+        cfg->inter = I_X32C3;
+        P = 24;
       } else if (sscanf(val, "q%d", &P) == 1 && P >= 16 && P <= 28) {
         cfg->inter = I_QP;
       } else {
@@ -553,9 +611,13 @@ static void parse_config(Config *cfg, const char *text) {
     }
   }
   free(spec);
-  if ((cfg->grid != 200 && cfg->grid != 100) || !cfg->a.levels ||
-      !cfg->b.levels) {
+  if ((cfg->grid != 200 && cfg->grid != 120 && cfg->grid != 100) ||
+      !cfg->a.levels || !cfg->b.levels) {
     fail("incomplete config", text);
+  }
+  if (cfg->inter >= I_X32C1 &&
+      (strcmp(cfg->a.name, "q15") || strcmp(cfg->b.name, "q15"))) {
+    fail("version 4 candidates need a=q15,b=q15", text);
   }
   codec_finish(&cfg->a);
   codec_finish(&cfg->b);
@@ -584,6 +646,8 @@ int main(int argc, char **argv) {
   s.da = Q15_ONE;
   s.db = Q15_ONE / 2;
   s.dt = Q15_ONE;
+  s.cda = (s.da + 10) / 20;
+  s.cdb = (s.db + 10) / 20;
   s.ca = malloc(n * sizeof(int));
   s.cb = malloc(n * sizeof(int));
   s.nca = malloc(n * sizeof(int));
@@ -605,7 +669,7 @@ int main(int argc, char **argv) {
     if (cfg.inter == I_Q15) {
       s.ca[i] = encode15(&cfg.a, q15(initial_a[i]), R_NEAR, 0, &unused);
       s.cb[i] = encode15(&cfg.b, q15(initial_b[i]), R_NEAR, 0, &unused);
-    } else if (cfg.inter == I_QP) {
+    } else if (cfg.inter == I_QP || cfg.inter >= I_X32C1) {
       int64_t one = (int64_t)1 << P;
       s.ca[i] = encodep(&cfg.a, (int64_t)floor(initial_a[i] * one + 0.5),
                         R_NEAR, 0, &unused);
@@ -619,11 +683,16 @@ int main(int argc, char **argv) {
     f.b[i] = (float)cand_value(&s, 1, i);
   }
   double feed = s.feed / (double)Q15_ONE, kill = s.kill / (double)Q15_ONE;
+  /* The c2 candidate runs with the folded coefficients, so the reference
+   * uses those effective values, as the Float32 comparison of the core
+   * uses its Q15-effective parameters. */
+  double ref_da = cfg.inter == I_X32C2 ? s.cda * 20 / (double)Q15_ONE : 1;
+  double ref_db = cfg.inter == I_X32C2 ? s.cdb * 20 / (double)Q15_ONE : 0.5;
   int done = 0;
   for (int k = 4; k < argc; k++) {
     int target = atoi(argv[k]);
     for (; done < target; done++) {
-      ref_step(&f, feed, kill, 1, 0.5, 1);
+      ref_step(&f, feed, kill, ref_da, ref_db, 1);
       cand_step(&s);
     }
     double ma[7], mb[7];
