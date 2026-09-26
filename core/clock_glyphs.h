@@ -16,9 +16,18 @@
  *   resources/normal/base/pbf/BITHAM_30_BLACK.pbf
  *     sha256 08d17b31cdeda603e855d359226a031f376dc3697e363a0beedbd3a6715a15fe
  *
- * A watch build defines RD_FONT and compiles the glyphs of that set only.
+ * A watch build defines RD_FONT and compiles the glyphs of that set only,
+ * and with RD_FACE 1 (the analog face) only its date line.
  */
 /* clang-format off */
+
+#if !defined(RD_FACE) || RD_FACE == 0
+#define CM_TIME_LINE 1
+#define CM_TIME_FONT(glyphs, bits) {glyphs, bits}
+#else
+#define CM_TIME_LINE 0
+#define CM_TIME_FONT(glyphs, bits) {NULL, NULL}
+#endif
 
 /* System font keys and text boxes of each set, for the watch. */
 static const CmLayout CM_LAYOUTS[CM_FONT_COUNT] = {
@@ -27,6 +36,7 @@ static const CmLayout CM_LAYOUTS[CM_FONT_COUNT] = {
 };
 
 #if !defined(RD_FONT) || RD_FONT == 0
+#if CM_TIME_LINE
 static const uint8_t CM_BITS_LECO_42_NUMBERS[740] = {
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0x3f, 0xc0, 0xff, 0x03, 0xfc, 0x3f, 0xc0, 0xff, 0x03,
@@ -104,6 +114,7 @@ static const CmGlyph CM_GLYPHS_LECO_42_NUMBERS[CM_GLYPHS] = {
     {20, 29, 3, 13, 26, 5191}, /* 9 */
     {6, 24, 3, 18, 12, 5771}, /* : */
 };
+#endif
 
 static const uint8_t CM_BITS_LECO_20_BOLD_NUMBERS[175] = {
     0xff, 0xff, 0xff, 0xff, 0xe1, 0x87, 0x1f, 0x7e, 0xf8, 0xe1, 0x87, 0x1f,
@@ -139,6 +150,7 @@ static const CmGlyph CM_GLYPHS_LECO_20_BOLD_NUMBERS[CM_GLYPHS] = {
 #endif
 
 #if !defined(RD_FONT) || RD_FONT == 1
+#if CM_TIME_LINE
 static const uint8_t CM_BITS_BITHAM_42_BOLD[826] = {
     0x00, 0xfc, 0x00, 0x00, 0xfe, 0x1f, 0x00, 0xfc, 0xff, 0x00, 0xfc, 0xff,
     0x0f, 0xf0, 0xff, 0x7f, 0xe0, 0xff, 0xff, 0xc1, 0x7f, 0xf8, 0x0f, 0x7f,
@@ -223,6 +235,7 @@ static const CmGlyph CM_GLYPHS_BITHAM_42_BOLD[CM_GLYPHS] = {
     {23, 30, 2, 12, 26, 5776}, /* 9 */
     {6, 23, 3, 19, 10, 6466}, /* : */
 };
+#endif
 
 static const uint8_t CM_BITS_BITHAM_30_BLACK[464] = {
     0x80, 0x1f, 0x00, 0xfe, 0x07, 0xf8, 0xff, 0xc1, 0xff, 0x3f, 0xfc, 0xff,
@@ -281,15 +294,16 @@ static const CmGlyph CM_GLYPHS_BITHAM_30_BLACK[CM_GLYPHS] = {
 
 #endif
 
-/* Time and date fonts of each set, or NULL when the set is not compiled. */
+/* Time and date fonts of each set, or NULL when the set or line is not
+ * compiled. */
 static const CmFont CM_FONTS[CM_FONT_COUNT][2] = {
 #if !defined(RD_FONT) || RD_FONT == 0
-    {{CM_GLYPHS_LECO_42_NUMBERS, CM_BITS_LECO_42_NUMBERS}, {CM_GLYPHS_LECO_20_BOLD_NUMBERS, CM_BITS_LECO_20_BOLD_NUMBERS}}, /* leco */
+    {CM_TIME_FONT(CM_GLYPHS_LECO_42_NUMBERS, CM_BITS_LECO_42_NUMBERS), {CM_GLYPHS_LECO_20_BOLD_NUMBERS, CM_BITS_LECO_20_BOLD_NUMBERS}}, /* leco */
 #else
     {{NULL, NULL}, {NULL, NULL}},
 #endif
 #if !defined(RD_FONT) || RD_FONT == 1
-    {{CM_GLYPHS_BITHAM_42_BOLD, CM_BITS_BITHAM_42_BOLD}, {CM_GLYPHS_BITHAM_30_BLACK, CM_BITS_BITHAM_30_BLACK}}, /* bitham */
+    {CM_TIME_FONT(CM_GLYPHS_BITHAM_42_BOLD, CM_BITS_BITHAM_42_BOLD), {CM_GLYPHS_BITHAM_30_BLACK, CM_BITS_BITHAM_30_BLACK}}, /* bitham */
 #else
     {{NULL, NULL}, {NULL, NULL}},
 #endif

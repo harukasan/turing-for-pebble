@@ -70,9 +70,18 @@ for name, font in data['fonts'].items():
     out.append(f' *     sha256 {font["sha256"]}')
 out += [
     ' *',
-    ' * A watch build defines RD_FONT and compiles the glyphs of that set only.',
+    ' * A watch build defines RD_FONT and compiles the glyphs of that set only,',
+    ' * and with RD_FACE 1 (the analog face) only its date line.',
     ' */',
     '/* clang-format off */',
+    '',
+    '#if !defined(RD_FACE) || RD_FACE == 0',
+    '#define CM_TIME_LINE 1',
+    '#define CM_TIME_FONT(glyphs, bits) {glyphs, bits}',
+    '#else',
+    '#define CM_TIME_LINE 0',
+    '#define CM_TIME_FONT(glyphs, bits) {NULL, NULL}',
+    '#endif',
     '',
     '/* System font keys and text boxes of each set, for the watch. */',
     'static const CmLayout CM_LAYOUTS[CM_FONT_COUNT] = {',
@@ -90,13 +99,18 @@ for index, font_set in enumerate(data['sets']):
     entry = []
     for line in LINES:
         name = font_set[line]['font']
-        out.append(font_tables(line, name))
-        entry.append(f'{{CM_GLYPHS_{name}, CM_BITS_{name}}}')
+        if line == 'time':
+            out += ['#if CM_TIME_LINE', font_tables(line, name) + '#endif\n']
+            entry.append(f'CM_TIME_FONT(CM_GLYPHS_{name}, CM_BITS_{name})')
+        else:
+            out.append(font_tables(line, name))
+            entry.append(f'{{CM_GLYPHS_{name}, CM_BITS_{name}}}')
     out += ['#endif', '']
     lines.append((index, font_set['name'], entry))
-out.append(
-    '/* Time and date fonts of each set, or NULL when the set is not compiled. */'
-)
+out += [
+    '/* Time and date fonts of each set, or NULL when the set or line is not',
+    ' * compiled. */',
+]
 out.append('static const CmFont CM_FONTS[CM_FONT_COUNT][2] = {')
 for index, name, entry in lines:
     out += [

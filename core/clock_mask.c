@@ -54,7 +54,12 @@ const CmLayout *cm_layout(int font) {
 }
 
 int cm_font_available(int font) {
-  return font >= 0 && font < CM_FONT_COUNT && CM_FONTS[font][CM_TIME].glyphs;
+  return font >= 0 && font < CM_FONT_COUNT && CM_FONTS[font][CM_DATE].glyphs;
+}
+
+static int cm_date_valid(int year, int month, int day) {
+  return year >= 0 && year <= 9999 && month >= 1 && month <= 12 && day >= 1 &&
+         day <= 31;
 }
 
 /* Grid cell holding the center of display pixel p on an axis of n cells
@@ -133,17 +138,18 @@ static void cm_date_text(uint8_t out[CM_DATE_LENGTH], int year, int month,
 }
 
 /* Visit the glyph pixels of the time and date lines (only check the
- * arguments when visit is NULL), or return -1 for an unavailable font or a
- * date or time out of range. */
+ * arguments when visit is NULL), or return -1 for an unavailable font or
+ * time line (an analog watch build has none) or a date or time out of
+ * range. */
 #if defined(__GNUC__)
 /* Kept out of line: the mask builder and the text drawer share one copy. */
 __attribute__((noinline))
 #endif
 static int cm_visit(int font, int hour, int minute, int year, int month,
                     int day, CmVisit visit, void *context) {
-  if (!cm_font_available(font) || hour < 0 || hour > 23 || minute < 0 ||
-      minute > 59 || year < 0 || year > 9999 || month < 1 || month > 12 ||
-      day < 1 || day > 31) {
+  if (!cm_font_available(font) || !CM_FONTS[font][CM_TIME].glyphs || hour < 0 ||
+      hour > 23 || minute < 0 || minute > 59 ||
+      !cm_date_valid(year, month, day)) {
     return -1;
   }
   if (!visit) {
@@ -302,14 +308,13 @@ static void cm_capsule(int x0, int y0, int x1, int y1, int r, CmVisit visit,
     seed = seed < 0                   ? 0
            : seed >= RD_DISPLAY_WIDTH ? RD_DISPLAY_WIDTH - 1
                                       : seed;
-    int x = seed;
-    while (x >= 0 && cm_inside(x, y, x0, y0, dx, dy, l2, r2)) {
-      visit(context, x, y);
-      x--;
-    }
-    for (x = seed + 1;
-         x < RD_DISPLAY_WIDTH && cm_inside(x, y, x0, y0, dx, dy, l2, r2); x++) {
-      visit(context, x, y);
+    for (int step = -1; step <= 1; step += 2) {
+      for (int x = step < 0 ? seed : seed + 1;
+           x >= 0 && x < RD_DISPLAY_WIDTH &&
+           cm_inside(x, y, x0, y0, dx, dy, l2, r2);
+           x += step) {
+        visit(context, x, y);
+      }
     }
   }
 }
@@ -334,7 +339,7 @@ static int cm_visit_analog(int font, int hour_angle, int minute_angle, int year,
                            int month, int day, CmVisit visit, void *context) {
   if (!cm_font_available(font) || hour_angle < 0 || hour_angle >= CM_TURN ||
       minute_angle < 0 || minute_angle >= CM_TURN ||
-      cm_visit(font, 0, 0, year, month, day, NULL, NULL) != 0) {
+      !cm_date_valid(year, month, day)) {
     return -1;
   }
   if (!visit) {
