@@ -1,16 +1,20 @@
 /*
  * Emery watchface: runs the shared core in timer slices and draws the field
- * with a LECO or Bitham clock on top, whose digits the field avoids. The
- * scheduling model is described in docs/behavior.md:
+ * with a LECO or Bitham clock on top, digital or, with RD_FACE, analog
+ * hands and the date, which the field avoids. The scheduling model is
+ * described in docs/behavior.md:
  *   - startup runs steps for STARTUP_MS after launch (at most
  *     STARTUP_STEPS_MAX of them) in consecutive slices of at most
  *     SLICE_BUDGET_MS, rescheduled SCHEDULE_NOW_MS apart, with the screen
  *     redrawn about every FRAME_INTERVAL_MS,
  *   - every minute rebuilds the digit mask and raises the pending steps to
- *     RD_MINUTE_STEPS (adds them without avoidance), run the same way,
+ *     RD_MINUTE_STEPS (adds them without avoidance), run the same way; the
+ *     analog hands instead sweep to the new minute over RD_SWEEP_MS in the
+ *     same slices, the mask rebuilt whenever a hand angle changes,
  *   - a backlight-on event animates for at most BACKLIGHT_WINDOW_MS with the
  *     same slices and redraws,
- *   - focus loss cancels timers and focus restore resumes pending work.
+ *   - focus loss cancels timers and snaps a sweep, and focus restore
+ *     resumes pending work.
  * With RD_LOG, timing counters feed the startup summary log; RD_PROFILE
  * adds a clock calibration loop and a periodic profile log.
  */
@@ -69,6 +73,19 @@ static bool slice_seen, interrupted;
 static bool startup_logged;
 static uint32_t next_log_step = LOG_INTERVAL_STEPS;
 static uint32_t calibration_ms, mask_ms;
+#endif
+#if RD_FACE
+/* Angles of the hands shown and masked, always equal after set_hands, and
+ * the sweep toward the angles of a new minute. */
+static int hour_angle, minute_angle;
+static int sweep_from_hour, sweep_from_minute, sweep_to_hour, sweep_to_minute;
+static uint32_t sweep_start_ms;
+static bool sweeping;
+#if RD_LOG
+/* Mask rebuilds, their longest time, and steps_total at the start of the
+ * current sweep, for the RD sweep log. */
+static uint32_t sweep_rebuilds, sweep_mask_max_ms, sweep_steps;
+#endif
 #endif
 
 static uint32_t now_ms(void) {
@@ -171,12 +188,37 @@ static uint8_t *clock_row(void *context, int y) {
   return row.min_x == 0 && row.max_x >= RD_DISPLAY_WIDTH - 1 ? row.data : NULL;
 }
 
+#if RD_FACE
+/* Tip of a hand of a length at an angle, for the system drawing. */
+static GPoint hand_tip(int angle, int length) {
+  int32_t trig = (int32_t)angle * TRIG_MAX_ANGLE / CM_TURN;
+  return GPoint(CM_DIAL_X + sin_lookup(trig) * length / TRIG_MAX_RATIO,
+                CM_DIAL_Y - cos_lookup(trig) * length / TRIG_MAX_RATIO);
+}
+#endif
+
 /* Draw the clock text with the system fonts, when the framebuffer cannot be
- * captured. */
+ * captured. The analog hands are system lines, close to but not the pixels
+ * of cm_draw_analog. */
 static void draw_system_text(GContext *ctx) {
   const CmLayout *layout = cm_layout(RD_FONT);
   char text[16];
   graphics_context_set_text_color(ctx, GColorWhite);
+#if RD_FACE
+  strftime(text, sizeof(text), "%Y.%m.%d", &clock_time);
+  graphics_draw_text(
+      ctx, text, font_date,
+      GRect(0, cm_analog_date_top(RD_FONT), RD_DISPLAY_WIDTH, layout->date_box),
+      GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+  GPoint center = GPoint(CM_DIAL_X, CM_DIAL_Y);
+  graphics_context_set_stroke_color(ctx, GColorWhite);
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_context_set_stroke_width(ctx, 2 * CM_HOUR_RADIUS + 1);
+  graphics_draw_line(ctx, center, hand_tip(hour_angle, CM_HOUR_LENGTH));
+  graphics_context_set_stroke_width(ctx, 2 * CM_MINUTE_RADIUS + 1);
+  graphics_draw_line(ctx, center, hand_tip(minute_angle, CM_MINUTE_LENGTH));
+  graphics_fill_circle(ctx, center, CM_CENTER_RADIUS);
+#else
   strftime(text, sizeof(text), "%H:%M", &clock_time);
   graphics_draw_text(
       ctx, text, font_clock,
@@ -187,6 +229,7 @@ static void draw_system_text(GContext *ctx) {
       ctx, text, font_date,
       GRect(0, layout->date_top, RD_DISPLAY_WIDTH, layout->date_box),
       GTextOverflowModeTrailingEllipsis, GTextAlignmentCenter, NULL);
+#endif
 }
 
 /* Blit the field straight into the framebuffer as ARGB8 rows from the core,
@@ -242,9 +285,15 @@ static void draw(Layer *this_layer, GContext *ctx) {
     if (RD_CLOCK) {
       ClockRows rows = {frame_buffer, bounds.origin.y < 0 ? 0 : bounds.origin.y,
                         y_end};
+#if RD_FACE
+      cm_draw_analog(clock_row, &rows, GColorWhiteARGB8, RD_FONT, hour_angle,
+                     minute_angle, clock_time.tm_year + 1900,
+                     clock_time.tm_mon + 1, clock_time.tm_mday);
+#else
       cm_draw(clock_row, &rows, GColorWhiteARGB8, RD_FONT, clock_time.tm_hour,
               clock_time.tm_min, clock_time.tm_year + 1900,
               clock_time.tm_mon + 1, clock_time.tm_mday);
+#endif
     }
     graphics_release_frame_buffer(ctx, frame_buffer);
   } else if (RD_CLOCK) {
@@ -264,6 +313,9 @@ static void draw(Layer *this_layer, GContext *ctx) {
 
 static void schedule(uint32_t delay);
 static void end_light(void);
+#if RD_FACE
+static bool advance_sweep(void);
+#endif
 
 #if RD_LOG
 static void log_summary(void) {
@@ -334,6 +386,13 @@ static void update(void *context) {
     return;
   }
   uint32_t start = now_ms();
+#if RD_FACE
+  /* The rebuild of a moving hand is charged to this slice's budget. */
+  bool moved = sweeping && advance_sweep();
+  bool sweep_left = sweeping;
+#else
+  bool moved = false, sweep_left = false;
+#endif
   bool working = startup_active || pending > 0;
   if (working && slice_seen) {
     /* A backwards clock is a clock fault, a long gap an interruption. */
@@ -378,7 +437,7 @@ static void update(void *context) {
   } else if (working) {
     pending -= done;
   }
-  bool remaining = startup_active || pending > 0;
+  bool remaining = startup_active || pending > 0 || sweep_left;
   uint32_t elapsed = elapsed_ms(start);
   if (elapsed > max_compute) {
     max_compute = elapsed;
@@ -388,7 +447,7 @@ static void update(void *context) {
   }
   steps_total += (uint32_t)done;
   slices++;
-  if (done) {
+  if (done || moved) {
     int32_t since = since_ms(last_mark_ms);
     /* While work or the animation is active, redraw once another slice would
      * overshoot the interval, so frames come about every FRAME_INTERVAL_MS
@@ -485,10 +544,17 @@ static void backlight(bool on) {
   }
 }
 
+#if RD_FACE
+static void snap_sweep(void);
+#endif
+
 static void focus(bool on) {
   focused = on;
   if (!on) {
     stop();
+#if RD_FACE
+    snap_sweep();
+#endif
     if (startup_active) {
       interrupted = true;
     }
@@ -500,8 +566,25 @@ static void focus(bool on) {
   }
 }
 
-/* Build the mask of the digits of clock_time and install it: B is held at
- * 0 under the digits at once, and the kill rate rises toward them. */
+#if RD_CLOCK && RD_AVOID
+/* Build the cell mask of the clock face of clock_time into clock_mask: the
+ * digits, or the hands at the shown angles and the date. */
+static int build_clock_mask(void) {
+#if RD_FACE
+  return cm_build_analog(clock_mask, rd_width(state), rd_height(state), RD_FONT,
+                         hour_angle, minute_angle, clock_time.tm_year + 1900,
+                         clock_time.tm_mon + 1, clock_time.tm_mday, RD_HALO);
+#else
+  return cm_build(clock_mask, rd_width(state), rd_height(state), RD_FONT,
+                  clock_time.tm_hour, clock_time.tm_min,
+                  clock_time.tm_year + 1900, clock_time.tm_mon + 1,
+                  clock_time.tm_mday, RD_HALO);
+#endif
+}
+#endif
+
+/* Build the mask of the clock face and install it: B is held at 0 under
+ * the digits or hands at once, and the kill rate rises toward them. */
 static void rebuild_mask(void) {
 #if RD_CLOCK && RD_AVOID
 #if RD_LOG
@@ -510,25 +593,117 @@ static void rebuild_mask(void) {
   if (!clock_mask) {
     clock_mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
   }
-  if (clock_mask &&
-      cm_build(clock_mask, rd_width(state), rd_height(state), RD_FONT,
-               clock_time.tm_hour, clock_time.tm_min, clock_time.tm_year + 1900,
-               clock_time.tm_mon + 1, clock_time.tm_mday, RD_HALO) == 0) {
+  if (clock_mask && build_clock_mask() == 0) {
     rd_mask(state, clock_mask);
   }
 #if RD_LOG
   mask_ms = elapsed_ms(start);
+#if RD_FACE
+  if (sweeping) {
+    sweep_rebuilds++;
+    if (mask_ms > sweep_mask_max_ms) {
+      sweep_mask_max_ms = mask_ms;
+    }
+  }
+#endif
 #endif
 #endif
 }
 
-/* A new minute: mask the new digits, and give the pattern RD_MINUTE_STEPS
- * to refill the strokes of the old ones. With avoidance the steps do not
- * accumulate while the face is unfocused; without it they add up. */
+#if RD_FACE
+/* Angles of the hands at a time. */
+static void target_angles(const struct tm *time, int *hour, int *minute) {
+  *hour = cm_hour_angle(time->tm_hour, time->tm_min);
+  *minute = cm_minute_angle(time->tm_min);
+}
+
+/* Show the hands at these angles, rebuilding the mask only when either
+ * changes. Returns whether they moved. */
+static bool set_hands(int hour, int minute) {
+  if (hour == hour_angle && minute == minute_angle) {
+    return false;
+  }
+  hour_angle = hour;
+  minute_angle = minute;
+  rebuild_mask();
+  return true;
+}
+
+/* Sweep from the shown angles to those of clock_time, starting now. The
+ * first slice moves the hands. */
+static void start_sweep(void) {
+  sweep_from_hour = hour_angle;
+  sweep_from_minute = minute_angle;
+  target_angles(&clock_time, &sweep_to_hour, &sweep_to_minute);
+  sweep_start_ms = now_ms();
+#if RD_LOG
+  if (!sweeping) {
+    sweep_rebuilds = 0;
+    sweep_mask_max_ms = 0;
+    sweep_steps = steps_total;
+  }
+#endif
+  sweeping = true;
+}
+
+/* End the sweep at its target angles. Returns whether the hands moved. */
+static bool end_sweep(void) {
+  bool moved = set_hands(sweep_to_hour, sweep_to_minute);
+#if RD_LOG
+  APP_LOG(APP_LOG_LEVEL_INFO,
+          "RD sweep rebuilds=%lu mask_max_ms=%lu ms=%ld steps=%lu",
+          (unsigned long)sweep_rebuilds, (unsigned long)sweep_mask_max_ms,
+          (long)since_ms(sweep_start_ms),
+          (unsigned long)(steps_total - sweep_steps));
+#endif
+  sweeping = false;
+  return moved;
+}
+
+static void snap_sweep(void) {
+  if (sweeping) {
+    end_sweep();
+  }
+}
+
+/* Move the hands to their eased angles RD_SWEEP_MS into the sweep, ending
+ * it at its target once the time is up or the clock went backwards.
+ * Returns whether the hands moved. */
+static bool advance_sweep(void) {
+  int32_t elapsed = since_ms(sweep_start_ms);
+  if (elapsed < 0 || elapsed >= RD_SWEEP_MS) {
+    return end_sweep();
+  }
+  return set_hands(
+      cm_sweep_angle(sweep_from_hour, sweep_to_hour, (int)elapsed, RD_SWEEP_MS),
+      cm_sweep_angle(sweep_from_minute, sweep_to_minute, (int)elapsed,
+                     RD_SWEEP_MS));
+}
+#endif
+
+/* A new minute: mask the new digits or sweep the hands, and give the
+ * pattern RD_MINUTE_STEPS to refill the strokes of the old ones. With
+ * avoidance the steps do not accumulate while the face is unfocused;
+ * without it they add up. */
 static void tick(struct tm *tick_time, TimeUnits units_changed) {
   (void)units_changed;
   clock_time = *tick_time;
+#if RD_FACE
+  /* Focused, the hands sweep in the next slices; unfocused, they jump. */
+#ifndef RD_FRAME_BENCH
+  if (focused) {
+    start_sweep();
+  } else
+#endif
+  {
+    int hour, minute;
+    sweeping = false;
+    target_angles(&clock_time, &hour, &minute);
+    set_hands(hour, minute);
+  }
+#else
   rebuild_mask();
+#endif
 #ifndef RD_FRAME_BENCH
   if (startup_active) {
     /* The startup steps refill the digits; the deadline settles the rest. */
@@ -581,6 +756,9 @@ static void init(void) {
   font_date = fonts_get_system_font(cm_layout(RD_FONT)->date_key);
   time_t now = time(NULL);
   clock_time = *localtime(&now);
+#if RD_FACE
+  target_angles(&clock_time, &hour_angle, &minute_angle);
+#endif
   rebuild_mask();
   window = window_create();
   layer = layer_create(GRect(0, 0, RD_DISPLAY_WIDTH, RD_DISPLAY_HEIGHT));
@@ -603,8 +781,9 @@ static void init(void) {
   startup_start_ms = now_ms();
 #if RD_LOG
   APP_LOG(APP_LOG_LEVEL_INFO,
-          "RD init mode=%d font=%d core_bytes=%lu heap_min=%lu mask_ms=%lu",
-          RD_MODE, RD_FONT, (unsigned long)rd_bytes(RD_MODE),
+          "RD init mode=%d font=%d face=%d core_bytes=%lu heap_min=%lu "
+          "mask_ms=%lu",
+          RD_MODE, RD_FONT, RD_FACE, (unsigned long)rd_bytes(RD_MODE),
           (unsigned long)min_heap, (unsigned long)mask_ms);
 #endif
   schedule(SCHEDULE_NOW_MS);

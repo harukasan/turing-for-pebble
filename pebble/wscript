@@ -52,6 +52,9 @@ def build(ctx):
         # RD_BUILD_FONT selects the clock font set (0 LECO, 1 Bitham).
         if os.environ.get('RD_BUILD_FONT'):
             cflags.append('-DRD_FONT=' + os.environ['RD_BUILD_FONT'])
+        # RD_BUILD_FACE selects the clock face (0 digital, 1 analog).
+        if os.environ.get('RD_BUILD_FACE'):
+            cflags.append('-DRD_FACE=' + os.environ['RD_BUILD_FACE'])
         # RD_BUILD_RENDER overrides the rd_row_rgb2 flags (2 interpolates).
         if os.environ.get('RD_BUILD_RENDER'):
             cflags.append('-DRD_RENDER_FLAGS=' + os.environ['RD_BUILD_RENDER'])

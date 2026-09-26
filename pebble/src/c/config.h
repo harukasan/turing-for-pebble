@@ -34,6 +34,12 @@
 #ifndef RD_FONT
 #define RD_FONT 0
 #endif
+/* Clock face: 0 digital HH:MM and date, 1 analog hands and date. */
+#ifndef RD_FACE
+#define RD_FACE 0
+#endif
+/* Duration of the sweep of the analog hands to a new minute. */
+#define RD_SWEEP_MS 1000
 /* Hold B at 0 in the cells under the clock digits, widened by RD_HALO
  * pixels, and raise the kill rate toward them so the pattern fades out
  * around the digits. Off in mode 0, where a minute

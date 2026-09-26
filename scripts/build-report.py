@@ -10,20 +10,35 @@ r['arm'] = []
 hardware = json.loads(Path('docs/hardware-measurements.json').read_text())[
     'measurements'
 ]
-for mode in [0, 1, 3]:
+# The watchfaces of build-pebble.sh: output name, mode, and clock face.
+variants = [
+    ('0', 0, 'digital'),
+    ('1', 1, 'digital'),
+    ('3', 3, 'digital'),
+    ('3-analog', 3, 'analog'),
+]
+for name, mode, face in variants:
     core_bytes = next(c['coreBytes'] for c in r['comparisons'] if c['mode'] == mode)
     values = (
         subprocess.check_output(
-            ['arm-none-eabi-size', f'build/pebble/mode-{mode}.elf'], text=True
+            ['arm-none-eabi-size', f'build/pebble/mode-{name}.elf'], text=True
         )
         .splitlines()[1]
         .split()
     )
     text, data, bss = map(int, values[:3])
-    # The newest physical-watch measurement of this mode, if any.
-    physical = next((m for m in reversed(hardware) if m['mode'] == mode), None)
+    # The newest physical-watch measurement of this mode and face, if any.
+    # Entries without a face were measured with the digital face.
+    physical = next(
+        (
+            m
+            for m in reversed(hardware)
+            if m['mode'] == mode and m.get('face', 'digital') == face
+        ),
+        None,
+    )
     stack = {}
-    for f in Path(f'build/pebble/stack-{mode}').glob('*.su'):
+    for f in Path(f'build/pebble/stack-{name}').glob('*.su'):
         for line in f.read_text().splitlines():
             place, size, kind = line.split('\t')
             stack[place.split(':')[-1]] = int(size)
@@ -32,6 +47,7 @@ for mode in [0, 1, 3]:
     r['arm'].append(
         {
             'mode': mode,
+            'face': face,
             'textBytes': text,
             'dataBytes': data,
             'bssBytes': bss,
