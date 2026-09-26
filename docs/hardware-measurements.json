@@ -3,6 +3,7 @@
   "fields": {
     "commit": "git commit of the measured build",
     "mode": "0, 1, or 3",
+    "face": "digital or analog (RD_FACE). Entries without it were measured with the digital face",
     "date": "ISO 8601 date",
     "firmware": "watch firmware version",
     "startupWallMs": "wall_ms of the RD startup line: the validated slice and gap times summed until the startup and any minute refill it still owed finished (gaps of 5 s or more are excluded and flagged as interrupted)",

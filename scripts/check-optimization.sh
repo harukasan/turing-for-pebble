@@ -2,8 +2,8 @@
 # The fixed-point core must give identical fields at every optimization
 # level, and identical to the recorded hashes of the numerical definition in
 # tests/golden-hashes.txt (mode, steps, hash per line, optionally followed by
-# the clock mask arguments of build/core-test, digital or `analog ...`; seed
-# 42).
+# the clock mask arguments of build/core-test, digital or `analog ...`, with
+# seed 42).
 set -eu
 mkdir -p build
 cc -O0 -std=c11 tests/core.c -o build/core-o0

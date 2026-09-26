@@ -1,6 +1,6 @@
 /* Host run of the phase timing in core/rd_bench.c: build/bench mode
  * count [analog], with the mask of the digits or, with `analog`, of the
- * analog face. Host times only rank the phases; the watch numbers
+ * analog face. Host times only rank the phases, and the watch numbers
  * decide. */
 #define _POSIX_C_SOURCE 199309L
 #include "../core/rd.c"

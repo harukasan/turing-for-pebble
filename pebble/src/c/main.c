@@ -8,9 +8,9 @@
  *     SLICE_BUDGET_MS, rescheduled SCHEDULE_NOW_MS apart, with the screen
  *     redrawn about every FRAME_INTERVAL_MS,
  *   - every minute rebuilds the digit mask and raises the pending steps to
- *     RD_MINUTE_STEPS (adds them without avoidance), run the same way; the
- *     analog hands instead sweep to the new minute over RD_SWEEP_MS in the
- *     same slices, the mask rebuilt whenever a hand angle changes,
+ *     RD_MINUTE_STEPS (adds them without avoidance), run the same way, and
+ *     the analog hands sweep to the new minute over RD_SWEEP_MS in the same
+ *     slices, the mask rebuilt whenever a hand angle changes,
  *   - a backlight-on event animates for at most BACKLIGHT_WINDOW_MS with the
  *     same slices and redraws,
  *   - focus loss cancels timers and snaps a sweep, and focus restore
@@ -689,7 +689,7 @@ static void tick(struct tm *tick_time, TimeUnits units_changed) {
   (void)units_changed;
   clock_time = *tick_time;
 #if RD_FACE
-  /* Focused, the hands sweep in the next slices; unfocused, they jump. */
+  /* Focused, the hands sweep in the next slices. Unfocused, they jump. */
 #ifndef RD_FRAME_BENCH
   if (focused) {
     start_sweep();
