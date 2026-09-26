@@ -82,10 +82,14 @@ export class TuringPlayer {
     this.playing = false;
   }
 
-  /** Reset the field: a new simulation of the model of params with the
-   * engine and seed. Parameters of another model set later are not
-   * stepped until the next load. */
-  async load(engine: Engine, seed: number, params: Parameters) {
+  /** Reset the field: a new simulation of the model of params (by default
+   * the current settings) with the engine and seed. Parameters of another
+   * model set later are not stepped until the next load. */
+  async load(
+    engine: Engine,
+    seed: number,
+    params: Parameters = this.settings.params
+  ) {
     const requested = ++this.generation;
     this.sim?.dispose();
     this.sim = null;
