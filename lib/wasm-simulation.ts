@@ -19,6 +19,7 @@ type API = {
   rd_seed(p: number, x: number, y: number, r: number): number;
   rd_step(p: number, n: number): number;
   rd_steps(p: number): number;
+  rd_hash(p: number): number;
   rd_row(p: number, y: number, c: number, flags: number): number;
   rd_width(p: number): number;
   rd_height(p: number): number;
@@ -182,6 +183,10 @@ export class WasmSimulation {
   }
   get steps() {
     return this.api.rd_steps(this.state);
+  }
+  /** rd_hash of the stored field, as an unsigned integer. */
+  hash() {
+    return this.api.rd_hash(this.state) >>> 0;
   }
   get linearBytes() {
     return this.api.memory.buffer.byteLength;
