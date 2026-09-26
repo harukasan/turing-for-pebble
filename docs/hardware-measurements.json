@@ -237,6 +237,40 @@
       "clockInvalid": false,
       "interrupted": false,
       "note": "1,330 steps: a minute change near the end raised the pending steps by 80. 664 draws, 23.4 frames per second, two steps per frame; about 26.7 s for the 1,250 startup steps alone. The display-limit build measured the OS ceiling at about 27 frames per second with any draw."
+    },
+    {
+      "commit": "fff525e plus the three-pass Q15 row loop (RD_BUILD_LOG=1)",
+      "mode": 3,
+      "date": "2026-09-26",
+      "firmware": "unknown",
+      "startupWallMs": 25313,
+      "stepsPerSecond": 49.3,
+      "avgStepUs": 13665,
+      "maxStepMs": 39,
+      "avgDrawUs": 7378,
+      "avgTextUs": 951,
+      "minimumFreeHeapBytes": 22776,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "note": "619 draws, 24.5 frames per second, two steps per frame. RD_BENCH step 13.1 ms against 14.25 ms for the single-loop version. Load size 15,045 B without logs. Experiments that did not help on the watch: holding the previous column's residual in a register (14.25 ms, kept), fusing the Laplacian sums into the cell loop (15.45 ms), unrolling the cell loop twice (15.25 ms), and -mcpu=cortex-m33 (14.25 ms)."
+    },
+    {
+      "commit": "fff525e plus the three-pass Q15 row loop, 50 ms redraws with 30 ms slices (RD_BUILD_LOG=1)",
+      "mode": 3,
+      "date": "2026-09-26",
+      "firmware": "unknown",
+      "startupWallMs": 22675,
+      "stepsPerSecond": 55.1,
+      "avgStepUs": 13984,
+      "maxStepMs": 43,
+      "avgDrawUs": 6582,
+      "avgTextUs": 890,
+      "minimumFreeHeapBytes": 22776,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "note": "422 draws, 18.6 frames per second, three steps per frame."
     }
   ]
 }

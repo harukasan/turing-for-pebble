@@ -21,10 +21,10 @@
 #define STARTUP_STEPS RD_STARTUP_STEPS
 #define STEPS_PER_SLICE 8
 #define SLICE_BUDGET_MS 8
-#define STARTUP_SLICE_BUDGET_MS 20
+#define STARTUP_SLICE_BUDGET_MS 30
 #define FRAME_INTERVAL_MS 100
 /* Redraw interval while startup or minute work is pending. */
-#define WORK_FRAME_INTERVAL_MS 40
+#define WORK_FRAME_INTERVAL_MS 50
 #define SCHEDULE_NOW_MS 1
 #define BACKLIGHT_WINDOW_MS 5000
 #define LOG_INTERVAL_STEPS 256
