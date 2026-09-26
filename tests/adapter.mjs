@@ -4,11 +4,19 @@ import {
   loadCore,
   WasmSimulation,
   effective,
+  buildAnalogMask,
   buildMask,
   maskBit,
   maskLevels,
 } from '../lib/wasm-simulation.ts';
 import { FloatSimulation } from '../lib/float-simulation.ts';
+import {
+  analogPixels,
+  hourAngle,
+  minuteAngle,
+  sweepAngle,
+  TURN,
+} from '../lib/clock-face.ts';
 import {
   CLOCK_FONTS,
   clockPixels,
@@ -132,19 +140,80 @@ for (const font of CLOCK_FONTS)
         );
       }
 
-// Masked cells hold the equilibrium in both engines, through a step.
+// The analog mask of a grid is the face bitmap drawn by the preview,
+// widened by the square halo and mapped to cells, and the JS angles agree
+// with the core.
+for (let t = 0; t < 720; t++) {
+  const [h, m] = [Math.floor(t / 60), t % 60];
+  assert.equal(hourAngle(h, m), api.cm_hour_angle(h, m));
+  assert.equal(hourAngle(h + 12, m), api.cm_hour_angle(h + 12, m));
+  assert.equal(minuteAngle(m), api.cm_minute_angle(m));
+}
+assert.equal(sweepAngle(api, TURN - 24, 0, 1000, 1000), 0);
+assert.throws(() => sweepAngle(api, TURN, 0, 0, 1000));
+const faces = [
+  [hourAngle(13, 57), minuteAngle(57)],
+  [0, 0],
+  [1438, 1416],
+];
+for (const font of CLOCK_FONTS)
+  for (const width of [100, 200])
+    for (const halo of [0, 2, 3])
+      for (const [hour, minute] of faces) {
+        const date = times[1];
+        const height = (width * 228) / 200;
+        const bitmap = analogPixels(api, fontIndex(font), hour, minute, date);
+        const expected = new Uint8Array(((width + 7) >> 3) * height);
+        for (let py = 0; py < 228; py++)
+          for (let px = 0; px < 200; px++) {
+            if (!maskBit(bitmap, 200, px, py)) continue;
+            for (
+              let y = Math.max(0, py - halo);
+              y <= Math.min(227, py + halo);
+              y++
+            )
+              for (
+                let x = Math.max(0, px - halo);
+                x <= Math.min(199, px + halo);
+                x++
+              ) {
+                const gx = Math.floor((x * width) / 200),
+                  gy = Math.floor((y * height) / 228);
+                expected[gy * ((width + 7) >> 3) + (gx >> 3)] |= 1 << (gx & 7);
+              }
+          }
+        const mask = buildAnalogMask(
+          api,
+          width,
+          height,
+          fontIndex(font),
+          hour,
+          minute,
+          date,
+          halo,
+        );
+        assert.deepEqual(mask, expected, `${font} ${width} ${halo} ${hour}`);
+      }
+
+// Masked cells hold the equilibrium in both engines, through a step, for
+// the digits and for the analog face.
 const clockDate = times[1];
-for (const [engine, width] of [
-  [0, 200],
-  [1, 100],
-  ['float', 100],
+for (const [engine, width, face] of [
+  [0, 200, 'digital'],
+  [1, 100, 'digital'],
+  ['float', 100, 'digital'],
+  [1, 100, 'analog'],
+  ['float', 100, 'analog'],
 ]) {
   const s =
     engine === 'float'
       ? new FloatSimulation(width, 42)
       : new WasmSimulation(api, engine, 42);
   if (engine !== 'float') assert.equal(s.components.length, 6);
-  const mask = buildMask(api, s.width, s.height, 1, clockDate, 1);
+  const mask =
+    face === 'analog'
+      ? buildAnalogMask(api, s.width, s.height, 1, 360, 600, clockDate, 1)
+      : buildMask(api, s.width, s.height, 1, clockDate, 1);
   const levels = maskLevels(mask, s.width, s.height);
   s.setMask(mask);
   s.seedAt(Math.floor(s.width / 2), Math.floor(s.height / 2), 20);
@@ -191,5 +260,5 @@ for (const [engine, width] of [
   wasm.dispose();
 }
 console.log(
-  'Clock masks: core glyphs equal the JSON glyphs for both fonts, mask levels agree and B stays 0 in masked cells',
+  'Clock masks: core glyphs equal the JSON glyphs for both fonts, analog masks equal the splatted face bitmap, mask levels agree and B stays 0 in masked cells for both faces',
 );

@@ -1,8 +1,17 @@
 import { FloatSimulation } from "../../lib/float-simulation";
 import { drawClock, fontIndex, loadFonts } from "../../lib/clock-fonts";
+import {
+  analogPixels,
+  dateAtMinutes,
+  drawAnalog,
+  hourAngle,
+  minuteAngle,
+  sweepAngle,
+} from "../../lib/clock-face";
 import type { Parameters } from "../../lib/simulation";
 import {
   WasmSimulation,
+  buildAnalogMask,
   buildMask,
   loadCore,
   type CoreAPI,
@@ -12,11 +21,14 @@ import {
   engineWidth,
   HALO,
   isFloat,
+  SWEEP_MS,
   type Engine,
   type PlayerSettings,
 } from "./modes";
 
 type ActiveSimulation = WasmSimulation | FloatSimulation;
+/** Angles of the analog hands, in 1/1440 of a turn. */
+type Hands = { hour: number; minute: number };
 
 export type PlayerStats = {
   steps: number;
@@ -47,6 +59,13 @@ export class TuringPlayer {
   private maskSim: ActiveSimulation | null = null;
   private maskKey = "";
   private playing = false;
+  /** Angles of the analog hands shown, null to snap to the next target. */
+  private hands: Hands | null = null;
+  /** The sweep of the hands in progress, started at a frame time. */
+  private sweep: { from: Hands; to: Hands; start: number } | null = null;
+  /** The face bitmap drawn over the field and the key it was built for. */
+  private overlay: Uint8Array | null = null;
+  private overlayKey = "";
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -183,26 +202,57 @@ export class TuringPlayer {
       clock,
       avoid,
       font,
+      face,
+      time,
       palette,
       quantize,
       interpolate,
     } = this.settings;
     const start = performance.now();
-    const minute = Math.floor(Date.now() / 60000);
-    const key = clock && avoid ? `${font}|${minute}` : "";
+    const shown = time === null ? new Date() : dateAtMinutes(time);
+    const day = `${shown.getFullYear()}-${shown.getMonth() + 1}-${shown.getDate()}`;
     try {
+      let faceKey: string;
+      let hands: Hands | null = null;
+      if (face === "analog") {
+        hands = this.moveHands(
+          core,
+          {
+            hour: hourAngle(shown.getHours(), shown.getMinutes()),
+            minute: minuteAngle(shown.getMinutes()),
+          },
+          now
+        );
+        faceKey = `analog|${font}|${day}|${hands.hour}|${hands.minute}`;
+      } else {
+        this.hands = null;
+        this.sweep = null;
+        faceKey = `digital|${font}|${day}|${shown.getHours() * 60 + shown.getMinutes()}`;
+      }
+      const key = clock && avoid ? faceKey : "";
       if (sim !== this.maskSim || key !== this.maskKey) {
         sim.setMask(
-          key
-            ? buildMask(
-                core,
-                sim.width,
-                sim.height,
-                fontIndex(font),
-                new Date(),
-                HALO
-              )
-            : null
+          !key
+            ? null
+            : hands
+              ? buildAnalogMask(
+                  core,
+                  sim.width,
+                  sim.height,
+                  fontIndex(font),
+                  hands.hour,
+                  hands.minute,
+                  shown,
+                  HALO
+                )
+              : buildMask(
+                  core,
+                  sim.width,
+                  sim.height,
+                  fontIndex(font),
+                  shown,
+                  HALO
+                )
         );
         this.maskSim = sim;
         this.maskKey = key;
@@ -225,7 +275,19 @@ export class TuringPlayer {
       this.off.putImageData(this.pixels, 0, 0);
       this.ctx.imageSmoothingEnabled = false;
       this.ctx.drawImage(this.offscreen, 0, 0);
-      if (clock) drawClock(this.ctx, new Date(), font);
+      if (clock && hands) {
+        if (faceKey !== this.overlayKey) {
+          this.overlay = analogPixels(
+            core,
+            fontIndex(font),
+            hands.hour,
+            hands.minute,
+            shown
+          );
+          this.overlayKey = faceKey;
+        }
+        if (this.overlay) drawAnalog(this.ctx, this.overlay);
+      } else if (clock) drawClock(this.ctx, shown, font);
       this.lastPaint = now;
       if (now - this.lastStats > 400) {
         this.publishStats();
@@ -237,4 +299,32 @@ export class TuringPlayer {
       this.publishStats();
     }
   };
+  /** Move the analog hands toward a target at frame time now: snap on the
+   * first frame, start a sweep from the shown angles when the target
+   * changes, and ease along it for SWEEP_MS. The mask key holds the shown
+   * angles, so the mask is rebuilt only when an integer angle changes. */
+  private moveHands(core: CoreAPI, target: Hands, now: number): Hands {
+    if (!this.hands) {
+      this.sweep = null;
+      this.hands = target;
+      return target;
+    }
+    const goal = this.sweep?.to ?? this.hands;
+    if (target.hour !== goal.hour || target.minute !== goal.minute)
+      this.sweep = { from: this.hands, to: target, start: now };
+    if (this.sweep) {
+      const { from, to } = this.sweep;
+      const elapsed = now - this.sweep.start;
+      if (elapsed >= SWEEP_MS) {
+        this.hands = to;
+        this.sweep = null;
+      } else {
+        this.hands = {
+          hour: sweepAngle(core, from.hour, to.hour, elapsed, SWEEP_MS),
+          minute: sweepAngle(core, from.minute, to.minute, elapsed, SWEEP_MS),
+        };
+      }
+    }
+    return this.hands;
+  }
 }

@@ -10,6 +10,12 @@ export const engineMode = (engine: Engine) =>
   engine.endsWith("200") ? 0 : engine.endsWith("120") ? 3 : 1;
 export const isFloat = (engine: Engine) => engine.startsWith("float");
 export const HALO = 1;
+/** Duration of the sweep of the analog hands to a new minute (RD_SWEEP_MS
+ * on the watch). */
+export const SWEEP_MS = 1000;
+
+/** Clock face: the digital HH:MM and date, or hands and the date. */
+export type ClockFace = "digital" | "analog";
 
 export const defaultParameters: Parameters = {
   feed: 0.029,
@@ -27,6 +33,9 @@ export type PlayerSettings = {
   interpolate: boolean;
   clock: boolean;
   font: ClockFont;
+  face: ClockFace;
+  /** Minute of the day shown, or null for the current time. */
+  time: number | null;
   avoid: boolean;
 };
 
@@ -38,5 +47,7 @@ export const defaultPlayerSettings: PlayerSettings = {
   interpolate: true,
   clock: true,
   font: "leco",
+  face: "digital",
+  time: null,
   avoid: true,
 };

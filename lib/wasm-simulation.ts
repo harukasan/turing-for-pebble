@@ -36,8 +36,44 @@ type API = {
     day: number,
     halo: number
   ): number;
+  cm_build_analog(
+    m: number,
+    w: number,
+    h: number,
+    font: number,
+    hourAngle: number,
+    minuteAngle: number,
+    year: number,
+    month: number,
+    day: number,
+    halo: number
+  ): number;
+  cm_sweep_angle(
+    from: number,
+    to: number,
+    elapsedMs: number,
+    durationMs: number
+  ): number;
+  cm_hour_angle(hour: number, minute: number): number;
+  cm_minute_angle(minute: number): number;
 };
 export type CoreAPI = API;
+/** A copy of the mask of a grid that fill writes at a Wasm pointer, or an
+ * error when fill returns nonzero. */
+function withMaskBuffer(
+  api: API,
+  bytes: number,
+  fill: (pointer: number) => number
+) {
+  const pointer = api.malloc(bytes);
+  if (!pointer) throw new Error("Wasm allocation failed");
+  try {
+    if (fill(pointer)) throw new Error("Invalid clock mask");
+    return new Uint8Array(api.memory.buffer, pointer, bytes).slice();
+  } finally {
+    api.free(pointer);
+  }
+}
 /** The clock mask of a grid (cm_build in core/clock_mask.c), one bit per
  * cell in rows of (width + 7) / 8 bytes. */
 export function buildMask(
@@ -48,29 +84,48 @@ export function buildMask(
   date: Date,
   halo: number
 ) {
-  const bytes = api.cm_bytes(width, height);
-  const pointer = api.malloc(bytes);
-  if (!pointer) throw new Error("Wasm allocation failed");
-  try {
-    if (
-      api.cm_build(
-        pointer,
-        width,
-        height,
-        font,
-        date.getHours(),
-        date.getMinutes(),
-        date.getFullYear(),
-        date.getMonth() + 1,
-        date.getDate(),
-        halo
-      )
+  return withMaskBuffer(api, api.cm_bytes(width, height), (pointer) =>
+    api.cm_build(
+      pointer,
+      width,
+      height,
+      font,
+      date.getHours(),
+      date.getMinutes(),
+      date.getFullYear(),
+      date.getMonth() + 1,
+      date.getDate(),
+      halo
     )
-      throw new Error("Invalid clock mask");
-    return new Uint8Array(api.memory.buffer, pointer, bytes).slice();
-  } finally {
-    api.free(pointer);
-  }
+  );
+}
+/** The mask of the analog face of a grid (cm_build_analog in
+ * core/clock_mask.c): the hands at their angles, the center disk, and the
+ * date. At width 200 and halo 0 it is the pixel bitmap of the face. */
+export function buildAnalogMask(
+  api: API,
+  width: number,
+  height: number,
+  font: number,
+  hourAngle: number,
+  minuteAngle: number,
+  date: Date,
+  halo: number
+) {
+  return withMaskBuffer(api, api.cm_bytes(width, height), (pointer) =>
+    api.cm_build_analog(
+      pointer,
+      width,
+      height,
+      font,
+      hourAngle,
+      minuteAngle,
+      date.getFullYear(),
+      date.getMonth() + 1,
+      date.getDate(),
+      halo
+    )
+  );
 }
 /** Ramp of the mask levels and the kill rate at the mask (RD_MASK_RAMP and
  * RD_MASK_KILL of core/rd.h). */
