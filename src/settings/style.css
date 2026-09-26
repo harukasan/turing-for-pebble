@@ -1,22 +1,24 @@
+/* The Pebble app's theme: coreOrange with white text on it, the dark grey
+ * background of its dark scheme, and white in its light scheme. */
 :root {
-  --bg: #111315;
-  --surface: #1c1f22;
-  --line: #34383d;
-  --text: #eef0f2;
-  --muted: #a3a9b0;
-  --accent: #7fdc4a;
-  --accent-text: #0e1a07;
+  --bg: #333333;
+  --surface: #3c3c3c;
+  --line: #545454;
+  --text: #f1f1f1;
+  --muted: #b3b3b3;
+  --accent: #fa4a36;
+  --accent-text: #ffffff;
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #f4f5f6;
-    --surface: #ffffff;
-    --line: #d5d9dd;
-    --text: #15181b;
-    --muted: #5b636b;
-    --accent: #2f7d12;
+    --bg: #ffffff;
+    --surface: #f6f6f6;
+    --line: #dcdcdc;
+    --text: #111111;
+    --muted: #5f5f5f;
+    --accent: #fa4a36;
     --accent-text: #ffffff;
     color-scheme: light;
   }
