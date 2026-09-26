@@ -655,6 +655,10 @@ static void check_encode_masked(void) {
          shares.held == 5);
 }
 
+/* Pixels of the LECO analog face with the hour hand at angle 360 (3
+ * o'clock), the minute hand at 600 (25 minutes), and the date 2046.08.29. */
+#define ANALOG_PIXELS 1620
+
 /* Row callback of cm_draw over a 200 x 228 byte screen. */
 static uint8_t *test_row(void *context, int y) {
   return (uint8_t *)context + y * RD_DISPLAY_WIDTH;
@@ -722,6 +726,206 @@ static void check_clock_mask(void) {
   assert(cm_draw(test_row, NULL, 0xff, 0, 24, 50, 2026, 9, 24) == -1);
 }
 
+/* Pixel (x, y) of a 200 x 228 bitmap in the mask format. */
+static int bitmap_bit(const uint8_t *bits, int x, int y) {
+  return bits[y * 25 + x / 8] >> (x % 8) & 1;
+}
+
+static void bitmap_pixel(void *context, int x, int y) {
+  uint8_t *bits = context;
+  assert(x >= 0 && x < RD_DISPLAY_WIDTH && y >= 0 && y < RD_DISPLAY_HEIGHT);
+  bits[y * 25 + x / 8] |= (uint8_t)(1u << (x % 8));
+}
+
+/* The hands and the center disk alone, as cm_visit_analog visits them. */
+static void hands_bitmap(uint8_t bits[5700], int hour_angle, int minute_angle) {
+  memset(bits, 0, 5700);
+  cm_hand(hour_angle, CM_HOUR_LENGTH, CM_HOUR_RADIUS, bitmap_pixel, bits);
+  cm_hand(minute_angle, CM_MINUTE_LENGTH, CM_MINUTE_RADIUS, bitmap_pixel, bits);
+  cm_capsule(CM_DIAL_X, CM_DIAL_Y, CM_DIAL_X, CM_DIAL_Y, CM_CENTER_RADIUS,
+             bitmap_pixel, bits);
+}
+
+/* Analog face: argument checks, drawing against the mask, geometry,
+ * mirror symmetry, the mask of wider halos and coarser grids, and the
+ * sweep. */
+static void check_analog(void) {
+  static uint8_t mask[5700], pixels[5700], other[5700];
+  memset(mask, 0xa5, sizeof mask);
+  const int bad[][10] = {{100, 114, 0, -1, 600, 2046, 8, 29, 1},
+                         {100, 114, 0, CM_TURN, 600, 2046, 8, 29, 1},
+                         {100, 114, 0, 360, -1, 2046, 8, 29, 1},
+                         {100, 114, 0, 360, CM_TURN, 2046, 8, 29, 1},
+                         {100, 114, CM_FONT_COUNT, 360, 600, 2046, 8, 29, 1},
+                         {100, 114, -1, 360, 600, 2046, 8, 29, 1},
+                         {201, 229, 0, 360, 600, 2046, 8, 29, 1},
+                         {40, 45, 0, 360, 600, 2046, 8, 29, 1},
+                         {100, 100, 0, 360, 600, 2046, 8, 29, 1},
+                         {100, 114, 0, 360, 600, 10000, 8, 29, 1},
+                         {100, 114, 0, 360, 600, 2046, 0, 29, 1},
+                         {100, 114, 0, 360, 600, 2046, 13, 29, 1},
+                         {100, 114, 0, 360, 600, 2046, 8, 0, 1},
+                         {100, 114, 0, 360, 600, 2046, 8, 32, 1},
+                         {100, 114, 0, 360, 600, 2046, 8, 29, -1},
+                         {100, 114, 0, 360, 600, 2046, 8, 29, CM_MAX_HALO + 1}};
+  for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
+    const int *b = bad[i];
+    assert(cm_build_analog(mask, b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
+                           b[8]) == -1);
+  }
+  assert(cm_build_analog(NULL, 100, 114, 0, 360, 600, 2046, 8, 29, 1) == -1);
+  for (size_t i = 0; i < sizeof mask; i++) {
+    assert(mask[i] == 0xa5);
+  }
+  assert(cm_draw_analog(NULL, NULL, 0xff, 0, 360, 600, 2046, 8, 29) == -1);
+  assert(cm_draw_analog(test_row, NULL, 0xff, 0, CM_TURN, 600, 2046, 8, 29) ==
+         -1);
+  assert(cm_draw_analog(test_row, NULL, 0xff, 0, 360, 600, 2046, 13, 29) == -1);
+  assert(cm_analog_date_top(-1) == -1 &&
+         cm_analog_date_top(CM_FONT_COUNT) == -1);
+  /* cm_draw_analog sets exactly the pixels of the 200-wide mask at halo
+   * 0, for both fonts. */
+  for (int font = 0; font < CM_FONT_COUNT; font++) {
+    static uint8_t screen[RD_DISPLAY_HEIGHT][RD_DISPLAY_WIDTH];
+    memset(screen, 0, sizeof screen);
+    assert(cm_draw_analog(test_row, screen, 0xff, font, 360, 600, 2046, 8,
+                          29) == 0);
+    assert(cm_build_analog(mask, 200, 228, font, 360, 600, 2046, 8, 29, 0) ==
+           0);
+    int drawn = 0;
+    for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+      for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+        int bit = bitmap_bit(mask, x, y);
+        assert((screen[y][x] == 0xff) == bit);
+        drawn += bit;
+      }
+    }
+    assert(font != CM_FONT_LECO || drawn == ANALOG_PIXELS);
+  }
+  /* Every row of a capsule is one run holding the seed: the scan visits
+   * exactly the pixels within the radius of the segment, for every angle
+   * of both hands. */
+  for (int angle = 0; angle < CM_TURN; angle++) {
+    for (int hand = 0; hand < 2; hand++) {
+      int length = hand ? CM_MINUTE_LENGTH : CM_HOUR_LENGTH;
+      int r = hand ? CM_MINUTE_RADIUS : CM_HOUR_RADIUS;
+      int dx = cm_scale(length, cm_sin(angle));
+      int dy = -cm_scale(length, cm_cos(angle));
+      memset(pixels, 0, sizeof pixels);
+      cm_hand(angle, length, r, bitmap_pixel, pixels);
+      for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+        for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+          int inside = cm_inside(x, y, CM_DIAL_X, CM_DIAL_Y, dx, dy,
+                                 dx * dx + dy * dy, r * r);
+          assert(bitmap_bit(pixels, x, y) == inside);
+        }
+      }
+    }
+  }
+  /* Geometry over every time: the hands and the disk stay within the dial
+   * and the date line starts at its row with an empty gap above it. */
+  for (int font = 0; font < CM_FONT_COUNT; font++) {
+    int date_first = font == CM_FONT_LECO ? 210 : 201;
+    int date_last = font == CM_FONT_LECO ? 223 : 221;
+    for (int t = 0; t < 720; t++) {
+      assert(cm_build_analog(mask, 200, 228, font,
+                             cm_hour_angle(t / 60, t % 60),
+                             cm_minute_angle(t % 60), 2046, 8, 29, 0) == 0);
+      int first = -1, last = -1;
+      for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+        for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+          if (!bitmap_bit(mask, x, y)) {
+            continue;
+          }
+          if (y <= 186) {
+            assert(x >= 18 && x <= 182 && y >= 22);
+          } else {
+            assert(y >= date_first && y <= date_last);
+            first = first < 0 ? y : first;
+            last = y;
+          }
+        }
+      }
+      assert(first == date_first && last == date_last);
+    }
+  }
+  /* Mirrored times give mirrored hands: left to right about x = 100 and
+   * top to bottom about y = 104. */
+  for (int a = 0; a < CM_TURN; a += 15) {
+    for (int b = 0; b < CM_TURN; b += 90) {
+      int bb = (b + a / 15 * 7) % CM_TURN;
+      hands_bitmap(pixels, a, bb);
+      hands_bitmap(other, (CM_TURN - a) % CM_TURN, (CM_TURN - bb) % CM_TURN);
+      for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+        assert(!bitmap_bit(pixels, 0, y));
+        for (int x = 1; x < RD_DISPLAY_WIDTH; x++) {
+          assert(bitmap_bit(pixels, x, y) == bitmap_bit(other, 200 - x, y));
+        }
+      }
+      hands_bitmap(other, (CM_TURN * 3 / 2 - a) % CM_TURN,
+                   (CM_TURN * 3 / 2 - bb) % CM_TURN);
+      for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+        for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+          int mirrored = y <= 208 ? bitmap_bit(other, x, 208 - y) : 0;
+          assert(bitmap_bit(pixels, x, y) == mirrored);
+        }
+      }
+    }
+  }
+  /* The mask of a grid and halo is the splat of every face pixel. */
+  assert(cm_build_analog(pixels, 200, 228, CM_FONT_BITHAM, 1438, 1416, 2046, 8,
+                         29, 0) == 0);
+  const int widths[3] = {100, 120, 200};
+  const int halos[3] = {0, 1, 3};
+  for (int w = 0; w < 3; w++) {
+    int width = widths[w], height = width * 228 / 200;
+    for (int h = 0; h < 3; h++) {
+      memset(other, 0, sizeof other);
+      for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+        for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+          if (bitmap_bit(pixels, x, y)) {
+            cm_splat(other, width, height, x, y, halos[h]);
+          }
+        }
+      }
+      assert(cm_build_analog(mask, width, height, CM_FONT_BITHAM, 1438, 1416,
+                             2046, 8, 29, halos[h]) == 0);
+      assert(memcmp(mask, other, cm_bytes(width, height)) == 0);
+    }
+  }
+  /* The sweep: exact ends, the shorter way round, monotone, through 1439
+   * before 0. */
+  assert(cm_hour_angle(11, 59) == 1438 && cm_hour_angle(23, 59) == 1438);
+  assert(cm_hour_angle(12, 0) == 0 && cm_hour_angle(24, 0) == -1);
+  assert(cm_hour_angle(0, 60) == -1 && cm_hour_angle(-1, 0) == -1);
+  assert(cm_minute_angle(59) == 1416 && cm_minute_angle(0) == 0);
+  assert(cm_minute_angle(60) == -1 && cm_minute_angle(-1) == -1);
+  assert(cm_sweep_angle(-1, 0, 0, 1000) == -1);
+  assert(cm_sweep_angle(0, CM_TURN, 0, 1000) == -1);
+  assert(cm_sweep_angle(0, 24, 0, 0) == -1);
+  assert(cm_sweep_angle(0, 24, 0, 1 << 21) == -1);
+  assert(cm_sweep_angle(0, 24, 5, (1 << 21) - 1) == 0);
+  const int sweeps[3][2] = {{1416, 0}, {1430, 10}, {10, 1430}};
+  for (int s = 0; s < 3; s++) {
+    int from = sweeps[s][0], to = sweeps[s][1];
+    int forward = s < 2;
+    assert(cm_sweep_angle(from, to, -5, 1000) == from);
+    assert(cm_sweep_angle(from, to, 0, 1000) == from);
+    assert(cm_sweep_angle(from, to, 1000, 1000) == to);
+    assert(cm_sweep_angle(from, to, 5000, 1000) == to);
+    int previous = from, passed = 0;
+    for (int t = 1; t <= 1000; t++) {
+      int angle = cm_sweep_angle(from, to, t, 1000);
+      int moved = ((angle - previous) * (forward ? 1 : -1) + CM_TURN) % CM_TURN;
+      assert(moved >= 0 && moved <= 2);
+      passed |= angle == 1439;
+      previous = angle;
+    }
+    assert(previous == to && passed);
+  }
+  assert(cm_sweep_angle(1416, 0, 500, 1000) > 1416);
+}
+
 int main(int argc, char **argv) {
   if (argc == 4 && strcmp(argv[1], "render") == 0) {
     /* Render mode: FNV-1a of every interpolated, quantized lime row after
@@ -745,19 +949,24 @@ int main(int argc, char **argv) {
   if (argc > 1) {
     /* Hash mode: print the field hash after `count` steps of `mode`,
      * optionally with the clock mask of `font hour minute year month day
-     * halo` installed first. */
+     * halo`, or of the analog face with `analog font hour_angle
+     * minute_angle year month day halo`, installed first. */
     int mode = atoi(argv[1]), count = argc > 2 ? atoi(argv[2]) : 100;
     void *memory = malloc(rd_bytes(mode));
     void *state = rd_init(memory, rd_bytes(mode), mode, 42);
+    int analog = argc > 10 && strcmp(argv[3], "analog") == 0;
     if (argc > 9) {
       int v[7];
       for (int i = 0; i < 7; i++) {
-        v[i] = atoi(argv[3 + i]);
+        v[i] = atoi(argv[3 + analog + i]);
       }
       uint8_t *mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
-      if (cm_build(mask, rd_width(state), rd_height(state), v[0], v[1], v[2],
-                   v[3], v[4], v[5], v[6]) ||
-          rd_mask(state, mask)) {
+      int built =
+          analog ? cm_build_analog(mask, rd_width(state), rd_height(state),
+                                   v[0], v[1], v[2], v[3], v[4], v[5], v[6])
+                 : cm_build(mask, rd_width(state), rd_height(state), v[0], v[1],
+                            v[2], v[3], v[4], v[5], v[6]);
+      if (built || rd_mask(state, mask)) {
         fprintf(stderr, "invalid mask arguments\n");
         return 1;
       }
@@ -774,6 +983,7 @@ int main(int argc, char **argv) {
   check_laplacian();
   check_encode_masked();
   check_clock_mask();
+  check_analog();
   check_nearest_unchanged();
   for (int mode = 0; mode < MODE_COUNT; mode++) {
     size_t size = rd_bytes(mode);

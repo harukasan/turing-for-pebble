@@ -3,7 +3,10 @@
 # against these; any difference means the numerical contract changed.
 # Lines with seven more numbers install the clock mask of build/core-test
 # (font hour minute year month day halo) before stepping, which also pins
-# the glyph tables and the halo rule of core/clock_mask.c.
+# the glyph tables and the halo rule of core/clock_mask.c. Lines with
+# `analog` and seven numbers (font hour_angle minute_angle year month day
+# halo) install the mask of the analog face instead, which also pins the
+# sine table and the hand rasterizer.
 0 1 2679910999
 0 100 2981002916
 0 1000 4136537897
@@ -22,3 +25,9 @@
 1 1000 531352377 1 13 57 2046 8 29 1
 3 1000 3098818504 0 13 57 2046 8 29 1
 3 1000 744617503 1 13 57 2046 8 29 1
+0 1000 3493144021 analog 0 360 600 2046 8 29 1
+0 1000 1907492487 analog 1 1438 1416 2046 8 29 1
+1 1000 1873640889 analog 0 360 600 2046 8 29 1
+1 1000 3421207122 analog 1 1438 1416 2046 8 29 1
+3 1000 2342577178 analog 0 360 600 2046 8 29 1
+3 1000 2934449207 analog 1 1438 1416 2046 8 29 1
