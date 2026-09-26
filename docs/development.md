@@ -42,7 +42,7 @@ pnpm run build
 pnpm run dev --host 127.0.0.1
 ```
 
-The local URL is normally `http://127.0.0.1:5173/`. No deployment is required. The development server is not an on-watch performance benchmark. The standalone Web build uses Vite and Panda CSS. `pnpm run typecheck`, `pnpm run dev`, and `pnpm run build` regenerate ignored `styled-system/` with `panda codegen`. See [Web core and demo](web.md).
+The local URL is normally `http://127.0.0.1:5173/`. The published demo on GitHub Pages is built by CI, as described in [Web core and demo](web.md#github-pages). The development server is not an on-watch performance benchmark. The standalone Web build uses Vite and Panda CSS. `pnpm run typecheck`, `pnpm run dev`, and `pnpm run build` regenerate ignored `styled-system/` with `panda codegen`. See [Web core and demo](web.md).
 
 `mise run test-core` runs `tests/core.c` at `-O2`, then under AddressSanitizer and UndefinedBehaviorSanitizer, then `tests/wasm.mjs` (native versus Wasm field hashes and rendered rows) and `tests/adapter.mjs` (the TypeScript adapters and the clock masks). `pnpm run test:optimization` (`scripts/check-optimization.sh`) compiles the core at `-O0` and `-O3` and compares every field hash with `tests/golden-hashes.txt`, whose lines hold mode, steps, hash, and optionally the seven clock-mask arguments of `build/core-test`. `pnpm run compare:float` (`scripts/compare-float.mjs`) measures the Wasm core against the Float32 reference at the effective parameters and writes `docs/float-precision.json`.
 
