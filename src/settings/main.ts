@@ -369,21 +369,62 @@ function update() {
 }
 
 const fileStatus = element("file-status");
+const fileText = element<HTMLTextAreaElement>("file-text");
+/** The page runs as the data URL the phone opens in the Pebble app, whose
+ * web view neither saves downloads nor offers a share sheet, and shows a
+ * downloaded file in place of the page. */
+const inApp = location.protocol === "data:";
+
+/** Show the settings file's text and copy it by selecting it, which works
+ * in web views without the Clipboard API. Runs within the click. */
+function showAndCopy() {
+  fileText.value = toFileJson(settings);
+  fileText.focus();
+  fileText.setSelectionRange(0, fileText.value.length);
+  let copied = false;
+  try {
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  }
+  fileText.blur();
+  return copied;
+}
+
+/** Fill the page from a settings file's text. `source` names the text,
+ * for example a file name, in the messages. */
+function load(text: string, source: string) {
+  const loaded = fromFileJson(text);
+  if (!loaded) {
+    fileStatus.textContent = `${source}は設定として読み込めませんでした。`;
+    return;
+  }
+  Object.assign(settings, loaded);
+  changed("field");
+  fileStatus.textContent = `${source}から設定を読み込みました。保存を押すと watch に送ります。`;
+}
 
 /** The settings file through the share sheet where the web view offers one,
- * as the Pebble app on the iPhone does, else as a download. */
+ * as text to copy in the Pebble app, and as a download elsewhere. */
 element("export").addEventListener("click", async () => {
   const file = new File([toFileJson(settings)], SETTINGS_FILE_NAME, {
     type: "application/json",
   });
-  try {
-    if (navigator.canShare?.({ files: [file] })) {
+  if (navigator.canShare?.({ files: [file] })) {
+    try {
       await navigator.share({ files: [file] });
       fileStatus.textContent = "書き出しました。";
-      return;
+    } catch (error) {
+      if ((error as Error).name !== "AbortError")
+        fileStatus.textContent = "書き出せませんでした。";
     }
-  } catch (error) {
-    if ((error as Error).name === "AbortError") return;
+    return;
+  }
+  if (inApp) {
+    fileStatus.textContent = showAndCopy()
+      ? "Pebble アプリではファイルを保存できないため、設定をコピーしました。メモなどに貼り付けて残せます。"
+      : "Pebble アプリではファイルを保存できません。上の文字列をコピーして残してください。";
+    return;
   }
   const url = URL.createObjectURL(file);
   const link = document.createElement("a");
@@ -391,45 +432,25 @@ element("export").addEventListener("click", async () => {
   link.download = SETTINGS_FILE_NAME;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  fileStatus.textContent = `${SETTINGS_FILE_NAME} を書き出しました。保存されない場合は「コピー」を使ってください。`;
+  fileStatus.textContent = `${SETTINGS_FILE_NAME} を書き出しました。`;
 });
 
-/** The settings file's text to the clipboard, through a selected text area
- * where the Clipboard API is unavailable. */
-element("copy").addEventListener("click", async () => {
-  const text = toFileJson(settings);
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch {
-    const area = document.createElement("textarea");
-    area.value = text;
-    area.setAttribute("readonly", "");
-    area.className = "visually-hidden";
-    document.body.append(area);
-    area.select();
-    const copied = document.execCommand("copy");
-    area.remove();
-    if (!copied) {
-      fileStatus.textContent = "コピーできませんでした。";
-      return;
-    }
-  }
-  fileStatus.textContent = "設定をコピーしました。";
+element("copy").addEventListener("click", () => {
+  fileStatus.textContent = showAndCopy()
+    ? "設定をコピーしました。"
+    : "コピーできませんでした。上の文字列を選んでコピーしてください。";
 });
 
 const importInput = element<HTMLInputElement>("import");
 importInput.addEventListener("change", async () => {
   const file = importInput.files?.[0];
   importInput.value = "";
-  if (!file) return;
-  const loaded = fromFileJson(await file.text());
-  if (!loaded) {
-    fileStatus.textContent = `${file.name} は設定ファイルとして読み込めませんでした。`;
-    return;
-  }
-  Object.assign(settings, loaded);
-  changed("field");
-  fileStatus.textContent = `${file.name} を読み込みました。保存を押すと watch に送ります。`;
+  if (file) load(await file.text(), `${file.name} `);
+});
+
+element("import-text").addEventListener("click", () => {
+  if (fileText.value.trim()) load(fileText.value, "貼り付けた文字列");
+  else fileStatus.textContent = "設定の JSON を貼り付けてください。";
 });
 
 element("save").addEventListener("click", () => {

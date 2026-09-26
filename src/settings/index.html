@@ -64,7 +64,7 @@
               <button type="button" id="export">書き出す</button>
               <button type="button" id="copy">コピー</button>
               <label class="file-button">
-                読み込む
+                ファイル
                 <input
                   type="file"
                   id="import"
@@ -72,6 +72,17 @@
                   accept="application/json,.json"
                 />
               </label>
+            </div>
+            <textarea
+              id="file-text"
+              class="file-text"
+              rows="4"
+              spellcheck="false"
+              aria-label="設定の JSON"
+              placeholder="書き出した設定がここに出ます。設定の JSON を貼り付けて読み込むこともできます。"
+            ></textarea>
+            <div class="file-actions">
+              <button type="button" id="import-text">テキストを読み込む</button>
             </div>
             <p id="file-status" class="hint" aria-live="polite"></p>
           </fieldset>

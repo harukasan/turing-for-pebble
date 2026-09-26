@@ -416,3 +416,20 @@ legend {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+.file-text {
+  display: block;
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  /* 16px keeps iOS from zooming into the field. */
+  font:
+    16px/1.4 ui-monospace,
+    Menlo,
+    monospace;
+  resize: vertical;
+}
