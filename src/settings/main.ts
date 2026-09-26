@@ -461,6 +461,25 @@ element("cancel").addEventListener("click", () => {
   location.href = returnTo ?? "pebblejs://close";
 });
 
+/** The page scrolls inside .scroll, sized to the visible area. When the
+ * keyboard opens, the Pebble app shrinks its web view and iOS scrolls the
+ * fixed document to the focused field, and neither always comes back when
+ * the keyboard closes. So .scroll follows the visual viewport's height, and
+ * the document returns to the top once no field has the focus. */
+function fitViewport() {
+  const height = window.visualViewport?.height ?? window.innerHeight;
+  document.documentElement.style.setProperty(
+    "--viewport-height",
+    `${Math.round(height)}px`
+  );
+  const active = document.activeElement;
+  if (!active || active === document.body) window.scrollTo(0, 0);
+}
+window.visualViewport?.addEventListener("resize", fitViewport);
+window.addEventListener("resize", fitViewport);
+document.addEventListener("focusout", () => setTimeout(fitViewport, 100));
+fitViewport();
+
 update();
 view
   ?.load(wasmUrl, fontsUrl)
