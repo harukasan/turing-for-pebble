@@ -4,12 +4,12 @@
  * scheduling model is described in docs/behavior.md:
  *   - startup runs steps for STARTUP_MS after launch (at most
  *     STARTUP_STEPS_MAX of them) in consecutive slices of at most
- *     STARTUP_SLICE_BUDGET_MS, rescheduled SCHEDULE_NOW_MS apart, with the
- *     screen redrawn about every WORK_FRAME_INTERVAL_MS,
+ *     SLICE_BUDGET_MS, rescheduled SCHEDULE_NOW_MS apart, with the screen
+ *     redrawn about every FRAME_INTERVAL_MS,
  *   - every minute rebuilds the digit mask and raises the pending steps to
  *     RD_MINUTE_STEPS (adds them without avoidance), run the same way,
- *   - a backlight-on event animates for at most BACKLIGHT_WINDOW_MS, at most
- *     STEPS_PER_SLICE steps within SLICE_BUDGET_MS per frame,
+ *   - a backlight-on event animates for at most BACKLIGHT_WINDOW_MS with the
+ *     same slices and redraws,
  *   - focus loss cancels timers and focus restore resumes pending work.
  * With RD_LOG, timing counters feed the startup summary log; RD_PROFILE
  * adds a clock calibration loop and a periodic profile log.
@@ -21,12 +21,10 @@
 
 #define STARTUP_MS RD_STARTUP_MS
 #define STARTUP_STEPS_MAX RD_STARTUP_STEPS_MAX
-#define STEPS_PER_SLICE 8
-#define SLICE_BUDGET_MS 8
-#define STARTUP_SLICE_BUDGET_MS 30
-#define FRAME_INTERVAL_MS 100
-/* Redraw interval while startup or minute work is pending. */
-#define WORK_FRAME_INTERVAL_MS 50
+/* Compute slice while startup, minute work, or the backlight animation is
+ * active, and the redraw interval of those frames. */
+#define SLICE_BUDGET_MS 30
+#define FRAME_INTERVAL_MS 50
 #define SCHEDULE_NOW_MS 1
 #define BACKLIGHT_WINDOW_MS 5000
 #define LOG_INTERVAL_STEPS 256
@@ -264,6 +262,7 @@ static void draw(Layer *this_layer, GContext *ctx) {
 }
 
 static void schedule(uint32_t delay);
+static void end_light(void);
 
 #if RD_LOG
 static void log_summary(void) {
@@ -324,10 +323,9 @@ static void log_progress(void) {
 }
 #endif
 
-/* One timer slice: run pending startup or minute steps within the startup
- * budget, or animation steps while the backlight is on within the frame
- * budget. Pending work is rescheduled immediately and the screen is
- * redrawn at most every FRAME_INTERVAL_MS. */
+/* One timer slice: run startup, minute, or backlight animation steps within
+ * SLICE_BUDGET_MS, reschedule immediately while any of them continues, and
+ * redraw about every FRAME_INTERVAL_MS. */
 static void update(void *context) {
   (void)context;
   timer = NULL;
@@ -348,10 +346,10 @@ static void update(void *context) {
     }
   }
   bool animate = lit;
-  uint32_t budget = working ? STARTUP_SLICE_BUDGET_MS : SLICE_BUDGET_MS;
+  uint32_t budget = SLICE_BUDGET_MS;
   int target = startup_active ? (int)(STARTUP_STEPS_MAX - startup_steps)
                : working      ? pending
-               : animate      ? STEPS_PER_SLICE
+               : animate      ? (int)STARTUP_STEPS_MAX
                               : 0;
   int done = 0;
   while (done < target) {
@@ -394,10 +392,8 @@ static void update(void *context) {
     /* While work is pending, redraw once another slice would overshoot the
      * interval, so frames come about every WORK_FRAME_INTERVAL_MS instead
      * of every second slice. */
-    int32_t interval = working
-                           ? WORK_FRAME_INTERVAL_MS - STARTUP_SLICE_BUDGET_MS
-                           : FRAME_INTERVAL_MS;
-    if (!marked || !remaining || since < 0 || since >= interval) {
+    int32_t interval = FRAME_INTERVAL_MS - SLICE_BUDGET_MS;
+    if (!marked || !(remaining || animate) || since < 0 || since >= interval) {
       layer_mark_dirty(layer);
       last_mark_ms = now_ms();
       marked = true;
@@ -409,7 +405,7 @@ static void update(void *context) {
     slice_seen = true;
     schedule(SCHEDULE_NOW_MS);
   } else if (animate) {
-    schedule(FRAME_INTERVAL_MS);
+    schedule(SCHEDULE_NOW_MS);
   }
 #if RD_LOG
   if (!remaining && !startup_logged) {
@@ -430,7 +426,7 @@ static void schedule(uint32_t delay) {
 
 /* Cancel animation and any scheduled slice. */
 static void stop(void) {
-  lit = false;
+  end_light();
   if (light_timer) {
     app_timer_cancel(light_timer);
     light_timer = NULL;
@@ -441,10 +437,29 @@ static void stop(void) {
   }
 }
 
+#if RD_LOG
+/* Steps and frames of the current backlight window, for the log. */
+static uint32_t light_start_ms, light_steps, light_draws;
+#endif
+
+/* End of a backlight window: the last computed steps are drawn. */
+static void end_light(void) {
+  if (!lit) {
+    return;
+  }
+  lit = false;
+#if RD_LOG
+  APP_LOG(APP_LOG_LEVEL_INFO, "RD light steps=%lu draws=%lu ms=%ld",
+          (unsigned long)(steps_total - light_steps),
+          (unsigned long)(draws - light_draws), (long)since_ms(light_start_ms));
+#endif
+  layer_mark_dirty(layer);
+}
+
 static void light_expired(void *context) {
   (void)context;
   light_timer = NULL;
-  lit = false;
+  end_light();
 }
 
 /* Backlight on starts a bounded animation window. Backlight off ends it but
@@ -459,8 +474,13 @@ static void backlight(bool on) {
   }
   if (!lit && focused) {
     lit = true;
+#if RD_LOG
+    light_start_ms = now_ms();
+    light_steps = steps_total;
+    light_draws = draws;
+#endif
     light_timer = app_timer_register(BACKLIGHT_WINDOW_MS, light_expired, NULL);
-    schedule(pending || startup_active ? SCHEDULE_NOW_MS : FRAME_INTERVAL_MS);
+    schedule(SCHEDULE_NOW_MS);
   }
 }
 

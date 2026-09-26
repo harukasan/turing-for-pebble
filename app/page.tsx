@@ -343,10 +343,13 @@ export default function Home() {
       // Like the watch, pending startup or minute work runs in consecutive
       // 30 ms slices with the screen painted about every 50 ms.
       const deviceWork = c.deviceMode && c.running && pending.current > 0;
+      const deviceLight = c.deviceMode && c.running && now < lightUntil.current;
+      const deviceActive = deviceWork || deviceLight;
       if (document.hidden || (c.deviceMode && !focused)) return;
-      if (!deviceWork && now - lastPaint < (c.deviceMode ? 100 : 1000 / 30))
+      if (!deviceActive && now - lastPaint < (c.deviceMode ? 100 : 1000 / 30))
         return;
-      // Pending work paints every 50 ms and animation every 100 ms, like the watch.
+      // Pending work and the backlight animation paint every 50 ms, like the
+      // watch.
       const s = sim.current;
       if (!s) return;
       const start = performance.now();
@@ -380,7 +383,7 @@ export default function Home() {
         maskKey = key;
       }
       const manual = manualPending.current > 0;
-      const budget = deviceWork && !manual ? 30 : 8;
+      const budget = deviceActive && !manual ? 30 : 8;
       const target = manual
         ? Math.min(manualPending.current, 8)
         : c.running
@@ -389,8 +392,8 @@ export default function Home() {
               ? pending.current
               : Math.min(pending.current, 8)
             : c.deviceMode
-              ? now < lightUntil.current
-                ? 8
+              ? deviceLight
+                ? Infinity
                 : 0
               : c.speed
           : 0;
@@ -402,7 +405,11 @@ export default function Home() {
       if (manual) manualPending.current -= steps;
       else if (pending.current > 0) pending.current -= steps;
       if (steps) measured = (performance.now() - start) / steps;
-      if (deviceWork && pending.current > 0 && now - lastPaint < 50) return;
+      if (
+        ((deviceWork && pending.current > 0) || deviceLight) &&
+        now - lastPaint < 50
+      )
+        return;
       lastPaint = now;
       if (!pixels) {
         offscreen.width = 200;
@@ -839,7 +846,8 @@ export default function Home() {
               onChange={setSpeed}
             />
             <p className="hint">
-              通常は最大30描画/秒、計算予算8ms。実機動作モードは分が変わるたびに300ステップ（数字を避けないときは16ステップ）、点灯中は最大5秒・10fps・8ステップ/描画。
+              通常は最大30描画/秒、計算予算8ms。実機動作モードは分が変わるたびに300ステップ（数字を避けないときは16ステップ）、点灯中は最大5秒、同じ50
+              msごとの描画。
             </p>
             <div className="control-top" style={{ marginTop: 18 }}>
               <label htmlFor="seed">乱数シード</label>

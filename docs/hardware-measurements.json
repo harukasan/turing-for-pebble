@@ -288,6 +288,23 @@
       "clockInvalid": false,
       "interrupted": false,
       "note": "The startup ran for RD_STARTUP_MS (30 s): since_init_ms 30,031, 1,653 steps, 555 draws at 18.5 frames per second, three steps per frame."
+    },
+    {
+      "commit": "6619c59 plus the backlight animation at the work pacing (RD_BUILD_LOG=1)",
+      "mode": 3,
+      "date": "2026-09-26",
+      "firmware": "unknown",
+      "startupWallMs": 29978,
+      "stepsPerSecond": 55.4,
+      "avgStepUs": 13903,
+      "maxStepMs": 35,
+      "avgDrawUs": 6586,
+      "avgTextUs": 894,
+      "minimumFreeHeapBytes": 21904,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "note": "Startup 1,661 steps and 551 frames in 30.03 s. A backlight window after the startup (RD light line) ran 282 steps and 93 frames in 5.05 s: 18.4 frames per second, three steps per frame."
     }
   ]
 }
