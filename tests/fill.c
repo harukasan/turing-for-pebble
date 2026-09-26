@@ -3,9 +3,11 @@
  * checkpoint, and write the interpolated display as a PPM there. Driven
  * by scripts/fill.py.
  *
- *   build/fill mode preset seed disks min_radius radius_range out_prefix
- *              checkpoint...
+ *   build/fill mode model p0 ... p9 seed disks min_radius radius_range
+ *              out_prefix checkpoint...
  *
+ * model and p0 to p9 are the model and the Q15 parameter vector of a preset
+ * (scripts/list-presets.mjs).
  * The field is reseeded with `disks` disks placed by the LCG sequence of
  * rd_init, radius min_radius + random_below(radius_range); 24 4 6 is the
  * seeding of rd_init.
@@ -21,25 +23,34 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define PRESET_COUNT 5
+/* Length of the parameter vector (RD_PARAM_MAX of numerical definition
+ * version 5). Only Gray-Scott, whose rd_params takes the first five, is
+ * supported so far. */
+#ifndef RD_PARAM_MAX
+#define RD_PARAM_MAX 10
+#endif
 /* B above 0.05 is visible with the lime palette at gain 3. */
 #define VISIBLE_B (RD_VALUE_ONE / 20)
 /* Green above this is a lit pixel of the lime palette (B above 0.14). */
 #define LIT_GREEN 127
 
 int main(int argc, char **argv) {
-  if (argc < 9) {
+  /* The arguments after the parameter vector. */
+  const int rest = 3 + RD_PARAM_MAX;
+  if (argc < rest + 6) {
     return 1;
   }
-  int mode = atoi(argv[1]), preset = atoi(argv[2]);
-  uint32_t seed = (uint32_t)strtoul(argv[3], NULL, 10);
-  const int feeds[PRESET_COUNT] = {950, 1786, 1203, 1147, 754};
-  const int kills[PRESET_COUNT] = {1868, 2032, 2127, 2130, 1704};
-  int disks = atoi(argv[4]), min_radius = atoi(argv[5]),
-      radius_range = atoi(argv[6]);
-  const char *prefix = argv[7];
-  if (!mode_supported(mode) || preset < 0 || preset >= PRESET_COUNT ||
-      disks < 0 || min_radius < 1 || radius_range < 1) {
+  int mode = atoi(argv[1]), model = atoi(argv[2]);
+  int params[RD_PARAM_MAX];
+  for (int i = 0; i < RD_PARAM_MAX; i++) {
+    params[i] = atoi(argv[3 + i]);
+  }
+  uint32_t seed = (uint32_t)strtoul(argv[rest], NULL, 10);
+  int disks = atoi(argv[rest + 1]), min_radius = atoi(argv[rest + 2]),
+      radius_range = atoi(argv[rest + 3]);
+  const char *prefix = argv[rest + 4];
+  if (!mode_supported(mode) || model != 0 || disks < 0 || min_radius < 1 ||
+      radius_range < 1) {
     return 1;
   }
   void *memory = malloc(rd_bytes(mode));
@@ -58,14 +69,15 @@ int main(int argc, char **argv) {
   uint8_t *mask = malloc(cm_bytes(width, height));
   cm_build(mask, width, height, CM_FONT_LECO, 13, 57, 2046, 8, 29, 1);
   rd_mask(state, mask);
-  rd_params(state, feeds[preset], kills[preset], RD_Q15_ONE, RD_Q15_ONE / 2,
-            RD_Q15_ONE);
+  if (rd_params(state, params[0], params[1], params[2], params[3], params[4])) {
+    return 1;
+  }
   int block = width / 12 > 4 ? width / 12 : 4;
   int blocks_x = (width + block - 1) / block,
       blocks_y = (height + block - 1) / block;
   int *seen = malloc(sizeof(int) * blocks_x * blocks_y);
   double total_ms = 0;
-  for (int arg = 8; arg < argc; arg++) {
+  for (int arg = rest + 5; arg < argc; arg++) {
     int checkpoint = atoi(argv[arg]);
     int count = checkpoint - (int)rd_steps(state);
     clock_t start = clock();
@@ -136,11 +148,11 @@ int main(int argc, char **argv) {
       }
     }
     fclose(ppm);
-    printf("{\"mode\": %d, \"width\": %d, \"height\": %d, \"preset\": %d, "
+    printf("{\"mode\": %d, \"width\": %d, \"height\": %d, \"model\": %d, "
            "\"seed\": %u, \"disks\": %d, \"minRadius\": %d, "
            "\"radiusRange\": %d, \"step\": %d, \"hostMsPerStep\": %.3f, "
            "\"bMean\": %.5f, \"blocks\": %.4f, \"stripeWidthPx\": %.3f}\n",
-           mode, width, height, preset, seed, disks, min_radius, radius_range,
+           mode, width, height, model, seed, disks, min_radius, radius_range,
            checkpoint, total_ms / checkpoint, cells ? sum / cells : 0,
            open ? (double)lit / open : 0, runs ? (double)run_pixels / runs : 0);
     fflush(stdout);

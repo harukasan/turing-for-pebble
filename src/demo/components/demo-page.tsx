@@ -1,13 +1,14 @@
 /** @jsxImportSource react */
 import { useId, type PointerEvent } from "react";
-import { presets, type Parameters } from "../../../lib/simulation";
-import { isFloat } from "../../core";
+import { presets } from "../../../lib/simulation";
+import { isFloat, type ParameterKey } from "../../core";
 import { makeSettings } from "../serialization";
 import { useDemo } from "../use-demo";
 import { Explanation } from "./explanation";
 import {
   bounds,
   engines,
+  labels,
   NumberSlider,
   SwitchControl,
   Selector,
@@ -124,26 +125,19 @@ export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
               パターン
             </h2>
             <div className={s.row}>
-              {presets.map((preset, index) => (
+              {presets.map((preset) => (
                 <button
-                  key={preset.name}
+                  key={preset.id}
                   className={s.button}
                   type="button"
-                  data-preset={index}
-                  onClick={() => demo.choosePreset(index)}
+                  data-preset={preset.id}
+                  onClick={() => demo.choosePreset(preset.id)}
                 >
                   {preset.name}
                 </button>
               ))}
             </div>
-            {(Object.keys(bounds) as (keyof Parameters)[]).map((key) => {
-              const labels: Record<keyof Parameters, string> = {
-                feed: "Feed / A の供給",
-                kill: "Kill / B の除去",
-                da: "Da / A の拡散",
-                db: "Db / B の拡散",
-                dt: "dt / 時間刻み",
-              };
+            {(Object.keys(bounds) as ParameterKey[]).map((key) => {
               const [min, max, step] = bounds[key];
               return (
                 <NumberSlider

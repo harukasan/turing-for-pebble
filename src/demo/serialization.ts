@@ -1,4 +1,4 @@
-import type { Parameters } from "../../lib/simulation.ts";
+import { parameterValues, type Parameters } from "../../lib/simulation.ts";
 import { effective } from "../../lib/wasm-simulation.ts";
 import { fontIndex, type ClockFont } from "../../lib/clock-fonts.ts";
 import {
@@ -41,6 +41,7 @@ export function makeSettings(input: SettingsInput) {
   } = input;
   const width = engineWidth(engine);
   const floatMode = isFloat(engine);
+  const values = parameterValues(params);
   return {
     model: "Gray-Scott",
     version: 4,
@@ -55,8 +56,10 @@ export function makeSettings(input: SettingsInput) {
       : engine === "u8-200"
         ? "packed-a7-linear-b9-sqrt"
         : "q15",
-    effective: floatMode ? params : effective(params, engineMode(engine)),
-    ...params,
+    effective: floatMode
+      ? values
+      : parameterValues(effective(params, engineMode(engine))),
+    ...values,
     width,
     height: gridHeight(width),
     seed,

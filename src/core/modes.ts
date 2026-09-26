@@ -11,7 +11,11 @@ export const engineMode = (engine: Engine) =>
 export const isFloat = (engine: Engine) => engine.startsWith("float");
 export const HALO = 1;
 
+/** The numeric parameters, without the model name. */
+export type ParameterKey = Exclude<keyof Parameters, "model">;
+
 export const defaultParameters: Parameters = {
+  model: "gray-scott",
   feed: 0.029,
   kill: 0.057,
   da: 1,

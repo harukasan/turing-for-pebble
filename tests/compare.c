@@ -1,33 +1,44 @@
-/* Run one mode / preset / seed case and print a JSON summary: host timing,
- * B statistics, and how much one further step changes cells and display
- * pixels. The rendered display is also written as a PPM. Driven by
- * scripts/compare.py. */
+/* Run one mode / parameter vector / seed case and print a JSON summary:
+ * host timing, B statistics, and how much one further step changes cells
+ * and display pixels. The rendered display is also written as a PPM.
+ * Driven by scripts/compare.py, which takes the vectors of the presets from
+ * scripts/list-presets.mjs.
+ *
+ *   build/compare mode model p0 ... p9 seed steps out.ppm
+ */
 #include "../core/rd.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 
-#define PRESET_COUNT 5
+/* Length of the parameter vector (RD_PARAM_MAX of numerical definition
+ * version 5). Only Gray-Scott, whose rd_params takes the first five, is
+ * supported so far. */
+#ifndef RD_PARAM_MAX
+#define RD_PARAM_MAX 10
+#endif
 
 int main(int argc, char **argv) {
-  if (argc != 6) {
+  if (argc != 6 + RD_PARAM_MAX) {
     return 1;
   }
-  int mode = atoi(argv[1]), preset = atoi(argv[2]), count = atoi(argv[4]);
-  uint32_t seed = (uint32_t)strtoul(argv[3], NULL, 10);
-  const int feeds[PRESET_COUNT] = {950, 1786, 1203, 1147, 754};
-  const int kills[PRESET_COUNT] = {1868, 2032, 2127, 2130, 1704};
-  if (mode < 0 || mode > 3 || preset < 0 || preset >= PRESET_COUNT ||
-      count < 1) {
+  int mode = atoi(argv[1]), model = atoi(argv[2]);
+  int params[RD_PARAM_MAX];
+  for (int i = 0; i < RD_PARAM_MAX; i++) {
+    params[i] = atoi(argv[3 + i]);
+  }
+  uint32_t seed = (uint32_t)strtoul(argv[3 + RD_PARAM_MAX], NULL, 10);
+  int count = atoi(argv[4 + RD_PARAM_MAX]);
+  const char *path = argv[5 + RD_PARAM_MAX];
+  if (mode < 0 || mode > 3 || model != 0 || count < 1) {
     return 1;
   }
   void *memory = malloc(rd_bytes(mode));
   void *state = rd_init(memory, rd_bytes(mode), mode, seed);
-  if (!state) {
+  if (!state ||
+      rd_params(state, params[0], params[1], params[2], params[3], params[4])) {
     return 1;
   }
-  rd_params(state, feeds[preset], kills[preset], RD_Q15_ONE, RD_Q15_ONE / 2,
-            RD_Q15_ONE);
   clock_t start = clock();
   rd_step(state, count);
   double ms = 1000. * (clock() - start) / CLOCKS_PER_SEC / count;
@@ -38,7 +49,7 @@ int main(int argc, char **argv) {
   int changed = 0, changed_pixels = 0;
   int *previous = malloc(width * height * sizeof(int));
   unsigned char *colors = malloc(RD_DISPLAY_WIDTH * RD_DISPLAY_HEIGHT * 4);
-  FILE *ppm = fopen(argv[5], "wb");
+  FILE *ppm = fopen(path, "wb");
   if (!ppm) {
     return 1;
   }
@@ -78,11 +89,11 @@ int main(int argc, char **argv) {
                         row[x * 4 + 2] != before[2];
     }
   }
-  printf("{\"mode\":%d,\"preset\":%d,\"seed\":%u,\"steps\":%d,\"hash\":%u,"
+  printf("{\"mode\":%d,\"model\":%d,\"seed\":%u,\"steps\":%d,\"hash\":%u,"
          "\"hostMsPerStep\":%.6f,\"bMean\":%.6f,\"bVariance\":%.6f,"
          "\"changedCellsFraction\":%.6f,\"changedDisplayPixelsFraction\":%.6f,"
          "\"coreBytes\":%zu}",
-         mode, preset, seed, count, hash, ms, sum / (width * height),
+         mode, model, seed, count, hash, ms, sum / (width * height),
          sum_squares / (width * height) -
              sum * sum / ((double)width * height * width * height),
          (double)changed / (width * height),

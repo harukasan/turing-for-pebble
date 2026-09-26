@@ -1,15 +1,22 @@
 /** @jsxImportSource react */
 import { useEffect, useId, useState, type CSSProperties } from "react";
-import { type Parameters } from "../../../lib/simulation";
-import { type Engine } from "../../core";
+import { type Engine, type ParameterKey } from "../../core";
 import { styles as s } from "../styles";
 
-export const bounds: Record<keyof Parameters, [number, number, number]> = {
+export const bounds: Record<ParameterKey, [number, number, number]> = {
   feed: [0.01, 0.1, 0.0001],
   kill: [0.03, 0.075, 0.0001],
   da: [0.1, 1, 0.01],
   db: [0.01, 0.5, 0.01],
   dt: [0.1, 1, 0.1],
+};
+
+export const labels: Record<ParameterKey, string> = {
+  feed: "Feed / A の供給",
+  kill: "Kill / B の除去",
+  da: "Da / A の拡散",
+  db: "Db / B の拡散",
+  dt: "dt / 時間刻み",
 };
 
 export const engines: [Engine, string][] = [

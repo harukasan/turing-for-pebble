@@ -129,10 +129,12 @@ export function loadCore(url = "/wasm/rd.wasm") {
 }
 /** The parameters the core computes with: each rounded to Q15, and in the
  * Q15 modes (1 and 3) the diffusion coefficients folded with the 1/20 of
- * the Laplacian into round(D / 20) / 20 (numerical definition version 4). */
-export const effective = (p: Parameters, mode = 0) =>
+ * the Laplacian into round(D / 20) / 20 (numerical definition version 4).
+ * The model passes through unchanged. */
+export const effective = (p: Parameters, mode = 0): Parameters =>
   Object.fromEntries(
     Object.entries(p).map(([k, v]) => {
+      if (typeof v !== "number") return [k, v];
       const q = Math.round(v * 32768);
       const folded =
         (mode === 1 || mode === 3) && (k === "da" || k === "db")
@@ -140,7 +142,7 @@ export const effective = (p: Parameters, mode = 0) =>
           : q;
       return [k, folded / 32768];
     })
-  );
+  ) as Parameters;
 export class WasmSimulation {
   private allocation: number;
   private state: number;

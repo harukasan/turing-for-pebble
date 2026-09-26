@@ -7,7 +7,14 @@ import {
 } from "./serialization.ts";
 
 const input: SettingsInput = {
-  params: { feed: 0.029, kill: 0.057, da: 1, db: 0.5, dt: 1 },
+  params: {
+    model: "gray-scott",
+    feed: 0.029,
+    kill: 0.057,
+    da: 1,
+    db: 0.5,
+    dt: 1,
+  },
   engine: "q15-120",
   seed: 42,
   palette: "green",
@@ -61,7 +68,10 @@ test("Float32 settings use requested coefficients without Q15 rounding", () => {
   assert.equal(settings.width, 100);
   assert.equal(settings.height, 114);
   assert.equal(settings.rounding, "float32-storage");
-  assert.deepEqual(settings.effective, input.params);
+  const { model, ...values } = input.params;
+  assert.equal(model, "gray-scott");
+  assert.equal(settings.model, "Gray-Scott");
+  assert.deepEqual(settings.effective, values);
   assert.equal(settings.avoidDigits, false);
   assert.equal(settings.minuteSteps, 16);
 });

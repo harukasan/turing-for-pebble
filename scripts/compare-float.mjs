@@ -3,7 +3,8 @@
 // da and db folded in the Q15 modes).
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
-import { Simulation, presets } from "../lib/simulation.ts";
+import { Simulation } from "../lib/simulation.ts";
+import { presetById } from "../lib/presets.ts";
 
 const wasm = readFileSync("public/wasm/rd.wasm");
 const { instance } = await WebAssembly.instantiate(wasm, {
@@ -14,6 +15,9 @@ const { instance } = await WebAssembly.instantiate(wasm, {
   },
 });
 const api = instance.exports;
+// The Gray-Scott cases stay the five presets the version 4 averages of
+// docs/float-precision.md were measured on.
+const REFERENCE_PRESETS = ["maze", "coral", "mitosis", "spots", "thin-line"];
 const seeds = [42, 1234];
 const checkpoints = [0, 1, 10, 100, 1000];
 const requestedBase = { da: 1, db: 0.5, dt: 1 };
@@ -76,7 +80,7 @@ for (const mode of [0, 1, 2, 3]) {
   const bytes = api.rd_bytes(mode);
   const allocation = api.malloc(bytes);
   assert(allocation, "Wasm allocation failed");
-  for (const preset of presets)
+  for (const preset of REFERENCE_PRESETS.map((id) => presetById(id)))
     for (const seed of seeds) {
       const state = api.rd_init(allocation, bytes, mode, seed);
       assert(state, "Wasm initialization failed");
@@ -130,6 +134,7 @@ for (const mode of [0, 1, 2, 3]) {
       }
       rows.push({
         mode,
+        id: preset.id,
         preset: preset.name,
         seed,
         width,

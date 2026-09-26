@@ -8,4 +8,4 @@ export {
   gridHeight,
   isFloat,
 } from "./modes";
-export type { Engine, PlayerSettings } from "./modes";
+export type { Engine, ParameterKey, PlayerSettings } from "./modes";

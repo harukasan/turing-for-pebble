@@ -1,11 +1,12 @@
 import { useEffect, useReducer, useRef, useState } from "react";
-import { presets, type Parameters } from "../../lib/simulation";
+import { presetById, presetParameters } from "../../lib/simulation";
 import {
   TuringPlayer,
   defaultParameters,
   defaultPlayerSettings,
   isFloat,
   type Engine,
+  type ParameterKey,
   type PlayerSettings,
   type PlayerStats,
 } from "../core";
@@ -184,19 +185,19 @@ export function useDemo(assetBaseUrl: string) {
     setOptions((current) => ({ ...current, [key]: value }));
   }
 
-  function updateParam(key: keyof Parameters, value: number) {
+  function updateParam(key: ParameterKey, value: number) {
     setOptions((current) => ({
       ...current,
       params: { ...current.params, [key]: value },
     }));
   }
 
-  function choosePreset(index: number) {
-    const preset = presets[index];
+  function choosePreset(id: string) {
+    const preset = presetById(id);
     if (!preset) return;
     setOptions((current) => ({
       ...current,
-      params: { ...defaultParameters, feed: preset.feed, kill: preset.kill },
+      params: presetParameters(preset),
     }));
     requestReset();
   }
