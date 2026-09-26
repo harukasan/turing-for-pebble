@@ -235,14 +235,22 @@ legend {
 }
 
 .stops {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  display: flex;
+  align-items: center;
+}
+
+/* A line from one stop's color to the next, as the watch interpolates. */
+.stop-link {
+  flex: 1 1 0;
+  min-width: 10px;
+  height: 6px;
+  margin: 0 4px;
+  border-radius: 3px;
 }
 
 .stop {
   display: flex;
-  flex: 1;
+  flex: none;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
@@ -251,6 +259,10 @@ legend {
   background: var(--bg);
   color: var(--text);
   font: inherit;
+}
+
+.stop-middle {
+  padding: 6px;
 }
 
 .stop[aria-expanded="true"] {

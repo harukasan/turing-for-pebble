@@ -142,9 +142,12 @@ type StopKey = (typeof STOPS)[number]["key"];
 
 const hex = (value: number) => `#${value.toString(16).padStart(6, "0")}`;
 
-/** The stops of the custom palette in use as buttons showing their colors.
- * A button opens the watch's 64 colors for its stop, and picking a color
- * closes them. */
+/** The stops of the custom palette in use, in one row from dark to light,
+ * as buttons showing their colors and joined by lines that blend from one
+ * color to the next. The ends carry 暗 and 明 on their outer sides, and the
+ * middle stops show their color only. A button
+ * opens the watch's 64 colors for its stop, and picking a color closes
+ * them. */
 function customPicker(
   stops: HTMLElement,
   picker: HTMLElement,
@@ -154,17 +157,19 @@ function customPicker(
   const buttons = STOPS.map(({ key, label }) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "stop";
+    const middle = key === "mid1" || key === "mid2";
+    button.className = middle ? "stop stop-middle" : "stop";
+    button.setAttribute("aria-label", label);
     const chip = document.createElement("span");
     chip.className = "stop-color";
-    const name = document.createElement("span");
-    name.textContent = label;
-    button.append(chip, name);
+    button.append(chip);
+    // The ends are named by one character on their outer side.
+    if (key === "low") button.prepend("暗");
+    if (key === "high") button.append("明");
     button.addEventListener("click", () => {
       picking = picking === key ? null : key;
       show();
     });
-    stops.append(button);
     return { key, button, chip };
   });
   const colors = PEBBLE_COLORS.map((color) => {
@@ -182,13 +187,22 @@ function customPicker(
     return button;
   });
   function show() {
-    const used: readonly string[] = stopKeys(settings);
+    const used: readonly StopKey[] = stopKeys(settings);
     if (picking && !used.includes(picking)) picking = null;
-    for (const { key, button, chip } of buttons) {
-      button.hidden = !used.includes(key);
+    const row: HTMLElement[] = [];
+    used.forEach((key, i) => {
+      const { button, chip } = buttons.find((b) => b.key === key)!;
       chip.style.background = hex(settings[key]);
       button.setAttribute("aria-expanded", String(picking === key));
-    }
+      if (i > 0) {
+        const link = document.createElement("span");
+        link.className = "stop-link";
+        link.style.background = `linear-gradient(to right, ${hex(settings[used[i - 1]])}, ${hex(settings[key])})`;
+        row.push(link);
+      }
+      row.push(button);
+    });
+    stops.replaceChildren(...row);
     picker.hidden = picking === null;
     const label = STOPS.find((stop) => stop.key === picking)?.label ?? "";
     picker.setAttribute("aria-label", label);
