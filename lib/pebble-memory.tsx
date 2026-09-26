@@ -8,6 +8,9 @@ type Arm = {
   remainingBeforeOsAllocationsBytes: number;
   minimumFreeHeapBytes: number | null;
   conservativeAppStackSumBytes: number;
+  physicalStartupMs: number | null;
+  physicalStepsPerSecond: number | null;
+  physicalMinimumFreeHeapBytes: number | null;
 };
 export function PebbleMemory({ mode }: { mode: number }) {
   const [rows, setRows] = useState<Arm[]>([]);
@@ -36,7 +39,10 @@ export function PebbleMemory({ mode }: { mode: number }) {
         ? '未測定'
         : `${row.minimumFreeHeapBytes} B`}
       。アプリのスタック上限見積もり {row.conservativeAppStackSumBytes}{' '}
-      B（OS・ライブラリ分は別）。実機の時間・ヒープは未測定です。
+      B（OS・ライブラリ分は別）。
+      {row.physicalStartupMs === null
+        ? '実機は未測定です。'
+        : `実機: 起動 ${(row.physicalStartupMs / 1000).toFixed(1)} 秒、毎秒 ${row.physicalStepsPerSecond} ステップ、最小空きヒープ ${row.physicalMinimumFreeHeapBytes} B。`}
     </p>
   ) : (
     <p>Pebbleビルド診断を読み込めません。実機の時間・ヒープは未測定です。</p>

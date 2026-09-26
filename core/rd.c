@@ -4,7 +4,7 @@
  * Concentrations are computed in Q24 fixed point (RD_VALUE_ONE is 1.0) and
  * coefficients are Q15 (RD_Q15_ONE is 1.0). Modes 0 and 2 pack both species
  * into one 16-bit word per cell: A as a 7-bit linear code and B as a 9-bit
- * square-root companded code. Mode 1 stores each species as a Q15 word.
+ * square-root companded code. Modes 1 and 3 store each species as a Q15 word.
  * The Q15 modes step on their codes with 32-bit arithmetic (react_codes),
  * the packed modes decode to Q24 and use 64-bit products (react_cell).
  * Every mode writes with Floyd-Steinberg error diffusion, so the rounding
@@ -208,7 +208,7 @@ static const uint16_t ROOT_TABLE[1 << ROOT_INDEX_BITS] = {
  * Control structure at the start of the aligned block. The caller block is
  * laid out as:
  *
- *   [<= 3 bytes padding][State][plane 0][plane 1, mode 1 only]
+ *   [<= 3 bytes padding][State][plane 0][plane 1, Q15 modes only]
  *   [saved rows: SAVED_ROWS x SPECIES_COUNT x width int32]
  *   [residual rows: SPECIES_COUNT x width int32]
  *   [output row, RD_ROW_BYTES][display lookup table, LUT_BYTES]
@@ -381,12 +381,12 @@ static uint8_t *column_weight(State *state) {
   return column_index(state) + RD_DISPLAY_WIDTH;
 }
 
-/* One grid row of interpolated Q15 B values. */
 /* The right grid column of every display column, periodic. */
 static uint8_t *column_right(State *state) {
   return column_weight(state) + RD_DISPLAY_WIDTH;
 }
 
+/* One grid row of interpolated Q15 B values. */
 static uint16_t *interpolation_row(State *state) {
   return (uint16_t *)(column_right(state) + RD_DISPLAY_WIDTH);
 }
@@ -1222,8 +1222,10 @@ static void step_codes(State *state, int count) {
   }
 }
 
-/* Advance the field in place. Each species keeps four decoded rows so that
- * neighbors still see the old values of rows that were already rewritten. */
+/* Advance the field in place. The Q15 modes step on their codes
+ * (step_codes). In the packed modes each species keeps four decoded rows so
+ * that neighbors still see the old values of rows that were already
+ * rewritten. */
 int rd_step(void *handle, int count) {
   State *state = checked_state(handle);
   if (!state || count < 0 || count > MAX_STEPS_PER_CALL) {

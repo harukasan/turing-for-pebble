@@ -49,7 +49,7 @@ case "$command" in
     ;;
   device-install)
     # --logs keeps streaming after the install, so the startup summary that
-    # the watchface logs when its 2,000 startup steps finish is captured.
+    # the watchface logs when its 30 s startup finishes is captured.
     pebble install --phone "$(phone)" --logs "$(built_pbw "${2:-3}")"
     ;;
   device-logs)

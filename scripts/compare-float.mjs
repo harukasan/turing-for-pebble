@@ -1,5 +1,6 @@
 // Compare the released Wasm core with the original Float32 reference at the
-// same grid resolution, initial field, and Q15-effective parameters.
+// same grid resolution, initial field, and effective parameters (Q15, with
+// da and db folded in the Q15 modes).
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Simulation, presets } from '../lib/simulation.ts';
@@ -150,10 +151,10 @@ for (const mode of [0, 1, 2, 3]) {
 }
 const report = {
   source: 'public/wasm/rd.wasm versus lib/simulation.ts',
-  coreVersion: 2,
+  coreVersion: 4,
   checkpoints,
   method:
-    'Float32 fields start from rd_get Q15 values, use the same grid and Q15-effective parameters, and run the existing Float32 Euler step. Each concentration is compared cell by cell. Mode 2 isolates storage precision at 100x114.',
+    'Float32 fields start from the rd_get Q24 values, use the same grid and the effective parameters (Q15, with da and db folded with the 1/20 of the Laplacian in the Q15 modes), and run the existing Float32 Euler step. Each concentration is compared cell by cell. Mode 2 isolates storage precision at 100x114.',
   rows,
 };
 writeFileSync(

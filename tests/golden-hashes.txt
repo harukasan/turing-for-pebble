@@ -1,4 +1,4 @@
-# Field hashes of numerical definition version 3: mode steps hash (seed 42,
+# Field hashes of numerical definition version 4: mode steps hash (seed 42,
 # default parameters). scripts/check-optimization.sh compares every build
 # against these; any difference means the numerical contract changed.
 # Lines with seven more numbers install the clock mask of build/core-test

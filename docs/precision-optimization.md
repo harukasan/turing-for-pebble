@@ -1,6 +1,6 @@
 # Storage precision study
 
-Numerical definition version 1 stored the 200 × 228 field as two 8-bit planes with stochastic rounding and rounded every product to Q15. Its B field drifted from the Float32 reference by a mean absolute error of 0.0146 after 1,000 steps, with a worst-case spatial correlation of 0.76, so patterns visibly shifted. Two 16-bit planes would need 182,400 B, which does not fit next to the watch application in the 128 KiB app region. This study measured which techniques recover precision within 16 bits per cell. Version 2 of the core adopts the best combination. [Shared C core](core.md) is the resulting contract and [Float32 precision comparison](float-precision.md) reports the production Wasm build.
+Numerical definition version 1 stored the 200 × 228 field as two 8-bit planes with stochastic rounding and rounded every product to Q15. Its B field drifted from the Float32 reference by a mean absolute error of 0.0146 after 1,000 steps, with a worst-case spatial correlation of 0.76, so patterns visibly shifted. Two 16-bit planes would need 182,400 B, which does not fit next to the watch application in the 128 KiB app region. This study measured which techniques recover precision within 16 bits per cell. Version 2 of the core adopted the best combination, and versions 3 and 4 followed as recorded below; version 2 of the core adopts the best combination. [Shared C core](core.md) is the resulting contract and [Float32 precision comparison](float-precision.md) reports the production Wasm build.
 
 ## Method
 
@@ -26,7 +26,7 @@ Candidate names follow `tests/precision.c`: `lin<bits>` is a linear code over [0
 
 ## Results
 
-Mean over 10 cases (5 presets × 2 seeds), 200 × 228 unless `g=100`:
+Mean over 10 cases (5 presets × 2 seeds), 200 × 228 unless `g=100` or `g=120`:
 
 | Candidate                             | Cases | B MAE @100 | Worst B MAE @100 | Min B corr @100 | A MAE @100 | B MAE @1000 | Worst B MAE @1000 | Min B corr @1000 | A MAE @1000 |
 | ------------------------------------- | ----- | ---------- | ---------------- | --------------- | ---------- | ----------- | ----------------- | ---------------- | ----------- |
@@ -101,8 +101,8 @@ The Q15 modes of version 3 computed every cell with 64-bit products, sums, and r
 | C2 (`i=q15x32c2`)          |                         0.00004 | 0.00015 |                         0.00003 | 0.00006 |
 | C3 (`i=q15x32c3`)          |                         0.00018 | 0.00098 |                         0.00008 | 0.00021 |
 
-The per-step Q15 rounding of C1 and C3 costs three to six times the error of version 3, while C2 matches it. Over seeds 1 through 8 of the spots preset at 10,000 steps, every candidate reproduces the reference B mean within 0.1% with correlations above 0.9997, so none of them shifts the marginal case. C2 became numerical definition version 4. On the watch a mode 3 step fell from 18.0 ms to 14.25 ms.
+The per-step Q15 rounding of C1 and C3 costs three to six times the error of version 3, while C2 matches it. Over seeds 1 through 8 of the spots preset at 10,000 steps, every candidate reproduces the reference B mean within 0.1% with correlations above 0.9997, so none of them shifts the marginal case. C2 became numerical definition version 4. On the watch a mode 3 step fell from 18.0 ms to 14.25 ms with the row loop of that time, and to 13.1 ms with the later three-pass loop.
 
 ## Cost
 
-On the host, the `tests/compare.c` binary advances mode 0 in 2.3 ms per step with version 2 and took 3.4 ms with version 1, because each stored row is decoded once into a 32-bit row and one hash per cell replaces the three per species of version 1. The B encode uses a 9-iteration integer square root. Mode 0 needs 100,075 B instead of 93,647 B and mode 1 50,475 B instead of 48,047 B for the decoded rows, the residual rows, and the dither salt. The Emery watchface builds for both modes with the SDK's `-Werror` in the same `.text` size class as before. On-watch timing and heap remain unmeasured, as listed in [Validation](validation.md).
+On the host, the `tests/compare.c` binary advances mode 0 in 2.3 ms per step with version 2 and took 3.4 ms with version 1, because each stored row is decoded once into a 32-bit row and one hash per cell replaces the three per species of version 1. The B encode uses a 9-iteration integer square root. Mode 0 needs 100,075 B instead of 93,647 B and mode 1 50,475 B instead of 48,047 B for the decoded rows, the residual rows, and the dither salt (version 2 figures; the current allocations, with the mask levels and the interpolation tables, are 147,695 B and 63,179 B, see [Shared C core](core.md)). The Emery watchface builds for both modes with the SDK's `-Werror` in the same `.text` size class as before. On-watch timing and heap were measured later, as recorded in [Validation](validation.md).

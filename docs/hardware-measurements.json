@@ -1,20 +1,21 @@
 {
-  "description": "Startup measurements from the physical Pebble Time 2, one entry per mode and build, taken from the RD startup log line of `PEBBLE_PHONE=<ip> npm run device` or `device:mode1`. scripts/build-report.py copies the newest entry per mode into public/reports/comparison.json.",
+  "description": "Measurements from the physical Pebble Time 2, one entry per build, taken from the four RD startup lines (and, in the newest entries, the RD light line) of a build made with RD_BUILD_LOG=1 or RD_BUILD_PROFILE=1 and installed with PEBBLE_PHONE=<ip> npm run device (or device:mode0, device:mode1). scripts/build-report.py copies the newest entry per mode into public/reports/comparison.json.",
   "fields": {
     "commit": "git commit of the measured build",
     "mode": "0, 1, or 3",
     "date": "ISO 8601 date",
     "firmware": "watch firmware version",
-    "startupWallMs": "wall_ms of the RD startup line (validated slice and gap times); since the time-based startup, about RD_STARTUP_MS",
+    "startupWallMs": "wall_ms of the RD startup line: the validated slice and gap times summed until the startup and any minute refill it still owed finished (gaps of 5 s or more are excluded and flagged as interrupted). Entries before the time-based startup are for fixed step counts.",
     "stepsPerSecond": "rate_x10 / 10",
     "avgStepUs": "avg_step_us",
     "maxStepMs": "max_step_ms",
-    "avgDrawUs": "avg_draw_us (framebuffer blit)",
+    "avgDrawUs": "avg_draw_us (the field rendered into the framebuffer)",
     "avgTextUs": "avg_text_us (clock text)",
     "minimumFreeHeapBytes": "heap_min",
     "loopMs": "loop_ms of an RD_BUILD_PROFILE=1 build, 0 otherwise",
     "clockInvalid": "clock_invalid",
-    "interrupted": "interrupted"
+    "interrupted": "interrupted",
+    "note": "free-text context of the entry: steps, frames, burst timings, and what changed"
   },
   "measurements": [
     {

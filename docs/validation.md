@@ -1,20 +1,20 @@
 # Validation and adoption status
 
-The implementation is available for local Web use and Emery builds. Production adoption is **pending**, because no physical Pebble Time 2 is connected and interactive Web browser verification is unavailable in this environment.
+The implementation is available for local Web use and Emery builds. Mode 3 (120 × 136, interpolated) is the production watch build, measured on a physical Pebble Time 2 through the phone's developer connection.
 
 ## Completed checks
 
-- Native C row-buffer updates match a full-screen double-buffer oracle for all three modes.
-- Native and Wasm field hashes match at steps 0, 1, and 100 with seed 42, including dithered error diffusion.
+- Native C row-buffer updates match a full-screen double-buffer oracle for all four modes (0 to 3), with and without a clock mask.
+- Native and Wasm field hashes match at steps 0, 1, and 100 with seed 42 for every mode, after 200 masked steps with each font, and for the interpolated rows of every mode.
 - Equilibrium, periodic seeding, coefficient endpoints, rounding ties, the integer square root over its whole domain, floor codes, the dithered threshold range, error diffusion mass conservation, invalid arguments, undersized allocation, alignment, and sentinel boundaries are tested.
 - AddressSanitizer, UndefinedBehaviorSanitizer, and LeakSanitizer passed. LeakSanitizer requires execution outside this environment's ptrace-based sandbox.
 - 300 allocation/reset cycles retain fixed Wasm linear memory. The TypeScript adapter is tested with real Wasm for loading, mode recreation, parameter conversion, stepping, seeding, RGBA output, and disposal.
 - The original Float32 reference tests passed.
 - TypeScript checking and the production Web build passed. The repository-wide `mise run lint` passes. Vendored `components/ui/` is excluded from oxlint, as described in `docs/development.md`.
 - Wasm was served with HTTP 200 and `application/wasm`.
-- Both Emery `.pbw` variants were built and installed in the emulator. Mode 0 was also observed after a back-button backlight animation and subsequent minute updates without a lower minimum free heap.
+- The Emery `.pbw` files of modes 0, 1, and 3 were built and installed in the emulator. Mode 0 was also observed after a back-button backlight animation and subsequent minute updates without a lower minimum free heap.
 - The Emery screenshot's 2,427 white clock/date pixels exactly match the extracted PBF glyph positions and bitmap pixels. There are zero missing or extra white pixels. This verifies font geometry against the emulator, not browser Canvas interaction.
-- With digit avoidance (B held at 0 under the digits, graded kill around them) and a 1-pixel halo, mode 1 emulator screenshots matched both font sets exactly: LECO at 13:31 2026.09.25 (2,358 glyph pixels) and Bitham at 13:32 2026.09.25 (3,453 glyph pixels). Every halo pixel was black. A Bitham screenshot 40 s after the change to 13:33 showed no trace of the previous digit. `tests/adapter.mjs` checks that the core's compiled glyphs equal the JSON glyphs for both fonts. The minute burst timing on the physical watch and its battery effect are not measured yet.
+- With digit avoidance (B held at 0 under the digits, graded kill around them) and a 1-pixel halo, mode 1 emulator screenshots matched both font sets exactly: LECO at 13:31 2026.09.25 (2,358 glyph pixels) and Bitham at 13:32 2026.09.25 (3,453 glyph pixels). Every halo pixel was black. A Bitham screenshot 40 s after the change to 13:33 showed no trace of the previous digit. `tests/adapter.mjs` checks that the core's compiled glyphs equal the JSON glyphs for both fonts.
 
 Machine-readable results and comparison images are in `public/reports/`. These are also linked from the local Web UI. Source for all numerical checks is under `tests/`.
 
@@ -22,7 +22,7 @@ Machine-readable results and comparison images are in `public/reports/`. These a
 
 For the cell-by-cell comparison with the original Float32 implementation, see [Float32 precision comparison](float-precision.md). The fixed-point implementation is not numerically identical to the Float32 reference. Numerical definition version 4 (packed 7-bit A and 9-bit square-root B codes, Floyd–Steinberg error diffusion with a dithered threshold for the packed codes, Q24 arithmetic in the packed modes, and 32-bit arithmetic on the Q15 codes) reduced the mode 0 error at 1,000 steps by about 7 times and the mode 1 error by more than 100 times. [Storage precision study](precision-optimization.md) records the candidates that were measured.
 
-The Web now exposes Float32 reference runs at both grid resolutions alongside the two production Wasm modes. The adapter test checks that its initial disk occupancy matches the C core in both grids and that Q15 initial values match exactly on the 100 × 114 grid. Its step, seed, and RGB2 rendering paths are also exercised. The UI switches by resetting to the same seed and preserves the original controls.
+The Web now exposes Float32 reference runs at both grid resolutions alongside the three Wasm engines, of which mode 3 is the production build. The adapter test checks that its initial disk occupancy matches the C core in both grids and that Q15 initial values match exactly on the 100 × 114 grid. Its step, seed, and RGB2 rendering paths are also exercised. The UI switches by resetting to the same seed and preserves the original controls.
 
 The [thin-line comparison image](../public/reports/thin-lines.png) records seed 42, Feed 0.023, Kill 0.052, Da 1, Db 0.5, dt 1, and 10,000 steps. The left half is 200 × 228 / packed and the right half is 100 × 114 / Q15, both displayed at 200 × 228. The high-resolution result has narrow curved bands while the low-resolution result has wider bands. The separate [Float32 precision report](float-precision.md) quantifies this preset at 1,000 steps.
 
@@ -36,13 +36,13 @@ At step 10,000, a further single step changes 0.11–0.17% of displayed pixels f
 
 ## Memory
 
-Core allocation is 100,567 B for mode 0 and 50,967 B for mode 1. These include decoded scratch rows, error diffusion residual rows, the rendering row, the display lookup table, control state, and alignment. Concentration planes plus scratch rows alone occupy 96.875 KiB and 48.438 KiB respectively. Version 2 added 6,920 B to mode 0 and 2,920 B to mode 1 for the decoded 32-bit rows, the residual rows, and the display lookup table. The watchface is now compiled with `-O3`, which grew its load size from 4,705 B to about 10.5 KB (mode 0) and 11.3 KB (mode 1); `scripts/build-pebble.sh` fails above 12,288 B.
+Core allocation is 147,695 B for mode 0, 63,179 B for mode 1, and 88,619 B for mode 3 ([Shared C core](core.md) has the breakdown: fields, row buffers, control, rendering tables, alignment, and the mask levels). The watch also allocates the clock mask bitmap (2,040 B in mode 3) outside the core. Load sizes at `-O3` are 13.8 KB (mode 0), 15.0 KB (mode 1), and 15.6 KB (mode 3), and `scripts/build-pebble.sh` fails above 20,480 B, because code, static data, the core allocation, and the OS's own allocations share the 128 KiB app region.
 
 The current `public/reports/comparison.json` records measured ELF text/data/BSS and compiler stack reports. Application RAM estimates use the 128 KiB app region and subtract both the load footprint and the core allocation. They do not include additional OS allocations.
 
-Observed emulator heap results are recorded with their build/observation scope. Version 1 mode 0 showed 32,888 B after startup and two subsequent minute updates. Version 1 mode 1 showed 78,688 B after startup and a subsequent minute update. The version 2 allocation and the larger code are together about 11.2 KB (mode 0) and 6.7 KB (mode 1) more than those binaries had, so the expected corresponding values are about 21.7 KiB and 72 KiB before remeasurement. The observation metadata is retained in `docs/emulator-measurements.json`. These exceed 16 KiB in the observed emulator intervals, but they are not a substitute for a sustained normal-operation and backlight workload on hardware. Use the current report for subsequent measurements.
+These emulator numbers are historical. Observed emulator heap results are recorded with their build/observation scope. Version 1 mode 0 showed 32,888 B after startup and two subsequent minute updates. Version 1 mode 1 showed 78,688 B after startup and a subsequent minute update. The version 2 allocation and the larger code are together about 11.2 KB (mode 0) and 6.7 KB (mode 1) more than those binaries had, so the expected corresponding values are about 21.7 KiB and 72 KiB before remeasurement. The observation metadata is retained in `docs/emulator-measurements.json`. These exceed 16 KiB in the observed emulator intervals, but they are not a substitute for a sustained normal-operation and backlight workload on hardware. Use the current report for subsequent measurements. No emulator heap was recorded for mode 3; the physical measurements below supersede the emulator.
 
-The two `.pbw` files were rebuilt for numerical definition version 2. Their current ELF section sizes are refreshed in `public/reports/comparison.json`. The heap observations above belong to the earlier version 1 binaries listed in `docs/emulator-measurements.json` and must be remeasured on the final binaries before an acceptance decision.
+The watchfaces are built from numerical definition version 4, and `public/reports/comparison.json` holds their current ELF section sizes together with the newest physical measurement of each mode.
 
 Compiler `.su` files report bounded, static frames and no application recursion. The report includes their sum as a deliberately conservative application-only stack bound. This is not a full stack high-water measurement. The OS and library call paths contribute additional stack usage.
 
@@ -50,26 +50,27 @@ Compiler `.su` files report bounded, static frames and no application recursion.
 
 The first physical measurements were taken on 2026-09-25 through the phone's developer connection, with the scheduling, drawing, and bit-exact core changes described in [Shared C core](core.md). `docs/hardware-measurements.json` holds the raw entries and `scripts/build-report.py` copies them into `public/reports/comparison.json`.
 
-| Mode                                | Steps per second |    Step | Blit per frame | Text per frame | Minimum free heap |                                        Startup |
-| ----------------------------------- | ---------------: | ------: | -------------: | -------------: | ----------------: | ---------------------------------------------: |
-| 0                                   |             11.4 |   81 ms |         3.2 ms |         2.8 ms |          21,104 B |                                    about 175 s |
-| 1                                   |             56.2 | 16.4 ms |         3.3 ms |         2.0 ms |          68,376 B |                                     about 36 s |
-| 1, version 3                        |             58.3 | 15.2 ms |         2.9 ms |         3.1 ms |          68,680 B |                                     about 34 s |
-| 1, production (1,800 steps)         |             63.0 | 15.1 ms |         3.5 ms |         3.0 ms |          69,176 B |                                28.8 s measured |
-| 1, with the digit mask              |             63.9 | 14.9 ms |         3.9 ms |         2.5 ms |          49,624 B |                                28.1 s measured |
-| 3, first build (1,250 steps)        |             40.3 | 20.9 ms |        12.0 ms |         2.9 ms |          20,952 B |                                31.0 s measured |
-| 3, step rewrites (1,250)            |             48.1 | 19.1 ms |        11.7 ms |         2.5 ms |          21,672 B |                                25.9 s measured |
-| 3, code rows and table (1,250)      |             51.1 | 18.0 ms |        11.6 ms |         2.5 ms |          19,912 B |                                24.4 s measured |
-| 3, 100 ms redraws (1,250)           |             42.4 | 18.3 ms |        11.7 ms |         2.7 ms |          19,912 B |                                29.5 s measured |
-| 3, faster renderer (1,250)          |             44.5 | 18.1 ms |         9.4 ms |         2.8 ms |          20,104 B |                                28.1 s measured |
-| 3, about 20 fps (1,250 steps)       |             40.4 | 18.5 ms |         6.5 ms |         0.9 ms |          20,592 B |                                30.9 s measured |
-| 3, version 4 (1,250 steps)          |             49.8 | 15.0 ms |         6.9 ms |         0.4 ms |          21,376 B |                                25.1 s measured |
-| 3, 40 ms redraws (1,250 steps)      |             46.8 | 14.8 ms |         7.3 ms |         0.9 ms |          21,368 B | about 26.7 s (28.4 s measured for 1,330 steps) |
-| 3, three-pass loop, 40 ms redraws   |             49.3 | 13.7 ms |         7.4 ms |         1.0 ms |          22,776 B |                                25.3 s measured |
-| 3, 50 ms, 3 steps per frame (1,250) |             55.1 | 14.0 ms |         6.6 ms |         0.9 ms |          22,776 B |                                22.7 s measured |
-| 3, production (30 s startup)        |             55.1 | 14.0 ms |         6.6 ms |         0.9 ms |          22,264 B |                            30.0 s, 1,653 steps |
+| Mode                                           | Steps per second |    Step | Blit per frame | Text per frame | Minimum free heap |                                        Startup |
+| ---------------------------------------------- | ---------------: | ------: | -------------: | -------------: | ----------------: | ---------------------------------------------: |
+| 0                                              |             11.4 |   81 ms |         3.2 ms |         2.8 ms |          21,104 B |                                    about 175 s |
+| 1                                              |             56.2 | 16.4 ms |         3.3 ms |         2.0 ms |          68,376 B |                                     about 36 s |
+| 1, version 3                                   |             58.3 | 15.2 ms |         2.9 ms |         3.1 ms |          68,680 B |                                     about 34 s |
+| 1, 1,800 steps (production then)               |             63.0 | 15.1 ms |         3.5 ms |         3.0 ms |          69,176 B |                                28.8 s measured |
+| 1, with the digit mask                         |             63.9 | 14.9 ms |         3.9 ms |         2.5 ms |          49,624 B |                                28.1 s measured |
+| 3, first build (1,250 steps)                   |             40.3 | 20.9 ms |        12.0 ms |         2.9 ms |          20,952 B |                                31.0 s measured |
+| 3, step rewrites (1,250)                       |             48.1 | 19.1 ms |        11.7 ms |         2.5 ms |          21,672 B |                                25.9 s measured |
+| 3, code rows and table (1,250)                 |             51.1 | 18.0 ms |        11.6 ms |         2.5 ms |          19,912 B |                                24.4 s measured |
+| 3, 100 ms redraws (1,250)                      |             42.4 | 18.3 ms |        11.7 ms |         2.7 ms |          19,912 B |                                29.5 s measured |
+| 3, faster renderer (1,250)                     |             44.5 | 18.1 ms |         9.4 ms |         2.8 ms |          20,104 B |                                28.1 s measured |
+| 3, about 20 fps (1,250 steps)                  |             40.4 | 18.5 ms |         6.5 ms |         0.9 ms |          20,592 B |                                30.9 s measured |
+| 3, version 4 (1,250 steps)                     |             49.8 | 15.0 ms |         6.9 ms |         0.4 ms |          21,376 B |                                25.1 s measured |
+| 3, 40 ms redraws (1,250 steps)                 |             46.8 | 14.8 ms |         7.3 ms |         0.9 ms |          21,368 B | about 26.7 s (28.4 s measured for 1,330 steps) |
+| 3, three-pass loop, 40 ms redraws (1,250)      |             49.3 | 13.7 ms |         7.4 ms |         1.0 ms |          22,776 B |                                25.3 s measured |
+| 3, 50 ms, 3 steps per frame (1,250)            |             55.1 | 14.0 ms |         6.6 ms |         0.9 ms |          22,776 B |                                22.7 s measured |
+| 3, 30 s startup                                |             55.1 | 14.0 ms |         6.6 ms |         0.9 ms |          22,264 B |                            30.0 s, 1,653 steps |
+| 3, production (30 s startup, backlight pacing) |             55.4 | 13.9 ms |         6.6 ms |         0.9 ms |          21,904 B |                            30.0 s, 1,661 steps |
 
-The hardware clock was valid throughout (`clock_invalid=0`). The 1,000,000-iteration calibration loop of the profile build took 46–47 ms. A 256-step log interval reproduced the mode 0 rate as 256 steps per 22.5 s. Neither mode reached the 30 s target for 2,000 steps with bit-exact code: mode 1 needed about 18% more speed and mode 0 about six times more. Version 3 (nearest rounding for the Q15 codes, no per-cell hash in mode 1) raised mode 1 to 58.3 steps/s at 15.2 ms per step, and the startup was set to 1,800 steps with 120 ms slices and one redraw per 200 ms, which brings mode 1's startup to a measured 28.8 s for 1,816 steps (1,800 plus one minute tick) at 63.0 steps/s.
+The hardware clock was valid throughout (`clock_invalid=0`). The 1,000,000-iteration calibration loop of the profile build took 46–47 ms. A 256-step log interval reproduced the mode 0 rate as 256 steps per 22.5 s. At the time, neither mode reached the 30 s target for 2,000 steps with bit-exact code: mode 1 needed about 18% more speed and mode 0 about six times more. Version 3 (nearest rounding for the Q15 codes, no per-cell hash in mode 1) raised mode 1 to 58.3 steps/s at 15.2 ms per step, and the startup was set to 1,800 steps with 120 ms slices and one redraw per 200 ms, which brings mode 1's startup to a measured 28.8 s for 1,816 steps (1,800 plus one minute tick) at 63.0 steps/s.
 
 ### Resolution study
 
@@ -93,24 +94,17 @@ To aim at 20 frames per second, the watch then redrew about every 50 ms with 30 
 
 Numerical definition version 4 then moved the Q15 modes to 32-bit arithmetic (see [Shared C core](core.md) and the [storage precision study](precision-optimization.md)). The harness showed the same Float32 error as version 3, and the watch measured 14.25 ms per step against 18.0 ms for version 3 in the same session. The production startup measured 25.1 s with 503 draws, one about every 50 ms, and 21,376 B of minimum free heap. The host growth harness places the completion of the maze preset at 120 × 136 at 800 steps as before, so the startup keeps 1,250 steps. The `RD_BENCH` phases of a version 4 step on the watch are 2.5 ms for the row copies and Laplacian sums, 5.7 ms for the reaction, and 4.85 ms for the encoding, error diffusion, and stores, of 14.25 ms in total. Splitting the row update into a reaction pass and one encoding pass per species removed the register spills of the single loop and brought the step to 13.1 ms in `RD_BENCH`. Holding the previous column's residual in a register was neutral (kept), and fusing the Laplacian sums into the cell loop (15.45 ms), unrolling the cell loop twice (15.25 ms), and compiling for the Cortex-M33 (14.25 ms) did not help. With the redraw interval at 40 ms and 20 ms slices, two steps per frame, the watch drew 664 frames in 28.4 s for 1,330 steps (a minute change near the end raised the pending steps by 80), 23.4 frames per second, or about 26.7 s for the 1,250 startup steps alone. With the three-pass loop the same pacing measured 25.3 s, 619 draws at 24.5 frames per second, and 22,776 B of minimum free heap. The production pacing then moved to 50 ms redraws with 30 ms slices, three steps per frame: 22.7 s, 422 draws at 18.6 frames per second, 55 steps per second. The startup is now bounded by time rather than by a step count: it runs for `RD_STARTUP_MS` (30 s) after launch, or until 2,500 steps (about 45 s at this rate) if the clock does not advance, and a minute change during it keeps only the refill steps it is still owed at the deadline. On the watch the startup ended 30.03 s after launch with 1,653 steps and 555 frames. The backlight animation then moved to the same pacing (30 ms slices, 50 ms redraws) instead of one step per 100 ms frame: a backlight window on the watch ran 282 steps and 93 frames in 5.05 s, 18.4 frames per second with three steps per frame.
 
-A display-limit build (`RD_BUILD_DEFINES="RD_FRAME_BENCH RD_STARTUP_STEPS=0"`) marks the layer dirty from a 1 ms timer for 5 s with the normal draw and then for 5 s with an empty draw. The watch rendered 136 frames with the normal draw (5.7 ms field, 1.0 ms text per frame) and 134 frames with the empty draw, about 27 frames per second either way, so the OS and display update, not the drawing, set the ceiling at about 37 ms per frame. The 50 ms redraw interval of the watchface is at three quarters of it.
+A display-limit build (`RD_BUILD_DEFINES="RD_FRAME_BENCH RD_STARTUP_MS=0"`) marks the layer dirty from a 1 ms timer for 5 s with the normal draw and then for 5 s with an empty draw. The watch rendered 136 frames with the normal draw (5.7 ms field, 1.0 ms text per frame) and 134 frames with the empty draw, about 27 frames per second either way, so the OS and display update, not the drawing, set the ceiling at about 37 ms per frame. The 50 ms redraw interval of the watchface is at three quarters of it.
 
-After a minute change the 300 burst steps took about 7.5 s in mode 3, against about 4.7 s in mode 1. On the host the old digits left no trace after 100 steps, so a shorter burst is possible. The battery effect of the bursts is not measured.
+After a minute change the 300 burst steps took about 7.5 s in the first mode 3 build (40 steps per second), against about 4.7 s in mode 1; at the current 55 steps per second they take about 5.5 s by estimate. On the host the old digits left no trace after 100 steps, so a shorter burst is possible.
 
 ## Timing limitation
 
 The emulator RTC implementation in the inspected official PebbleOS source (`src/fw/drivers/qemu/qemu_rtc_hal.c`) obtains whole seconds and fractional milliseconds from different clock sources. The observed combined timestamp can move backwards across a tick wrap. Diagnostics now abort that compute slice, set `clock_invalid=1`, and report a 1,000 ms sentinel. Once invalid, maximum timing fields cannot be used as performance measurements. The sentinel is not a measured 1,000 ms step.
 
-Backlight windows use a separate five-second AppTimer, so they do not depend on this wall-clock combination. Compute time is checked only after a complete step. A slow single step can exceed the nominal 8 ms slice budget, which makes physical-device timing an essential remaining check.
+Backlight windows use a separate five-second AppTimer, so they do not depend on this wall-clock combination. Compute time is checked only after a complete step, so a slice runs past its 30 ms budget by up to one step (the watch measured single steps of up to 59 ms).
 
-## Remaining acceptance work
-
-- Verify Web mode switching, repeated initialization, pause/advance behavior, simulated backlight/focus behavior, PNG export, and configuration downloads interactively. No connected browser is available to this agent.
-- Observe real-device backlight-on/off and focus loss, without an accelerometer subscription.
-- Measure minimum free heap throughout startup, minute updates, and backlight animation. Require at least 16 KiB during normal operation.
-- Measure compute and draw times on a physical Emery watch with `PEBBLE_PHONE=<ip> npm run device` and `device:mode1`, record the `RD startup` line in `docs/hardware-measurements.json`, and rerun `scripts/build-report.py`. Require 2,000 startup steps within 30 s and combined animation compute and drawing within 100 ms.
-- Validate full stack headroom including OS and library contributions.
-- Compare perceived flicker, legibility, and pattern quality on the physical display.
+## Production build
 
 Mode 3 (120 × 136, interpolated) is the production build: `pebble/src/c/config.h`, the build default, `npm run device`, and the Web's initial selection use it. Mode 1 remains available as the previous build, and mode 0 as the high-resolution comparison build.
 

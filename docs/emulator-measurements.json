@@ -1,4 +1,5 @@
 {
+  "description": "Emulator heap observations of the version 1 watchface builds of modes 0 and 1 (2026-09-24 and 2026-09-25), superseded by the physical measurements in hardware-measurements.json. No mode 3 entry exists, and emulator timing never qualifies hardware.",
   "sdk": "4.33.1",
   "physicalDevice": false,
   "measurements": [

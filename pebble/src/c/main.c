@@ -389,9 +389,9 @@ static void update(void *context) {
   slices++;
   if (done) {
     int32_t since = since_ms(last_mark_ms);
-    /* While work is pending, redraw once another slice would overshoot the
-     * interval, so frames come about every WORK_FRAME_INTERVAL_MS instead
-     * of every second slice. */
+    /* While work or the animation is active, redraw once another slice would
+     * overshoot the interval, so frames come about every FRAME_INTERVAL_MS
+     * instead of every second slice. */
     int32_t interval = FRAME_INTERVAL_MS - SLICE_BUDGET_MS;
     if (!marked || !(remaining || animate) || since < 0 || since >= interval) {
       layer_mark_dirty(layer);
@@ -522,8 +522,8 @@ static void rebuild_mask(void) {
 }
 
 /* A new minute: mask the new digits, and give the pattern RD_MINUTE_STEPS
- * to refill the strokes of the old ones. The steps do not accumulate while
- * the face is unfocused. */
+ * to refill the strokes of the old ones. With avoidance the steps do not
+ * accumulate while the face is unfocused; without it they add up. */
 static void tick(struct tm *tick_time, TimeUnits units_changed) {
   (void)units_changed;
   clock_time = *tick_time;

@@ -1,8 +1,8 @@
 {
   "source": "public/wasm/rd.wasm versus lib/simulation.ts",
-  "coreVersion": 2,
+  "coreVersion": 4,
   "checkpoints": [0, 1, 10, 100, 1000],
-  "method": "Float32 fields start from rd_get Q15 values, use the same grid and Q15-effective parameters, and run the existing Float32 Euler step. Each concentration is compared cell by cell. Mode 2 isolates storage precision at 100x114.",
+  "method": "Float32 fields start from the rd_get Q24 values, use the same grid and the effective parameters (Q15, with da and db folded with the 1/20 of the Laplacian in the Q15 modes), and run the existing Float32 Euler step. Each concentration is compared cell by cell. Mode 2 isolates storage precision at 100x114.",
   "rows": [
     {
       "mode": 0,

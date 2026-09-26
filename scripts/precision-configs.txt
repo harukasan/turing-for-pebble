@@ -55,6 +55,11 @@ g=100,a=q15,b=q15,r=fs,i=q24,d=8
 g=200,a=lin8,b=sqr10,r=fs,i=q24,d=8
 
 # Version 4 arithmetic: 32-bit products on Q15 codes (the core's Q15 modes)
+g=100,a=q15,b=q15,r=fs,i=q15x32c1
 g=100,a=q15,b=q15,r=fs,i=q15x32c2
+g=100,a=q15,b=q15,r=fs,i=q15x32c3
+g=120,a=q15,b=q15,r=fs,i=q15x32c1
 g=120,a=q15,b=q15,r=fs,i=q15x32c2
+g=120,a=q15,b=q15,r=fs,i=q15x32c3
 g=120,a=q15,b=q15,r=fs,i=q24
+g=120,a=q15,b=q15,r=near,i=q15

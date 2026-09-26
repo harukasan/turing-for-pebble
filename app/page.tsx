@@ -437,7 +437,7 @@ export default function Home() {
   }, []);
   const settings = {
     model: 'Gray-Scott',
-    version: 3,
+    version: 4,
     method: engine,
     rounding: floatMode
       ? 'float32-storage'
@@ -478,7 +478,7 @@ export default function Home() {
     a.download = `turing-${seed}-${stats.steps}.${kind}`;
     if (kind === 'h') {
       const q = effective(params);
-      const text = `/* Generated configuration, core v3 */\n#ifndef RD_MODE\n#define RD_MODE ${engineMode(engine)}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === 'green' ? 0 : palette === 'blue' ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n#ifndef RD_STARTUP_MS\n#define RD_STARTUP_MS 30000\n#endif\n#define RD_STARTUP_STEPS_MAX 2500\n#ifndef RD_RENDER_FLAGS\n#define RD_RENDER_FLAGS ${interpolate ? 2 : 0}\n#endif\n#ifndef RD_FONT\n#define RD_FONT ${fontIndex(font)}\n#endif\n#ifndef RD_AVOID\n#define RD_AVOID ${Number(avoid)}\n#endif\n#define RD_HALO ${HALO}\n#define RD_MINUTE_STEPS (RD_AVOID ? ${DEVICE_MINUTE_STEPS} : ${DEVICE_MINUTE_STEPS_PLAIN})\n`;
+      const text = `/* Generated configuration, core v4 */\n#ifndef RD_MODE\n#define RD_MODE ${engineMode(engine)}\n#endif\n#define RD_SEED ${seed}u\n#define RD_FEED ${Math.round(Number(q.feed) * 32768)}\n#define RD_KILL ${Math.round(Number(q.kill) * 32768)}\n#define RD_DA ${Math.round(Number(q.da) * 32768)}\n#define RD_DB ${Math.round(Number(q.db) * 32768)}\n#define RD_DT ${Math.round(Number(q.dt) * 32768)}\n#define RD_PALETTE ${palette === 'green' ? 0 : palette === 'blue' ? 1 : 2}\n#define RD_CLOCK ${Number(clock)}\n#ifndef RD_STARTUP_MS\n#define RD_STARTUP_MS 30000\n#endif\n#define RD_STARTUP_STEPS_MAX 2500\n#ifndef RD_RENDER_FLAGS\n#define RD_RENDER_FLAGS ${interpolate ? 2 : 0}\n#endif\n#ifndef RD_FONT\n#define RD_FONT ${fontIndex(font)}\n#endif\n#ifndef RD_AVOID\n#define RD_AVOID ${Number(avoid)}\n#endif\n#define RD_HALO ${HALO}\n#define RD_MINUTE_STEPS (RD_AVOID ? ${DEVICE_MINUTE_STEPS} : ${DEVICE_MINUTE_STEPS_PLAIN})\n`;
       const url = URL.createObjectURL(new Blob([text]));
       a.href = url;
       a.download = 'config.h';
@@ -663,7 +663,7 @@ export default function Home() {
                   </p>
                   <PebbleMemory mode={engineMode(engine)} />
                   <p>
-                    最小空きヒープは実測値、OS追加確保前の空きは見積もりです。両者は加算しません。採用判定は実機検証待ちです。
+                    最小空きヒープは実測値、OS追加確保前の空きは見積もりです。両者は加算しません。採用は実機の測定にもとづきます（docs/validation.md）。
                   </p>
                 </>
               )}
@@ -701,8 +701,8 @@ export default function Home() {
                 0.05。濃度は0〜1に制限します。
               </p>
               <p>
-                低い計算解像度は最近傍で200 ×
-                228に拡大します。64色モードでは各RGB成分を0・85・170・255に丸めます。表示倍率1×はCSSピクセル基準で、実寸ではありません。
+                低い計算解像度は200 ×
+                228に拡大します。補間をオンにするとBの濃度をセルの間で補間してから色にし、オフでは各画素がそのセルの色になります。64色モードでは各RGB成分を0・85・170・255に丸めます。表示倍率1×はCSSピクセル基準で、実寸ではありません。
               </p>
               <p>
                 共通Cの必要量はC

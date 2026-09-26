@@ -53,11 +53,14 @@ for mode in [0, 1, 3]:
             if emulator is None
             else emulator['minimumFreeHeapBytes'],
             'emulatorObservation': emulator,
-            'physicalComputeAndDrawMs': None
+            # One animation frame: the steps of a 30 ms slice (a slice ends
+            # after the step that crosses the budget) plus the field and
+            # text draw.
+            'physicalFrameMs': None
             if physical is None
             else round(
                 (
-                    physical['avgStepUs'] * 8
+                    -(-30000 // physical['avgStepUs']) * physical['avgStepUs']
                     + physical['avgDrawUs']
                     + physical['avgTextUs']
                 )

@@ -44,6 +44,8 @@ npm run dev -- --host 127.0.0.1
 
 The local URL is normally `http://localhost:3000/`. No deployment is required. The development server is not an on-watch performance benchmark.
 
+`mise run test-core` runs `tests/core.c` at `-O2`, then under AddressSanitizer and UndefinedBehaviorSanitizer, then `tests/wasm.mjs` (native versus Wasm field hashes and rendered rows) and `tests/adapter.mjs` (the TypeScript adapters and the clock masks). `npm run test:optimization` (`scripts/check-optimization.sh`) compiles the core at `-O0` and `-O3` and compares every field hash with `tests/golden-hashes.txt`, whose lines hold mode, steps, hash, and optionally the seven clock-mask arguments of `build/core-test`. `npm run compare:float` (`scripts/compare-float.mjs`) measures the Wasm core against the Float32 reference at the effective parameters and writes `docs/float-precision.json`.
+
 ## Lint and format
 
 `mise run lint` runs every check and fails on any lint error or unformatted file. `mise run format` rewrites all sources with the project formatters. Both aggregate the per-language tasks below, which can also be run alone.
@@ -55,7 +57,7 @@ The local URL is normally `http://localhost:3000/`. No deployment is required. T
 | `lint-py` / `format-py` | ruff 0.16.8 (mise)                                   | `scripts/*.py`                              |
 | `lint-sh` / `format-sh` | shellcheck 0.11.0 and shfmt 3.14.1 (mise)            | `scripts/*.sh`                              |
 
-`lint-c` runs `scripts/lint-c.sh`: a clang-format check, then `cc -fsyntax-only -Wall -Wextra -Werror` over `tests/core.c`, `tests/precision.c`, `core/rd.c` with `tests/compare.c`, and `pebble/src/c/core.c` with `RD_MODE` 0, 1, and 2 under C99 to mirror the watch build. `main.c` needs the SDK include tree, so it is only checked by `mise run build-pebble`, which compiles with the SDK's `-Werror`. Every other C build (`test-core`, `build-wasm`, `scripts/compare.py`) also passes `-Wall -Wextra`.
+`lint-c` runs `scripts/lint-c.sh`: a clang-format check, then `cc -fsyntax-only -Wall -Wextra -Werror` over `tests/core.c`, `tests/precision.c`, `tests/bench.c`, `tests/fill.c`, `core/rd.c` and `core/clock_mask.c` with `tests/compare.c`, and `pebble/src/c/core.c` with `RD_MODE` 0 to 3 and `RD_FONT` 0 and 1 under C99 to mirror the watch build. `main.c` needs the SDK include tree, so it is only checked by `mise run build-pebble`, which compiles with the SDK's `-Werror`. Every other C build (`test-core`, `build-wasm`, `scripts/compare.py`) also passes `-Wall -Wextra`.
 
 ruff, shellcheck, and shfmt are installed by `mise install`. clang-format is not managed by mise. Install it from the system package manager. The `.clang-format` configuration needs clang-format 15 or newer for `InsertBraces`, and the sources were formatted with 22.1.8. Other major versions may place braces or blank lines slightly differently.
 
@@ -64,7 +66,7 @@ Style settings live in `.editorconfig`, `.clang-format`, `ruff.toml`, `.oxlintrc
 Exclusions:
 
 - `components/ui/` is vendored shadcn output. oxlint skips it, oxfmt still formats it.
-- `public/reports/`, `public/fonts/leco.json`, and `docs/emulator-measurements.json` are generated. oxfmt skips them.
+- oxfmt skips `public/reports/`, `public/fonts/clock-fonts.json`, and `docs/emulator-measurements.json`. Generated files: `public/reports/` (`scripts/compare.py` and `scripts/build-report.py`), `public/fonts/clock-fonts.json` (`scripts/extract-fonts.py`), `core/clock_glyphs.h` (`scripts/gen-clock-glyphs.py`), `public/wasm/rd.wasm` (`mise run build-wasm`), and `docs/float-precision.json` (`npm run compare:float`). `docs/emulator-measurements.json` and `docs/hardware-measurements.json` are hand-maintained inputs of the report builder.
 - `pebble/wscript` is the SDK build template. ruff skips it.
 
 ## Emery builds
@@ -73,7 +75,7 @@ Exclusions:
 mise run build-pebble
 ```
 
-This builds modes 0, 1, and 3 and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. The sources are compiled with `-O3` after the SDK's own flags (`RD_BUILD_OPT` overrides it; `-O3` measured 6% faster steps than `-O2` on the watch), `RD_BUILD_PROFILE=1` adds the clock calibration loop and the periodic profile log, and the script fails if an ELF's load size exceeds 20,480 bytes (mode 3 is about 17.2 KB without logs: the row loop is duplicated so that rows away from the digits keep the loop without the mask levels, while the glyph traversal, the renderer, and the rare color fallback are kept out of line), because code shares the 128 KiB app region with the core allocation. Production builds leave out the diagnostic logs. `RD_BUILD_LOG=1` keeps them (the `RD init`, `RD startup`, and progress lines used for measurements), and `RD_BUILD_PROFILE=1` and `RD_BENCH` builds include them too. `RD_BUILD_RENDER` overrides the `rd_row_rgb2` flags, and `RD_BUILD_DEFINES` adds space-separated defines such as `RD_STARTUP_STEPS=1000` for study builds. The shared UUID means installing one mode replaces another in an emulator or watch.
+This builds modes 0, 1, and 3 and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. The sources are compiled with `-O3` after the SDK's own flags (`RD_BUILD_OPT` overrides it; `-O3` measured 6% faster steps than `-O2` on the watch), `RD_BUILD_PROFILE=1` adds the clock calibration loop and the periodic profile log, and the script fails if an ELF's load size exceeds 20,480 bytes (mode 3 is about 15.6 KB without logs: the row passes are duplicated so that rows away from the digits run without the mask levels, while the glyph traversal, the renderer, and the rare color fallback are kept out of line), because code shares the 128 KiB app region with the core allocation. Production builds leave out the diagnostic logs. `RD_BUILD_LOG=1` keeps them (the `RD init`, `RD startup`, `RD light`, and progress lines used for measurements), and `RD_BUILD_PROFILE=1`, `RD_BENCH`, and `RD_FRAME_BENCH` builds include them too. `RD_BUILD_MODE` selects the mode (default 3), `RD_BUILD_FONT` the clock font set (0 LECO, 1 Bitham), `RD_BUILD_RENDER` overrides the `rd_row_rgb2` flags (2 interpolates, the default for mode 3 and 0 for the others), and `RD_BUILD_DEFINES` adds space-separated defines such as `RD_STARTUP_MS=20000` for study builds. The shared UUID means installing one mode replaces another in an emulator or watch.
 
 ```sh
 npm run emulator              # build if needed, then install mode 3
@@ -89,7 +91,7 @@ PEBBLE_PHONE=<ip> npm run device:logs        # stream watch logs
 PEBBLE_PHONE=<ip> npm run device:screenshot  # build/watch.png
 ```
 
-These run `scripts/emulator.sh`, which re-executes itself under `mise exec` when `pebble` is not on `PATH`. The `device` commands use the phone's Pebble app developer connection (`--phone`), so enable it in the app and set `PEBBLE_PHONE` to the IP it shows. Start `npm run device` before the face launches so the startup summary is captured. The underlying commands are:
+These run `scripts/emulator.sh`, which re-executes itself under `mise exec` when `pebble` is not on `PATH`. `screenshot` and `device-screenshot` take an output path as a second argument, and `device-install` streams the watch logs after the install. The `device` commands use the phone's Pebble app developer connection (`--phone`), so enable it in the app and set `PEBBLE_PHONE` to the IP it shows. Start `npm run device` before the face launches so the startup summary is captured. The underlying commands are:
 
 ```sh
 mise exec -- pebble install --emulator emery --vnc build/pebble/mode-3.pbw
@@ -98,11 +100,11 @@ mise exec -- pebble screenshot --emulator emery --vnc --no-open build/emery.png
 
 Keep `--vnc` consistent across emulator commands. Changing emulator launch options can restart it and interrupt the current log connection.
 
-Mode 0 is 200 × 228 with 8-bit storage. Mode 1 is 100 × 114 and mode 3, the default, 120 × 136, both with 16-bit storage. The build script sets `RD_BUILD_MODE` explicitly. To build the mode selected in an exported `config.h`, copy it to `pebble/src/c/config.h` and run `mise exec -- pebble build --sdk 4.33.1` from `pebble/` after setting the corresponding `RD_BUILD_MODE`. The mode override takes precedence over the header's default.
+Mode 0 is 200 × 228 with packed 16-bit storage (A 7-bit, B 9-bit). Mode 1 is 100 × 114 and mode 3, the default, 120 × 136, both with 16-bit storage. The build script sets `RD_BUILD_MODE` explicitly. To build the mode selected in an exported `config.h`, copy it to `pebble/src/c/config.h` and run `mise exec -- pebble build --sdk 4.33.1` from `pebble/` after setting the corresponding `RD_BUILD_MODE`. The mode override takes precedence over the header's default.
 
-`RD_BUILD_DEFINES=RD_BENCH` builds a watchface that logs `RD bench` with the time of each phase of a step 3 s after launch. `RD_BUILD_DEFINES="RD_FRAME_BENCH RD_STARTUP_MS=0"` builds one that logs `RD frames`, the frames the OS renders in 5 s with the normal draw and then with an empty draw. `cc -O3 -std=c11 -DRD_MODE=3 tests/bench.c -o build/bench && build/bench 3` runs the same timing on the host.
+`RD_BUILD_DEFINES=RD_BENCH` builds a watchface that logs `RD bench` with the time of each phase of a step 3 s after launch. `RD_BUILD_DEFINES="RD_FRAME_BENCH RD_STARTUP_MS=0"` builds one that logs `RD frames`, the frames the OS renders in 5 s with the normal draw and then with an empty draw. `mkdir -p build && cc -O3 -std=c11 -DRD_MODE=3 tests/bench.c -o build/bench && build/bench 3 500` runs the same timing on the host (`build/bench MODE [COUNT]`; a binary built without `RD_MODE` accepts every mode). The host ranks the phases differently from the watch, so only the watch numbers decide.
 
-`mise exec -- python scripts/fill.py grids` and `fill.py seeds` rerun the growth comparison of the resolution study (`tests/fill.c`) and write contact sheets under `build/fill/`.
+`mise exec -- python scripts/fill.py grids` and `fill.py seeds` rerun the growth comparison of the resolution study and write contact sheets and `build/fill/<study>.jsonl` under `build/fill/` (`grids` is the default study). They drive `tests/fill.c` as `build/fill-run mode preset seed disks min_radius radius_range out_prefix checkpoint...`.
 
 ## Regenerating comparison artifacts
 
@@ -111,9 +113,9 @@ mise exec -- python scripts/compare.py
 mise exec -- python scripts/build-report.py
 ```
 
-`compare.py` runs 10,000 steps for the five presets, two seeds, and three modes. It creates PNGs and JSON under `public/reports/`, including `thin-lines.png` for the thin-line preset described in `docs/behavior.md`. The third mode is a diagnostic 100 × 114 / 8-bit configuration. It is not exposed as a production choice in the Web UI.
+`compare.py` runs 10,000 steps for the five presets, two seeds, and the four modes 0 to 3. It creates PNGs and JSON under `public/reports/`, including `thin-lines.png` for the thin-line preset described in `docs/behavior.md`. Mode 2 is a diagnostic 100 × 114 configuration with the packed cells of mode 0 that the Web UI does not expose, and `thin-lines.png` shows modes 0, 1, and 3.
 
-The report builder reads ARM ELF section sizes and `.su` stack reports, so run `mise run build-pebble` first with `arm-none-eabi-size` from the SDK toolchain on `PATH`. Runtime measurements must retain their measured build and observation scope. Do not substitute theoretical remaining RAM for measured minimum free heap.
+The report builder reads ARM ELF section sizes and `.su` stack reports, `docs/emulator-measurements.json`, and `docs/hardware-measurements.json`, and rewrites `public/reports/comparison.json` in place, so run `mise run build-pebble` and `compare.py` first with `arm-none-eabi-size` from the SDK toolchain on `PATH`. Runtime measurements must retain their measured build and observation scope. Do not substitute theoretical remaining RAM for measured minimum free heap.
 
 ## Storage precision experiment
 
@@ -133,7 +135,7 @@ The glyphs in `public/fonts/clock-fonts.json` and `core/clock_glyphs.h` were ext
 - `resources/normal/base/pbf/BITHAM_42_BOLD.pbf`
 - `resources/normal/base/pbf/BITHAM_30_BLACK.pbf`
 
-The font sets are listed in `SETS` of `scripts/extract-fonts.py`. Only the digits and the separator of each line are kept. `--list PATTERN` prints the characters of the matching PBFs; BITHAM_18_LIGHT_SUBSET and BITHAM_34_LIGHT_SUBSET contain no digits.
+The font sets are listed in `SETS` of `scripts/extract-fonts.py`. Only the digits and the separator of each line are kept. `extract-fonts.py /path/to/PebbleOS --list 'BITHAM_*'` prints the height and the printable characters of the matching PBFs; BITHAM_18_LIGHT_SUBSET and BITHAM_34_LIGHT_SUBSET contain no digits.
 
 Source: [coredevices/PebbleOS](https://github.com/coredevices/PebbleOS/tree/119cb96e3f47be0f61191c0b90a502bb01f2d9bc). License: Apache-2.0, copied to `public/fonts/LICENSE`. Per-file SHA-256 values and the source revision are embedded in the JSON. Glyph dimensions, bearings, advances, and monochrome pixels are preserved. The extractor requires a local checkout of that revision and its official `pbf_extract.py`:
 
@@ -143,6 +145,6 @@ mise exec -- python scripts/gen-clock-glyphs.py
 mise exec -- python scripts/verify-fonts.py build/emery.png 13:16 2026.09.25 --font leco --halo 1
 ```
 
-A sparse clone of `tools/font` and `resources/normal/base/pbf` at that revision is enough for the extractor. The last command checks a screenshot with the time and date it shows: its white pixels must be exactly the glyph pixels, and with `--halo` every other pixel within the halo must be black. `RD_BUILD_FONT=1 mise run build-pebble` builds the Bitham watchface.
+A sparse clone of `tools/font` and `resources/normal/base/pbf` at that revision is enough for the extractor. The last command checks a screenshot with the time and date it shows: its white pixels must be exactly the glyph pixels of the set named by `--font` (`leco` by default or `bitham`), and with `--halo N` every other pixel within N pixels of a glyph must be black. `RD_BUILD_FONT=1 mise run build-pebble` builds the Bitham watchface.
 
 Mise tool allowlisting follows the official [enable_tools setting](https://mise.jdx.dev/configuration/settings.html#enable_tools). The project does not change the global tool configuration.
