@@ -14,6 +14,7 @@ pnpm run dev --host 127.0.0.1
 
 - [Development and builds](docs/development.md)
 - [Web core and standalone demo](docs/web.md)
+- [Embed only the Web preview](docs/embed-preview.md)
 - [Core architecture and numerical contract](docs/core.md)
 - [Web and watchface behavior](docs/behavior.md)
 - [Validation results](docs/validation.md)

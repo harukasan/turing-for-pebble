@@ -4,7 +4,7 @@ The Web implementation has two layers. `src/core/` exports `TuringPlayer` and it
 
 `src/demo/` is the standalone React page. It owns the controls, explanatory text, browser-only tool registration, settings and Pebble header serialization, and PNG, JSON, and header downloads. `src/demo/main.ts` mounts it in `index.html`. The demo's `useDemo` hook translates React state into calls on `TuringPlayer`. Removing the demo does not remove the player API.
 
-The core can be used from another browser page without mounting the demo:
+The core can be used from another browser page without mounting the demo. For a source-bundled, preview-only integration in another site, see [Embed only the preview](embed-preview.md).
 
 ```ts
 import {
