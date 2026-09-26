@@ -339,12 +339,12 @@ export default function Home() {
       frame = requestAnimationFrame(render);
       const c = config.current;
       // Like the watch, pending startup or minute work runs in consecutive
-      // 30 ms slices with the screen painted about every 50 ms.
+      // 20 ms slices with the screen painted about every 40 ms.
       const deviceWork = c.deviceMode && c.running && pending.current > 0;
       if (document.hidden || (c.deviceMode && !focused)) return;
       if (!deviceWork && now - lastPaint < (c.deviceMode ? 100 : 1000 / 30))
         return;
-      // Pending work paints every 50 ms and animation every 100 ms, like the watch.
+      // Pending work paints every 40 ms and animation every 100 ms, like the watch.
       const s = sim.current;
       if (!s) return;
       const start = performance.now();
@@ -378,7 +378,7 @@ export default function Home() {
         maskKey = key;
       }
       const manual = manualPending.current > 0;
-      const budget = deviceWork && !manual ? 30 : 8;
+      const budget = deviceWork && !manual ? 20 : 8;
       const target = manual
         ? Math.min(manualPending.current, 8)
         : c.running
@@ -400,7 +400,7 @@ export default function Home() {
       if (manual) manualPending.current -= steps;
       else if (pending.current > 0) pending.current -= steps;
       if (steps) measured = (performance.now() - start) / steps;
-      if (deviceWork && pending.current > 0 && now - lastPaint < 50) return;
+      if (deviceWork && pending.current > 0 && now - lastPaint < 40) return;
       lastPaint = now;
       if (!pixels) {
         offscreen.width = 200;

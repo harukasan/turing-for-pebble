@@ -17,7 +17,7 @@
 /* Diagnostic logs (startup summary, progress): off in production, on with
  * RD_BUILD_LOG=1, RD_BUILD_PROFILE=1, or an RD_BENCH build. */
 #ifndef RD_LOG
-#if defined(RD_PROFILE) || defined(RD_BENCH)
+#if defined(RD_PROFILE) || defined(RD_BENCH) || defined(RD_FRAME_BENCH)
 #define RD_LOG 1
 #else
 #define RD_LOG 0

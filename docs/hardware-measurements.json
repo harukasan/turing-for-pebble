@@ -220,6 +220,23 @@
       "clockInvalid": false,
       "interrupted": false,
       "note": "32-bit arithmetic on the Q15 codes. 503 draws, one about every 50 ms. RD_BENCH step 14.25 ms against 18.0 ms for version 3 in the same session. Load size 16,449 B without logs."
+    },
+    {
+      "commit": "4589677 plus 40 ms redraws with 20 ms slices (RD_BUILD_LOG=1)",
+      "mode": 3,
+      "date": "2026-09-26",
+      "firmware": "unknown",
+      "startupWallMs": 28389,
+      "stepsPerSecond": 46.8,
+      "avgStepUs": 14754,
+      "maxStepMs": 39,
+      "avgDrawUs": 7343,
+      "avgTextUs": 944,
+      "minimumFreeHeapBytes": 21368,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "note": "1,330 steps: a minute change near the end raised the pending steps by 80. 664 draws, 23.4 frames per second, two steps per frame; about 26.7 s for the 1,250 startup steps alone. The display-limit build measured the OS ceiling at about 27 frames per second with any draw."
     }
   ]
 }

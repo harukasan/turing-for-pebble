@@ -50,20 +50,21 @@ Compiler `.su` files report bounded, static frames and no application recursion.
 
 The first physical measurements were taken on 2026-09-25 through the phone's developer connection, with the scheduling, drawing, and bit-exact core changes described in [Shared C core](core.md). `docs/hardware-measurements.json` holds the raw entries and `scripts/build-report.py` copies them into `public/reports/comparison.json`.
 
-| Mode                           | Steps per second |    Step | Blit per frame | Text per frame | Minimum free heap | 2,000 startup steps |
-| ------------------------------ | ---------------: | ------: | -------------: | -------------: | ----------------: | ------------------: |
-| 0                              |             11.4 |   81 ms |         3.2 ms |         2.8 ms |          21,104 B |         about 175 s |
-| 1                              |             56.2 | 16.4 ms |         3.3 ms |         2.0 ms |          68,376 B |          about 36 s |
-| 1, version 3                   |             58.3 | 15.2 ms |         2.9 ms |         3.1 ms |          68,680 B |          about 34 s |
-| 1, production (1,800 steps)    |             63.0 | 15.1 ms |         3.5 ms |         3.0 ms |          69,176 B |     28.8 s measured |
-| 1, with the digit mask         |             63.9 | 14.9 ms |         3.9 ms |         2.5 ms |          49,624 B |     28.1 s measured |
-| 3, first build (1,250 steps)   |             40.3 | 20.9 ms |        12.0 ms |         2.9 ms |          20,952 B |     31.0 s measured |
-| 3, step rewrites (1,250)       |             48.1 | 19.1 ms |        11.7 ms |         2.5 ms |          21,672 B |     25.9 s measured |
-| 3, code rows and table (1,250) |             51.1 | 18.0 ms |        11.6 ms |         2.5 ms |          19,912 B |     24.4 s measured |
-| 3, 100 ms redraws (1,250)      |             42.4 | 18.3 ms |        11.7 ms |         2.7 ms |          19,912 B |     29.5 s measured |
-| 3, faster renderer (1,250)     |             44.5 | 18.1 ms |         9.4 ms |         2.8 ms |          20,104 B |     28.1 s measured |
-| 3, about 20 fps (1,250 steps)  |             40.4 | 18.5 ms |         6.5 ms |         0.9 ms |          20,592 B |     30.9 s measured |
-| 3, version 4 (1,250 steps)     |             49.8 | 15.0 ms |         6.9 ms |         0.4 ms |          21,376 B |     25.1 s measured |
+| Mode                           | Steps per second |    Step | Blit per frame | Text per frame | Minimum free heap |                            2,000 startup steps |
+| ------------------------------ | ---------------: | ------: | -------------: | -------------: | ----------------: | ---------------------------------------------: |
+| 0                              |             11.4 |   81 ms |         3.2 ms |         2.8 ms |          21,104 B |                                    about 175 s |
+| 1                              |             56.2 | 16.4 ms |         3.3 ms |         2.0 ms |          68,376 B |                                     about 36 s |
+| 1, version 3                   |             58.3 | 15.2 ms |         2.9 ms |         3.1 ms |          68,680 B |                                     about 34 s |
+| 1, production (1,800 steps)    |             63.0 | 15.1 ms |         3.5 ms |         3.0 ms |          69,176 B |                                28.8 s measured |
+| 1, with the digit mask         |             63.9 | 14.9 ms |         3.9 ms |         2.5 ms |          49,624 B |                                28.1 s measured |
+| 3, first build (1,250 steps)   |             40.3 | 20.9 ms |        12.0 ms |         2.9 ms |          20,952 B |                                31.0 s measured |
+| 3, step rewrites (1,250)       |             48.1 | 19.1 ms |        11.7 ms |         2.5 ms |          21,672 B |                                25.9 s measured |
+| 3, code rows and table (1,250) |             51.1 | 18.0 ms |        11.6 ms |         2.5 ms |          19,912 B |                                24.4 s measured |
+| 3, 100 ms redraws (1,250)      |             42.4 | 18.3 ms |        11.7 ms |         2.7 ms |          19,912 B |                                29.5 s measured |
+| 3, faster renderer (1,250)     |             44.5 | 18.1 ms |         9.4 ms |         2.8 ms |          20,104 B |                                28.1 s measured |
+| 3, about 20 fps (1,250 steps)  |             40.4 | 18.5 ms |         6.5 ms |         0.9 ms |          20,592 B |                                30.9 s measured |
+| 3, version 4 (1,250 steps)     |             49.8 | 15.0 ms |         6.9 ms |         0.4 ms |          21,376 B |                                25.1 s measured |
+| 3, 40 ms redraws (production)  |             46.8 | 14.8 ms |         7.3 ms |         0.9 ms |          21,368 B | about 26.7 s (28.4 s measured for 1,330 steps) |
 
 The hardware clock was valid throughout (`clock_invalid=0`). The 1,000,000-iteration calibration loop of the profile build took 46–47 ms. A 256-step log interval reproduced the mode 0 rate as 256 steps per 22.5 s. Neither mode reached the 30 s target for 2,000 steps with bit-exact code: mode 1 needed about 18% more speed and mode 0 about six times more. Version 3 (nearest rounding for the Q15 codes, no per-cell hash in mode 1) raised mode 1 to 58.3 steps/s at 15.2 ms per step, and the startup was set to 1,800 steps with 120 ms slices and one redraw per 200 ms, which brings mode 1's startup to a measured 28.8 s for 1,816 steps (1,800 plus one minute tick) at 63.0 steps/s.
 
@@ -87,7 +88,9 @@ The first mode 3 builds redrew only every 200 ms while work was pending (about 5
 
 To aim at 20 frames per second, the watch then redrew about every 50 ms with 30 ms slices, drew the clock text itself from the core's glyph tables (0.9 ms instead of 2.8 ms, with the same pixels as the system fonts in both font sets), and used a render loop specialized for 120 cells, where display pixels 5k to 5k + 4 have constant weights. A full interpolated frame took 6.05 ms in `RD_BENCH`, and a logged startup drew 623 frames, one about every 50 ms, in 30.9 s. Production builds leave out the diagnostic logs, which with the out-of-line glyph traversal, renderer, and color fallback took mode 3 from 21,317 B to 17,233 B of load size.
 
-Numerical definition version 4 then moved the Q15 modes to 32-bit arithmetic (see [Shared C core](core.md) and the [storage precision study](precision-optimization.md)). The harness showed the same Float32 error as version 3, and the watch measured 14.25 ms per step against 18.0 ms for version 3 in the same session. The production startup measured 25.1 s with 503 draws, one about every 50 ms, and 21,376 B of minimum free heap. The host growth harness places the completion of the maze preset at 120 × 136 at 800 steps as before, so the startup keeps 1,250 steps.
+Numerical definition version 4 then moved the Q15 modes to 32-bit arithmetic (see [Shared C core](core.md) and the [storage precision study](precision-optimization.md)). The harness showed the same Float32 error as version 3, and the watch measured 14.25 ms per step against 18.0 ms for version 3 in the same session. The production startup measured 25.1 s with 503 draws, one about every 50 ms, and 21,376 B of minimum free heap. The host growth harness places the completion of the maze preset at 120 × 136 at 800 steps as before, so the startup keeps 1,250 steps. The `RD_BENCH` phases of a version 4 step on the watch are 2.5 ms for the row copies and Laplacian sums, 5.7 ms for the reaction, and 4.85 ms for the encoding, error diffusion, and stores, of 14.25 ms in total. With the redraw interval at 40 ms and 20 ms slices, two steps per frame, the watch drew 664 frames in 28.4 s for 1,330 steps (a minute change near the end raised the pending steps by 80), 23.4 frames per second, or about 26.7 s for the 1,250 startup steps alone.
+
+A display-limit build (`RD_BUILD_DEFINES="RD_FRAME_BENCH RD_STARTUP_STEPS=0"`) marks the layer dirty from a 1 ms timer for 5 s with the normal draw and then for 5 s with an empty draw. The watch rendered 136 frames with the normal draw (5.7 ms field, 1.0 ms text per frame) and 134 frames with the empty draw, about 27 frames per second either way, so the OS and display update, not the drawing, set the ceiling at about 37 ms per frame. The 50 ms redraw interval of the watchface is at three quarters of it.
 
 After a minute change the 300 burst steps took about 7.5 s in mode 3, against about 4.7 s in mode 1. On the host the old digits left no trace after 100 steps, so a shorter burst is possible. The battery effect of the bursts is not measured.
 

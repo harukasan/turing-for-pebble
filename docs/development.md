@@ -100,7 +100,7 @@ Keep `--vnc` consistent across emulator commands. Changing emulator launch optio
 
 Mode 0 is 200 × 228 with 8-bit storage. Mode 1 is 100 × 114 and mode 3, the default, 120 × 136, both with 16-bit storage. The build script sets `RD_BUILD_MODE` explicitly. To build the mode selected in an exported `config.h`, copy it to `pebble/src/c/config.h` and run `mise exec -- pebble build --sdk 4.33.1` from `pebble/` after setting the corresponding `RD_BUILD_MODE`. The mode override takes precedence over the header's default.
 
-`RD_BUILD_DEFINES=RD_BENCH` builds a watchface that logs `RD bench` with the time of each phase of a step 3 s after launch. `cc -O3 -std=c11 -DRD_MODE=3 tests/bench.c -o build/bench && build/bench 3` runs the same timing on the host.
+`RD_BUILD_DEFINES=RD_BENCH` builds a watchface that logs `RD bench` with the time of each phase of a step 3 s after launch. `RD_BUILD_DEFINES="RD_FRAME_BENCH RD_STARTUP_STEPS=0"` builds one that logs `RD frames`, the frames the OS renders in 5 s with the normal draw and then with an empty draw. `cc -O3 -std=c11 -DRD_MODE=3 tests/bench.c -o build/bench && build/bench 3` runs the same timing on the host.
 
 `mise exec -- python scripts/fill.py grids` and `fill.py seeds` rerun the growth comparison of the resolution study (`tests/fill.c`) and write contact sheets under `build/fill/`.
 

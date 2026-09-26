@@ -21,10 +21,10 @@
 #define STARTUP_STEPS RD_STARTUP_STEPS
 #define STEPS_PER_SLICE 8
 #define SLICE_BUDGET_MS 8
-#define STARTUP_SLICE_BUDGET_MS 30
+#define STARTUP_SLICE_BUDGET_MS 20
 #define FRAME_INTERVAL_MS 100
 /* Redraw interval while startup or minute work is pending. */
-#define WORK_FRAME_INTERVAL_MS 50
+#define WORK_FRAME_INTERVAL_MS 40
 #define SCHEDULE_NOW_MS 1
 #define BACKLIGHT_WINDOW_MS 5000
 #define LOG_INTERVAL_STEPS 256
@@ -105,6 +105,50 @@ static uint32_t calibrate(void) {
 }
 #endif
 
+#ifdef RD_FRAME_BENCH
+/* Display limit study: mark the layer dirty as often as the OS allows for
+ * FRAME_BENCH_MS with the normal draw (phase 1), then with an empty draw
+ * (phase 2), and log the frames and the draw time of each phase. Built
+ * with RD_STARTUP_STEPS=0 so that no compute competes. */
+#define FRAME_BENCH_MS 5000
+static int frame_phase;
+static uint32_t frame_count, frame_phase_start, frame_phase_count,
+    frame_phase_blit, frame_phase_text;
+
+static void frame_bench(void *context) {
+  (void)context;
+  int32_t since = since_ms(frame_phase_start);
+  if (since >= FRAME_BENCH_MS) {
+    uint32_t n = frame_count - frame_phase_count;
+    APP_LOG(
+        APP_LOG_LEVEL_INFO,
+        "RD frames phase=%d frames=%lu ms=%ld draw_us=%lu text_us=%lu",
+        frame_phase, (unsigned long)n, (long)since,
+        (unsigned long)(n ? (blit_ms_total - frame_phase_blit) * 1000 / n : 0),
+        (unsigned long)(n ? (text_ms_total - frame_phase_text) * 1000 / n : 0));
+    if (frame_phase == 2) {
+      frame_phase = 0;
+      return;
+    }
+    frame_phase = 2;
+    frame_phase_start = now_ms();
+    frame_phase_count = frame_count;
+  }
+  layer_mark_dirty(layer);
+  app_timer_register(1, frame_bench, NULL);
+}
+
+static void frame_bench_start(void *context) {
+  (void)context;
+  frame_phase = 1;
+  frame_phase_start = now_ms();
+  frame_phase_count = frame_count;
+  frame_phase_blit = blit_ms_total;
+  frame_phase_text = text_ms_total;
+  frame_bench(NULL);
+}
+#endif
+
 /* The framebuffer rows the clock may draw into: the unobstructed ones. */
 typedef struct {
   GBitmap *frame_buffer;
@@ -143,6 +187,12 @@ static void draw_system_text(GContext *ctx) {
  * glyphs, the same pixels as graphics_draw_text and much faster. Only the
  * unobstructed rows are written, so a Timeline Peek keeps its area. */
 static void draw(Layer *this_layer, GContext *ctx) {
+#ifdef RD_FRAME_BENCH
+  frame_count++;
+  if (frame_phase == 2) {
+    return;
+  }
+#endif
   uint32_t start = now_ms();
   GRect bounds = layer_get_unobstructed_bounds(this_layer);
   int y_end = bounds.origin.y + bounds.size.h;
@@ -436,6 +486,7 @@ static void tick(struct tm *tick_time, TimeUnits units_changed) {
   (void)units_changed;
   clock_time = *tick_time;
   rebuild_mask();
+#ifndef RD_FRAME_BENCH
   if (RD_AVOID) {
     if (pending < RD_MINUTE_STEPS) {
       pending = RD_MINUTE_STEPS;
@@ -443,6 +494,7 @@ static void tick(struct tm *tick_time, TimeUnits units_changed) {
   } else {
     pending += RD_MINUTE_STEPS;
   }
+#endif
   layer_mark_dirty(layer);
   schedule(SCHEDULE_NOW_MS);
 }
@@ -497,6 +549,9 @@ static void init(void) {
 #endif
 #ifdef RD_BENCH
   app_timer_register(3000, bench, NULL);
+#endif
+#ifdef RD_FRAME_BENCH
+  app_timer_register(3000, frame_bench_start, NULL);
 #endif
   startup_start_ms = now_ms();
 #if RD_LOG
