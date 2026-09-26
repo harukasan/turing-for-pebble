@@ -1,5 +1,5 @@
 /* Growth of the pattern on one grid for the resolution study: run a mode
- * with the LECO clock mask installed and print one JSON line per
+ * and model with the LECO clock mask installed and print one JSON line per
  * checkpoint, and write the interpolated display as a PPM there. Driven
  * by scripts/fill.py.
  *
@@ -8,14 +8,17 @@
  *
  * model and p0 to p9 are the model and the Q15 parameter vector of a preset
  * (scripts/list-presets.mjs).
- * The field is reseeded with `disks` disks placed by the LCG sequence of
- * rd_init, radius min_radius + random_below(radius_range); 24 4 6 is the
- * seeding of rd_init.
+ * The resting field is reseeded with `disks` disks placed by the LCG
+ * sequence of rd_init, radius min_radius + random_below(radius_range);
+ * 24 4 6 is the seeding of rd_init. A FitzHugh-Nagumo broken wave (init 1)
+ * is kept as rd_init_model seeds it.
  *
  * Metrics cover only the cells away from the digits (mask level
- * RD_MASK_RAMP): mean B, the fraction of blocks of about a twelfth of the
- * width that contain visible B, and the mean width in display pixels of
- * the lit runs along every fourth display row of the interpolated render.
+ * RD_MASK_RAMP): the mean of the displayed species (B, or the stored
+ * fraction of FitzHugh-Nagumo u), the fraction of blocks of about a twelfth
+ * of the width that contain a visible cell, and the mean width in display
+ * pixels of the lit runs along every fourth display row of the
+ * interpolated render.
  */
 #include "../core/rd.c"
 #include "../core/clock_mask.c"
@@ -23,14 +26,9 @@
 #include <stdlib.h>
 #include <time.h>
 
-/* Length of the parameter vector (RD_PARAM_MAX of numerical definition
- * version 5). Only Gray-Scott, whose rd_params takes the first five, is
- * supported so far. */
-#ifndef RD_PARAM_MAX
-#define RD_PARAM_MAX 10
-#endif
-/* B above 0.05 is visible with the lime palette at gain 3. */
-#define VISIBLE_B (RD_VALUE_ONE / 20)
+/* A cell is visible when its display intensity is above 0.15, B above
+ * 0.05 with the lime palette at gain 3. */
+#define VISIBLE_INTENSITY (RD_VALUE_ONE / 20 * 3)
 /* Green above this is a lit pixel of the lime palette (B above 0.14). */
 #define LIT_GREEN 127
 
@@ -49,29 +47,30 @@ int main(int argc, char **argv) {
   int disks = atoi(argv[rest + 1]), min_radius = atoi(argv[rest + 2]),
       radius_range = atoi(argv[rest + 3]);
   const char *prefix = argv[rest + 4];
-  if (!mode_supported(mode) || model != 0 || disks < 0 || min_radius < 1 ||
-      radius_range < 1) {
+  if (!mode_supported(mode) || !model_supported(model) || disks < 0 ||
+      min_radius < 1 || radius_range < 1) {
     return 1;
   }
   void *memory = malloc(rd_bytes(mode));
-  State *state = rd_init(memory, rd_bytes(mode), mode, seed);
-  int width = state->width, height = state->height;
-  for (int i = 0; i < width * height; i++) {
-    store_codes(state, i, is_packed(state) ? PACKED_FULL_A : Q15_FULL_A, 0);
+  State *state = rd_init_model(memory, rd_bytes(mode), mode, model, seed,
+                               params, PARAM_COUNT[model]);
+  if (!state) {
+    return 1;
   }
-  uint32_t lcg = seed;
-  for (int i = 0; i < disks; i++) {
-    int x = random_below(lcg_next(&lcg), RD_DISPLAY_WIDTH);
-    int y = random_below(lcg_next(&lcg), RD_DISPLAY_HEIGHT);
-    rd_seed(state, x, y,
-            min_radius + random_below(lcg_next(&lcg), radius_range));
+  int width = state->width, height = state->height;
+  if (model != RD_MODEL_FHN || state->params[FHN_INIT] == 0) {
+    fill_rest(state);
+    uint32_t lcg = seed;
+    for (int i = 0; i < disks; i++) {
+      int x = random_below(lcg_next(&lcg), RD_DISPLAY_WIDTH);
+      int y = random_below(lcg_next(&lcg), RD_DISPLAY_HEIGHT);
+      rd_seed(state, x, y,
+              min_radius + random_below(lcg_next(&lcg), radius_range));
+    }
   }
   uint8_t *mask = malloc(cm_bytes(width, height));
   cm_build(mask, width, height, CM_FONT_LECO, 13, 57, 2046, 8, 29, 1);
   rd_mask(state, mask);
-  if (rd_params(state, params[0], params[1], params[2], params[3], params[4])) {
-    return 1;
-  }
   int block = width / 12 > 4 ? width / 12 : 4;
   int blocks_x = (width + block - 1) / block,
       blocks_y = (height + block - 1) / block;
@@ -97,7 +96,8 @@ int main(int argc, char **argv) {
         sum += b / (double)RD_VALUE_ONE;
         cells++;
         int *entry = &seen[(y / block) * blocks_x + x / block];
-        if (b > VISIBLE_B) {
+        if ((int64_t)(b - DISPLAY_OFFSET[model]) * DISPLAY_GAIN[model] >
+            VISIBLE_INTENSITY) {
           *entry = 2;
         } else if (*entry == 0) {
           *entry = 1;

@@ -1,8 +1,9 @@
-/* Run one mode / parameter vector / seed case and print a JSON summary:
- * host timing, B statistics, and how much one further step changes cells
- * and display pixels. The rendered display is also written as a PPM.
- * Driven by scripts/compare.py, which takes the vectors of the presets from
- * scripts/list-presets.mjs.
+/* Run one mode / model and parameter vector / seed case and print a JSON
+ * summary: host timing, statistics of the displayed species (B, or the
+ * stored fraction (u + 2) / 4 of FitzHugh-Nagumo u), and how much one
+ * further step changes cells and display pixels. The rendered display is
+ * also written as a PPM. Driven by scripts/compare.py, which takes the
+ * vectors of the presets from scripts/list-presets.mjs.
  *
  *   build/compare mode model p0 ... p9 seed steps out.ppm
  */
@@ -10,13 +11,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-
-/* Length of the parameter vector (RD_PARAM_MAX of numerical definition
- * version 5). Only Gray-Scott, whose rd_params takes the first five, is
- * supported so far. */
-#ifndef RD_PARAM_MAX
-#define RD_PARAM_MAX 10
-#endif
 
 int main(int argc, char **argv) {
   if (argc != 6 + RD_PARAM_MAX) {
@@ -30,13 +24,15 @@ int main(int argc, char **argv) {
   uint32_t seed = (uint32_t)strtoul(argv[3 + RD_PARAM_MAX], NULL, 10);
   int count = atoi(argv[4 + RD_PARAM_MAX]);
   const char *path = argv[5 + RD_PARAM_MAX];
-  if (mode < 0 || mode > 3 || model != 0 || count < 1) {
+  if (mode < 0 || mode > 3 || model < 0 || model >= RD_MODEL_COUNT ||
+      count < 1) {
     return 1;
   }
   void *memory = malloc(rd_bytes(mode));
-  void *state = rd_init(memory, rd_bytes(mode), mode, seed);
-  if (!state ||
-      rd_params(state, params[0], params[1], params[2], params[3], params[4])) {
+  void *state = rd_init_model(memory, rd_bytes(mode), mode, model, seed, params,
+                              model == RD_MODEL_FHN ? RD_FHN_PARAMS
+                                                    : RD_GRAY_SCOTT_PARAMS);
+  if (!state) {
     return 1;
   }
   clock_t start = clock();

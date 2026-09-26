@@ -7,7 +7,7 @@ from PIL import Image, ImageDraw
 
 # Modes each model runs in: Gray-Scott in every mode, other models only in
 # the Q15 modes 1 and 3.
-MODEL_MODES = {0: [0, 1, 2, 3]}
+MODEL_MODES = {0: [0, 1, 2, 3], 1: [1, 3]}
 MODE_LABELS = ['200x228 A7+B9', '100x114 Q15', '100x114 A7+B9', '120x136 Q15']
 # The presets of the contact sheet, one row each.
 SHEET_PRESETS = ['maze', 'coral', 'mitosis', 'spots']

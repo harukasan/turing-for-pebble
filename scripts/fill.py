@@ -123,7 +123,14 @@ def complete_at(rows):
     return None
 
 
-cases = [(c, p, s) for c in CONFIGS for p in PRESETS for s in SEEDS]
+# FitzHugh-Nagumo (model 1) runs only in the Q15 modes 1 and 3.
+cases = [
+    (c, p, s)
+    for c in CONFIGS
+    for p in PRESETS
+    if ALL_PRESETS[p]['model'] == 0 or CONFIGS[c][0] in (1, 3)
+    for s in SEEDS
+]
 with concurrent.futures.ThreadPoolExecutor() as pool:
     results = dict(zip(cases, pool.map(run, cases)))
 with open(out / f'{STUDY}.jsonl', 'w') as f:
@@ -142,7 +149,7 @@ for preset in PRESETS:
         for row, label in enumerate(CONFIGS):
             top = row * (228 + label_height)
             draw.text((4, top + 100), label, fill='black')
-            for col, r in enumerate(results[(label, preset, seed)]):
+            for col, r in enumerate(results.get((label, preset, seed), [])):
                 left = 110 + col * 200
                 image = Image.open(f'{prefix(label, preset, seed)}-{r["step"]}.ppm')
                 sheet.paste(image, (left, top))
