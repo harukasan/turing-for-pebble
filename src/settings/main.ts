@@ -130,42 +130,68 @@ function slider(
   return show;
 }
 
-/** An 8 × 8 grid of the watch's 64 colors for one custom stop. */
-function colorGrid(
-  container: HTMLElement,
-  label: string,
-  key: "low" | "high",
+const STOPS = [
+  { key: "low", label: "暗い色" },
+  { key: "high", label: "明るい色" },
+] as const;
+
+const hex = (value: number) => `#${value.toString(16).padStart(6, "0")}`;
+
+/** The two stops of the custom palette as buttons showing their colors.
+ * A button opens the watch's 64 colors for its stop, and picking a color
+ * closes them. */
+function customPicker(
+  stops: HTMLElement,
+  picker: HTMLElement,
   onPick: () => void
 ) {
-  const title = document.createElement("span");
-  title.textContent = label;
-  const grid = document.createElement("div");
-  grid.className = "colors";
-  grid.setAttribute("role", "group");
-  grid.setAttribute("aria-label", label);
-  const buttons = PEBBLE_COLORS.map((color) => {
+  let picking: "low" | "high" | null = null;
+  const buttons = STOPS.map(({ key, label }) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "stop";
+    const chip = document.createElement("span");
+    chip.className = "stop-color";
+    const name = document.createElement("span");
+    name.textContent = label;
+    button.append(chip, name);
+    button.addEventListener("click", () => {
+      picking = picking === key ? null : key;
+      show();
+    });
+    stops.append(button);
+    return { key, button, chip };
+  });
+  const colors = PEBBLE_COLORS.map((color) => {
     const button = document.createElement("button");
     button.type = "button";
     button.style.background = css(color);
-    button.setAttribute(
-      "aria-label",
-      `#${valueOf(color).toString(16).padStart(6, "0")}`
-    );
+    button.setAttribute("aria-label", hex(valueOf(color)));
     button.addEventListener("click", () => {
-      settings[key] = valueOf(color);
+      if (!picking) return;
+      settings[picking] = valueOf(color);
+      picking = null;
       onPick();
     });
-    grid.append(button);
+    picker.append(button);
     return button;
   });
-  container.append(title, grid);
-  return () =>
+  function show() {
+    for (const { key, button, chip } of buttons) {
+      chip.style.background = hex(settings[key]);
+      button.setAttribute("aria-expanded", String(picking === key));
+    }
+    picker.hidden = picking === null;
+    const label = STOPS.find((stop) => stop.key === picking)?.label ?? "";
+    picker.setAttribute("aria-label", label);
     PEBBLE_COLORS.forEach((color, i) =>
-      buttons[i].setAttribute(
+      colors[i].setAttribute(
         "aria-pressed",
-        String(valueOf(color) === settings[key])
+        String(picking !== null && valueOf(color) === settings[picking])
       )
     );
+  }
+  return show;
 }
 
 const progress = element<HTMLParagraphElement>("progress");
@@ -259,12 +285,11 @@ const paletteList = element("palettes");
   paletteInputs.push(input);
 });
 const customPalette = element("custom-palette");
-const grids = [
-  colorGrid(element("custom-low"), "暗い側", "low", () => changed("palette")),
-  colorGrid(element("custom-high"), "明るい側", "high", () =>
-    changed("palette")
-  ),
-];
+const showCustom = customPicker(
+  element("custom-stops"),
+  element("color-picker"),
+  () => changed("palette")
+);
 
 const setFont = chips(
   element("fonts"),
@@ -301,7 +326,7 @@ function update() {
     customSwatch.replaceChildren(
       ...swatch(paletteSwatch(customStops(settings))).children
     );
-  grids.forEach((show) => show());
+  showCustom();
   setFont(settings.font);
   clock.checked = settings.clock === 1;
   avoid.checked = settings.avoid === 1;

@@ -19,7 +19,9 @@
     <div class="scroll">
       <main class="page">
         <section class="preview" aria-label="文字盤のプレビュー">
-          <canvas id="preview" width="200" height="228"></canvas>
+          <div class="bezel">
+            <canvas id="preview" width="200" height="228"></canvas>
+          </div>
           <p id="progress" class="progress" aria-live="polite">
             プレビューを読み込んでいます
           </p>
@@ -39,23 +41,20 @@
             <legend>配色</legend>
             <div id="palettes" class="palettes"></div>
             <div id="custom-palette" class="custom-palette" hidden>
-              <p class="hint">
-                暗い側と明るい側を Pebble の 64 色から選びます。
-              </p>
-              <div id="custom-low"></div>
-              <div id="custom-high"></div>
+              <div id="custom-stops" class="stops"></div>
+              <div id="color-picker" class="colors" hidden></div>
             </div>
           </fieldset>
           <fieldset>
             <legend>時計</legend>
             <div id="fonts" class="chips"></div>
             <label class="switch">
-              <input type="checkbox" id="clock" />
               時刻・日付を表示
+              <input type="checkbox" id="clock" role="switch" />
             </label>
             <label class="switch">
-              <input type="checkbox" id="avoid" />
               数字を避ける
+              <input type="checkbox" id="avoid" role="switch" />
             </label>
           </fieldset>
         </form>
