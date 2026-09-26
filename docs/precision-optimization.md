@@ -4,7 +4,7 @@ Numerical definition version 1 stored the 200 × 228 field as two 8-bit planes w
 
 ## Method
 
-`tests/precision.c` is a self-contained simulator with the version 1 arithmetic, the version 2 integer arithmetic, and double arithmetic as selectable paths, plus general storage codes and rounding schemes. Each candidate starts from the same 24-disk initial field as `rd_init`, quantized to its own nearest codes. The Float32 reference (float storage, double intermediates, the operation order of `lib/simulation.ts`) starts from the candidate's decoded initial values, so checkpoint 0 has no error. Five presets including the thin-line case and seeds 42 and 1234 give ten cases per candidate. The reported numbers are the B mean absolute error over all cells at 100 and 1,000 steps, its worst case, the lowest B spatial correlation, and the A mean absolute error. Stochastic candidates use the version 1 hash, so a candidate's value at 1,000 steps varies by about ±15% between realizations. Comparisons rest on the ten-case mean.
+`tests/precision.c` is a self-contained simulator with the version 1 arithmetic, the version 2 integer arithmetic, the version 4 32-bit candidates (`q15x32c1` to `q15x32c3`, below), and double arithmetic as selectable paths, plus general storage codes and rounding schemes. Each candidate starts from the same 24-disk initial field as `rd_init`, quantized to its own nearest codes. The Float32 reference (float storage, double intermediates, the operation order of `lib/simulation.ts`) starts from the candidate's decoded initial values, so checkpoint 0 has no error. Five presets including the thin-line case and seeds 42 and 1234 give ten cases per candidate. The reported numbers are the B mean absolute error over all cells at 100 and 1,000 steps, its worst case, the lowest B spatial correlation, and the A mean absolute error. Stochastic candidates use the version 1 hash, so a candidate's value at 1,000 steps varies by about ±15% between realizations. Comparisons rest on the ten-case mean.
 
 ```sh
 sh scripts/precision-sweep.sh
@@ -88,6 +88,20 @@ At 3,000 steps and beyond, every packed candidate diverges from the Float32 refe
 The spots preset near its survival boundary exposed a real bias of undithered error diffusion. Most disks die during the first 1,000 steps and the field then depends on whether a few survivors split. Over seeds 1 through 8, the reference B mean at 10,000 steps is 0.085. The undithered packed field (`d=0`) reaches 0.87 of it on average and 0.62 in the worst seed, so fewer spots multiply. The version 1 8-bit stochastic field reaches 0.99 and the Q15 field with version 2 arithmetic 0.99, so the loss belongs to the deterministic threshold on coarse codes, not to error diffusion itself. With the adopted `d=8` dither the packed field reaches 1.00 (0.97 to 1.02 by seed), and `d=16` 1.00 as well, while `d=4` still loses 6%. For the maze, cell-division, and thin-line presets over four seeds, the ratios are 1.00, 1.01, and 1.00 with the dither, and 0.99, 0.97, and 1.01 without it. The dither also raises the maze correlation at 10,000 steps from about 0.6 to about 0.9.
 
 Even with the dither, the marginal spots case is reproduced statistically, not seed by seed: the Q15 field with version 2 arithmetic, whose error at 1,000 steps is 0.00003, ends seed 1234 at a correlation of 0.48.
+
+## Version 4 arithmetic
+
+The Q15 modes of version 3 computed every cell with 64-bit products, sums, and rounding, which the watch measured as the largest phase of a step. Three 32-bit candidates on the Q15 codes were added to the harness and swept over the five presets and seeds 42 and 1234 on the 100 × 114 and 120 × 136 grids, against version 3 (`i=q24`) and the version 1 arithmetic. C1 rounds the Laplacian and A × B to Q15 before the products. C2 keeps the exact 20-fold Laplacian sum, folds each diffusion coefficient with the 1/20 into `round(D / 20)`, and computes A × B² exactly to the Q30 unit with the product split at bit 15. C3 rounds the Laplacian like C1 and computes the reaction like C2. All three round the Q30 rate once to Q24 and encode as version 3 does. The C2 reference runs with the folded coefficients, as the Float32 comparison of the core does.
+
+| Candidate                  | B MAE at 1,000 steps, 100 × 114 |   Worst | B MAE at 1,000 steps, 120 × 136 |   Worst |
+| -------------------------- | ------------------------------: | ------: | ------------------------------: | ------: |
+| version 1 (`r=near,i=q15`) |                         0.00450 | 0.01280 |                         0.00512 | 0.02943 |
+| version 3 (`i=q24`)        |                         0.00003 | 0.00010 |                         0.00003 | 0.00005 |
+| C1 (`i=q15x32c1`)          |                         0.00016 | 0.00090 |                         0.00009 | 0.00037 |
+| C2 (`i=q15x32c2`)          |                         0.00004 | 0.00015 |                         0.00003 | 0.00006 |
+| C3 (`i=q15x32c3`)          |                         0.00018 | 0.00098 |                         0.00008 | 0.00021 |
+
+The per-step Q15 rounding of C1 and C3 costs three to six times the error of version 3, while C2 matches it. Over seeds 1 through 8 of the spots preset at 10,000 steps, every candidate reproduces the reference B mean within 0.1% with correlations above 0.9997, so none of them shifts the marginal case. C2 became numerical definition version 4. On the watch a mode 3 step fell from 18.0 ms to 14.25 ms.
 
 ## Cost
 

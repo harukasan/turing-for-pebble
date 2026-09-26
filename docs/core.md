@@ -13,7 +13,7 @@ Mode 3 is the watch build. Its grid is not an integer fraction of the display, s
 
 Rotating the previous, current, and next row pointers preserves the old field while writing in place. Each stored row is decoded once when it becomes the next row. The saved first row supplies the periodic boundary when the last row is updated.
 
-## Numerical definition, version 3
+## Numerical definition, version 4
 
 The model is Gray–Scott with an explicit Euler step and periodic boundaries:
 
@@ -22,11 +22,20 @@ A' = clamp(A + dt × (Da × lap(A) − A × B² + feed × (1 − A)))
 B' = clamp(B + dt × (Db × lap(B) + A × B² − (feed + kill) × B))
 ```
 
-Concentrations are calculated in Q24, where `RD_VALUE_ONE` = 16,777,216 means 1. Coefficients are Q15, where `RD_Q15_ONE` = 32,768 means 1. Arithmetic rounding is to nearest with halfway values away from zero. Storage rounding uses the dithered error diffusion described below.
+Coefficients are Q15, where `RD_Q15_ONE` = 32,768 means 1. Storage rounding uses the error diffusion described below. The arithmetic of a step depends on the storage.
 
-The nine-point Laplacian (`laplacian` in `core/rd.c`) is evaluated on Q24 values as `(4 × axial_sum + diagonal_sum − 20 × center) / 20`, rounded. These exact rational weights preserve uniform fields exactly. The reaction is `A × B` rounded to Q24, then times `B` rounded to Q24. Each rate is accumulated as a Q39 sum of exact products of a Q15 coefficient and a Q24 concentration, with the reaction scaled by 2¹⁵. The rate times `dt` is a Q54 product rounded once to Q24 and added to the concentration. The result then passes through error diffusion, which clamps it to the codable range of its storage.
+The packed modes 0 and 2 decode their codes to Q24 concentrations, where `RD_VALUE_ONE` = 16,777,216 means 1, and compute as in versions 2 and 3, rounding to nearest with halfway values away from zero. The nine-point Laplacian (`laplacian_row` in `core/rd.c`) is evaluated on Q24 values as `(4 × axial_sum + diagonal_sum − 20 × center) / 20`, rounded. These exact rational weights preserve uniform fields exactly. The reaction is `A × B` rounded to Q24, then times `B` rounded to Q24. Each rate is accumulated as a Q39 sum of exact products of a Q15 coefficient and a Q24 concentration, with the reaction scaled by 2¹⁵. The rate times `dt` is a Q54 product rounded once to Q24 and added to the concentration.
 
-Version 1 rounded every product to Q15 and stored 8-bit codes with stochastic rounding. That definition is retained only as a baseline inside `tests/precision.c`. Version 2 introduced the codes, the error diffusion, and the Q24 arithmetic below with a dithered threshold in every mode. Version 3 differs from it only in mode 1, whose Q15 codes round to the nearest code without the dither. [Storage precision study](precision-optimization.md) records the comparison.
+The Q15 modes 1 and 3 compute on their Q15 codes with 32-bit arithmetic (`react_codes`). The Laplacian stays the exact 20-fold integer sum `S = 4 × axial_sum + diagonal_sum − 20 × center` of the codes (`laplacian_sums`). Each diffusion coefficient is folded with the 1/20 of the Laplacian into `fold(D) = (D + 10) / 20` in integer division, so the core computes with the effective coefficient `fold(D) × 20 / 32768`, at most 0.03% from the requested one (0.99976 of the request for Da = 1 and Db = 0.5). The reaction `A × B²` is exact to the Q30 unit: `A × B` splits at bit 15 into `hi × 2¹⁵ + lo`, and the reaction is `hi × B + floor(lo × B / 2¹⁵)`. The rates, in Q30, are
+
+```text
+rate_A = fold(Da) × S_A − A B² + feed × (1 − A)
+rate_B = fold(Db) × S_B + A B² − (feed + kill) × B
+```
+
+`rate_A` always fits a signed 32-bit integer, because `fold(Da) × S_A` stays below 2³⁰ in magnitude. Of `rate_B` only the final subtraction can leave the range, when `feed + kill` exceeds 1, and the result then saturates at −2³¹, which the clamp below turns into B = 0 in every such case, as the exact value would. With `dt` = 1 the new value in Q24 is the code times 2⁹ plus the rate rounded half up to Q24, `(rate >> 6) + ((rate >> 5) & 1)`. With another `dt` it is the code times 2⁹ plus `(rate × dt + 2²⁰) >> 21` in 64 bits, the same rounding. The result then passes through error diffusion, which clamps it to the codable range of its storage.
+
+Version 1 rounded every product to Q15 and stored 8-bit codes with stochastic rounding. That definition is retained only as a baseline inside `tests/precision.c`. Version 2 introduced the codes, the error diffusion, and the Q24 arithmetic with a dithered threshold in every mode. Version 3 differed from it only in the Q15 modes, whose codes round to the nearest code without the dither. Version 4 moved the Q15 modes to the 32-bit arithmetic above, which the harness measured at the same Float32 error as version 3 and the watch at 21% less time per step, and left the packed modes as in version 3. [Storage precision study](precision-optimization.md) records the comparisons.
 
 ### Storage codes
 
@@ -99,9 +108,9 @@ These choices change no result. `tests/golden-hashes.txt` records the field hash
 - `decode_a` is a 128-entry table of the rounded division, and `floor_b` normalizes its argument with a leading-zero count, takes a lower bound from a 256-entry table, and increments at most twice.
 - Products of the non-negative concentrations are rounded without a sign test, and the dithered comparison uses 32-bit products except for the packed A step, whose products need 64 bits.
 - With `dt` = 1 the rate is rounded by 15 bits directly, which equals rounding the `dt` product by 30 bits.
-- A B rounded to Q24 is at most 1.0, so the reaction's second product is a single 32 × 32 → 64 bit multiply.
+- In the packed modes, A B rounded to Q24 is at most 1.0, so the reaction's second product is a single 32 × 32 → 64 bit multiply.
 - The nearest Q15 code, halfway upward, is computed directly as `(value + 256) >> 9` instead of from the floor code and a comparison.
-- The Q15 modes step on the codes themselves (`step_codes`). The stored rows below the row being written are still old and are read in place, only the old row being rewritten is copied as 16-bit codes, and the Laplacian is summed on the codes and scaled to Q24 before the same rounding. The packed modes keep the decoded-row loop.
+- The Q15 modes step on the codes themselves (`step_codes`). The stored rows below the row being written are still old and are read in place, only the old row being rewritten is copied as 16-bit codes, and the 20-fold Laplacian sums are taken on the codes. The packed modes keep the decoded-row loop.
 - The interpolated renderer takes its column tables (left and right columns, weights) and the value table once per row, and lerps as `l + floor(((r − l)·w + 128) / 256)`, which equals the two-weight form with one multiply. `rd_row_rgb2_into` writes a row straight into a caller buffer such as a framebuffer row.
 - A Q15 rounding error lies in [−256, 255], so its right, lower-left, and lower shares come from a 512-entry table (`Q15_SHARES`, 2 KB) instead of three divisions.
 - `core/rd_bench.c` times the phases of a step on the watch (`RD_BUILD_DEFINES=RD_BENCH`) and on the host (`tests/bench.c`). Only the watch numbers decide, because the host ranks the phases differently.

@@ -203,6 +203,23 @@
       "clockInvalid": false,
       "interrupted": false,
       "note": "623 draws, one about every 50 ms. RD_BENCH render of a full interpolated frame: 6.05 ms (8.6 ms before the 120-cell loop). Load size 19,497 B with logs, 17,233 B without."
+    },
+    {
+      "commit": "5d696c6 plus numerical definition version 4 (RD_BUILD_LOG=1)",
+      "mode": 3,
+      "date": "2026-09-26",
+      "firmware": "unknown",
+      "startupWallMs": 25078,
+      "stepsPerSecond": 49.8,
+      "avgStepUs": 14964,
+      "maxStepMs": 39,
+      "avgDrawUs": 6862,
+      "avgTextUs": 401,
+      "minimumFreeHeapBytes": 21376,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "note": "32-bit arithmetic on the Q15 codes. 503 draws, one about every 50 ms. RD_BENCH step 14.25 ms against 18.0 ms for version 3 in the same session. Load size 16,449 B without logs."
     }
   ]
 }

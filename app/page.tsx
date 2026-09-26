@@ -440,7 +440,7 @@ export default function Home() {
       : engine === 'u8-200'
         ? 'packed-a7-linear-b9-sqrt'
         : 'q15',
-    effective: floatMode ? params : effective(params),
+    effective: floatMode ? params : effective(params, engineMode(engine)),
     ...params,
     width,
     height: gridHeight(width),

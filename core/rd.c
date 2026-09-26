@@ -1,10 +1,12 @@
 /*
- * Shared Gray-Scott reaction-diffusion core, numerical definition version 3.
+ * Shared Gray-Scott reaction-diffusion core, numerical definition version 4.
  *
  * Concentrations are computed in Q24 fixed point (RD_VALUE_ONE is 1.0) and
  * coefficients are Q15 (RD_Q15_ONE is 1.0). Modes 0 and 2 pack both species
  * into one 16-bit word per cell: A as a 7-bit linear code and B as a 9-bit
  * square-root companded code. Mode 1 stores each species as a Q15 word.
+ * The Q15 modes step on their codes with 32-bit arithmetic (react_codes),
+ * the packed modes decode to Q24 and use 64-bit products (react_cell).
  * Every mode writes with Floyd-Steinberg error diffusion, so the rounding
  * error of each cell is carried into its unwritten neighbors instead of being
  * discarded. The packed codes also dither the rounding threshold so that
@@ -244,6 +246,9 @@ typedef struct {
 typedef struct {
   int packed, width, unit_dt;
   int32_t feed, decay, da, db, dt;
+  /* Q15 modes: round(da / 20) and round(db / 20), so coefficient times the
+   * 20-fold Laplacian sum is the Q30 rate term. */
+  int32_t fold_da, fold_db;
   /* feed + kill for each mask level: the kill rises linearly from the
    * State's kill at level RD_MASK_RAMP to RD_MASK_KILL at level 0. */
   int32_t level_decay[RD_MASK_RAMP + 1];
@@ -799,6 +804,62 @@ static inline void react_cell(int32_t a, int32_t b, int32_t lap_a,
   }
 }
 
+/* Update of one cell of the Q15 modes, from its Q15 codes and the
+ * 20-fold Laplacian sums of the codes, in 32-bit arithmetic:
+ *   rate_a = fold_da * sum_a - A B^2 + feed * (1 - A)         (Q30)
+ *   rate_b = fold_db * sum_b + A B^2 - (feed + kill) * B      (Q30)
+ * A B^2 is exact to the Q30 unit (the product A B split at bit 15). With
+ * fold_da at most 1638 the Laplacian terms stay below 2^30 in magnitude, so
+ * rate_a always fits int32, and of rate_b only the final subtraction of
+ * (feed + kill) B, up to 2^31, can leave the range, where it saturates. The new
+ * value is the code plus the rate rounded half up to Q24, as a Q24 value for
+ * the encoder, or with a general dt the rate times dt rounded the same way. */
+static inline void react_codes(unsigned a, unsigned b, int32_t sum_a,
+                               int32_t sum_b, int32_t feed, int32_t decay,
+                               int32_t fold_da, int32_t fold_db, int32_t dt,
+                               int unit_dt, int32_t *next_a, int32_t *next_b) {
+  uint32_t ab = a * b;
+  int32_t reaction = (int32_t)((ab >> 15) * b + (((ab & 32767) * b) >> 15));
+  int32_t rate_a =
+      fold_da * sum_a - reaction + feed * (int32_t)(RD_Q15_ONE - a);
+  int32_t rate_b;
+  if (__builtin_sub_overflow(fold_db * sum_b + reaction, (uint32_t)decay * b,
+                             &rate_b)) {
+    rate_b = INT32_MIN;
+  }
+  if (unit_dt) {
+    *next_a = (int32_t)(a << Q15_SHIFT) + ((rate_a >> 6) + ((rate_a >> 5) & 1));
+    *next_b = (int32_t)(b << Q15_SHIFT) + ((rate_b >> 6) + ((rate_b >> 5) & 1));
+  } else {
+    *next_a = (int32_t)(a << Q15_SHIFT) +
+              (int32_t)(((int64_t)rate_a * dt + (1 << 20)) >> 21);
+    *next_b = (int32_t)(b << Q15_SHIFT) +
+              (int32_t)(((int64_t)rate_b * dt + (1 << 20)) >> 21);
+  }
+}
+
+/* The 20-fold nine-point Laplacian sum of a row of Q15 codes. */
+static void laplacian_sums(const uint16_t *restrict up,
+                           const uint16_t *restrict cur,
+                           const uint16_t *restrict down, int32_t *restrict out,
+                           int width) {
+  int last = width - 1;
+  int32_t s_first = up[0] + down[0], c_first = cur[0];
+  int32_t s_prev = up[last] + down[last], c_prev = cur[last];
+  int32_t s_cur = s_first, c_cur = c_first;
+  for (int x = 0; x < last; x++) {
+    int32_t s_next = up[x + 1] + down[x + 1], c_next = cur[x + 1];
+    out[x] = LAPLACIAN_AXIAL_WEIGHT * (s_cur + c_prev + c_next) + s_prev +
+             s_next - LAPLACIAN_SCALE * c_cur;
+    s_prev = s_cur;
+    c_prev = c_cur;
+    s_cur = s_next;
+    c_cur = c_next;
+  }
+  out[last] = LAPLACIAN_AXIAL_WEIGHT * (s_cur + c_prev + c_first) + s_prev +
+              s_first - LAPLACIAN_SCALE * c_cur;
+}
+
 /* Fill the step context and derive the dither salt before a step. The
  * residual rows themselves persist: after the last row they hold the shares
  * for row 0 of the next step. */
@@ -807,6 +868,8 @@ static void begin_step(State *state, StepContext *ctx) {
   ctx->width = state->width;
   ctx->feed = state->feed;
   ctx->decay = state->kill + state->feed;
+  ctx->fold_da = (state->da + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE;
+  ctx->fold_db = (state->db + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE;
   for (int level = 0; level <= RD_MASK_RAMP; level++) {
     ctx->level_decay[level] =
         state->feed + state->kill +
@@ -1005,35 +1068,6 @@ static void finish_row(StepContext *ctx) {
   }
 }
 
-/* Nine-point Laplacian of one species for a whole row of Q15 codes, into a
- * row of Q24 Laplacians. The weighted sum is linear, so the sum of the
- * codes shifted to Q24 equals the sum of the decoded values, and the
- * rounding is the same as in laplacian_row. */
-static void laplacian_codes(const uint16_t *restrict up,
-                            const uint16_t *restrict cur,
-                            const uint16_t *restrict down,
-                            int32_t *restrict out, int width) {
-  int last = width - 1;
-  int32_t s_first = up[0] + down[0], c_first = cur[0];
-  int32_t s_prev = up[last] + down[last], c_prev = cur[last];
-  int32_t s_cur = s_first, c_cur = c_first;
-  for (int x = 0; x < last; x++) {
-    int32_t s_next = up[x + 1] + down[x + 1], c_next = cur[x + 1];
-    out[x] =
-        round_laplacian((LAPLACIAN_AXIAL_WEIGHT * (s_cur + c_prev + c_next) +
-                         s_prev + s_next - LAPLACIAN_SCALE * c_cur) *
-                        (1 << Q15_SHIFT));
-    s_prev = s_cur;
-    c_prev = c_cur;
-    s_cur = s_next;
-    c_cur = c_next;
-  }
-  out[last] =
-      round_laplacian((LAPLACIAN_AXIAL_WEIGHT * (s_cur + c_prev + c_first) +
-                       s_prev + s_first - LAPLACIAN_SCALE * c_cur) *
-                      (1 << Q15_SHIFT));
-}
-
 /* Write row y from its old values and Laplacians: react and encode every
  * cell with the decay of its mask level, and hold B at 0 in a masked cell.
  * Inlined at both calls in rd_step, so a row outside the mask rows
@@ -1057,12 +1091,17 @@ update_row(StepContext *ctx, int y, const int32_t *restrict cur_a,
     int32_t next_a, next_b;
     uint32_t dither = packed ? cell_dither(step_salt, row_index + x) : 0;
     int level = levels ? levels[x] : RD_MASK_RAMP;
-    /* The old row is Q24 values, or Q15 codes in the Q15 row loop. */
-    int32_t a = codes_a ? decode_q15(codes_a[x]) : cur_a[x];
-    int32_t b = codes_b ? decode_q15(codes_b[x]) : cur_b[x];
-    react_cell(a, b, lap_a[x], lap_b[x], feed,
-               levels ? ctx->level_decay[level] : decay, da, db, dt, unit_dt,
-               &next_a, &next_b);
+    /* The Q15 row loop passes the old codes and their 20-fold Laplacian
+     * sums, the packed loop Q24 values and Q24 Laplacians. */
+    if (codes_a) {
+      react_codes(codes_a[x], codes_b[x], lap_a[x], lap_b[x], feed,
+                  levels ? ctx->level_decay[level] : decay, ctx->fold_da,
+                  ctx->fold_db, dt, unit_dt, &next_a, &next_b);
+    } else {
+      react_cell(cur_a[x], cur_b[x], lap_a[x], lap_b[x], feed,
+                 levels ? ctx->level_decay[level] : decay, da, db, dt, unit_dt,
+                 &next_a, &next_b);
+    }
     unsigned code_a = encode_cell(packed, RD_SPECIES_A, res_a, &shares_a, x,
                                   next_a, dither & DITHER_MASK);
     unsigned code_b = 0;
@@ -1087,7 +1126,7 @@ update_row(StepContext *ctx, int y, const int32_t *restrict cur_a,
  * below are still unwritten and are read in place, and only the old row
  * being rewritten is copied, to serve as the row above of the next row.
  * The saved-row buffers hold the old rows above and at the row, the
- * original first row, and the two rows of Laplacians. */
+ * original first row, and the two rows of 20-fold Laplacian sums. */
 static void step_codes(State *state, int count) {
   int width = state->width, height = state->height;
   size_t row_bytes = (size_t)width * sizeof(uint16_t);
@@ -1113,8 +1152,8 @@ static void step_codes(State *state, int count) {
           y == height - 1 ? first[0] : cells_a + row + width;
       const uint16_t *down_b =
           y == height - 1 ? first[1] : cells_b + row + width;
-      laplacian_codes(up[0], cur[0], down_a, lap_a, width);
-      laplacian_codes(up[1], cur[1], down_b, lap_b, width);
+      laplacian_sums(up[0], cur[0], down_a, lap_a, width);
+      laplacian_sums(up[1], cur[1], down_b, lap_b, width);
       if (y >= state->mask_first && y < state->mask_end) {
         update_row(&ctx, y, NULL, NULL, cur[0], cur[1], lap_a, lap_b, cells_a,
                    cells_b, mask_levels(state) + row);

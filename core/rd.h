@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define RD_VERSION 3
+#define RD_VERSION 4
 
 /* Coefficients (rd_params) are Q15 fixed point: RD_Q15_ONE represents 1.0. */
 #define RD_Q15_ONE 32768

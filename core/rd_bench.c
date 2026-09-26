@@ -4,8 +4,9 @@
  * tests/bench.c on the host. Each phase runs over the whole field `count`
  * times so that a millisecond clock resolves it:
  *   decode:     every stored row decoded to Q24 rows,
- *   laplacian:  the row loop of rd_step up to the Laplacians,
- *   react:      the same plus react_cell for every cell,
+ *   laplacian:  the row loop of rd_step up to the Laplacians (the 20-fold
+ *               sums on codes in the Q15 modes),
+ *   react:      the same plus react_codes or react_cell for every cell,
  *   step:       rd_step itself,
  *   render:     full interpolated frames of rd_row_rgb2 (all 228 rows).
  * Differences give the Laplacian, the reaction, and the encoding and store
@@ -66,6 +67,52 @@ static int32_t bench_rows(State *state, int react) {
   return sum;
 }
 
+/* The Q15 row loop without writing, like step_codes. */
+static int32_t bench_rows_codes(State *state, int react) {
+  int width = state->width, height = state->height;
+  size_t row_bytes = (size_t)width * sizeof(uint16_t);
+  uint16_t *cells_a = plane(state, RD_SPECIES_A);
+  uint16_t *cells_b = plane(state, RD_SPECIES_B);
+  int32_t *lap_a = saved_rows(state), *lap_b = lap_a + width;
+  uint16_t *codes = (uint16_t *)(lap_b + width);
+  uint16_t *up[SPECIES_COUNT] = {codes, codes + width};
+  uint16_t *cur[SPECIES_COUNT] = {codes + 2 * width, codes + 3 * width};
+  uint16_t *first[SPECIES_COUNT] = {codes + 4 * width, codes + 5 * width};
+  StepContext ctx;
+  begin_step(state, &ctx);
+  int32_t sum = 0;
+  memcpy(up[0], cells_a + (size_t)(height - 1) * width, row_bytes);
+  memcpy(up[1], cells_b + (size_t)(height - 1) * width, row_bytes);
+  memcpy(first[0], cells_a, row_bytes);
+  memcpy(first[1], cells_b, row_bytes);
+  for (int y = 0; y < height; y++) {
+    size_t row = (size_t)y * width;
+    memcpy(cur[0], cells_a + row, row_bytes);
+    memcpy(cur[1], cells_b + row, row_bytes);
+    const uint16_t *down_a = y == height - 1 ? first[0] : cells_a + row + width;
+    const uint16_t *down_b = y == height - 1 ? first[1] : cells_b + row + width;
+    laplacian_sums(up[0], cur[0], down_a, lap_a, width);
+    laplacian_sums(up[1], cur[1], down_b, lap_b, width);
+    if (react) {
+      for (int x = 0; x < width; x++) {
+        int32_t next_a, next_b;
+        react_codes(cur[0][x], cur[1][x], lap_a[x], lap_b[x], ctx.feed,
+                    ctx.decay, ctx.fold_da, ctx.fold_db, ctx.dt, ctx.unit_dt,
+                    &next_a, &next_b);
+        sum += next_a ^ next_b;
+      }
+    } else {
+      sum += lap_a[0] ^ lap_b[width - 1];
+    }
+    for (int species = 0; species < SPECIES_COUNT; species++) {
+      uint16_t *tmp = up[species];
+      up[species] = cur[species];
+      cur[species] = tmp;
+    }
+  }
+  return sum;
+}
+
 static void rd_bench(void *handle, int count, uint32_t (*now)(void),
                      RdBench *out) {
   State *state = checked_state(handle);
@@ -80,13 +127,14 @@ static void rd_bench(void *handle, int count, uint32_t (*now)(void),
   }
   out->decode = now() - start;
   start = now();
+  int packed = is_packed(state);
   for (int i = 0; i < count; i++) {
-    sink += bench_rows(state, 0);
+    sink += packed ? bench_rows(state, 0) : bench_rows_codes(state, 0);
   }
   out->laplacian = now() - start;
   start = now();
   for (int i = 0; i < count; i++) {
-    sink += bench_rows(state, 1);
+    sink += packed ? bench_rows(state, 1) : bench_rows_codes(state, 1);
   }
   out->react = now() - start;
   start = now();

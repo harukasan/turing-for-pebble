@@ -122,9 +122,19 @@ export function loadCore() {
     return instance.exports as API;
   }));
 }
-export const effective = (p: Parameters) =>
+/** The parameters the core computes with: each rounded to Q15, and in the
+ * Q15 modes (1 and 3) the diffusion coefficients folded with the 1/20 of
+ * the Laplacian into round(D / 20) / 20 (numerical definition version 4). */
+export const effective = (p: Parameters, mode = 0) =>
   Object.fromEntries(
-    Object.entries(p).map(([k, v]) => [k, Math.round(v * 32768) / 32768]),
+    Object.entries(p).map(([k, v]) => {
+      const q = Math.round(v * 32768);
+      const folded =
+        (mode === 1 || mode === 3) && (k === 'da' || k === 'db')
+          ? Math.round(q / 20) * 20
+          : q;
+      return [k, folded / 32768];
+    }),
   );
 export class WasmSimulation {
   private allocation: number;

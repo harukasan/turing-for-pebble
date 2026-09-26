@@ -43,9 +43,42 @@ static void reference(State *state) {
         laps[species] = sum < 0 ? -((-sum + 10) / 20) : (sum + 10) / 20;
       }
       int32_t next_a, next_b;
-      react_cell(rd_get(state, x, y, RD_SPECIES_A),
-                 rd_get(state, x, y, RD_SPECIES_B), laps[0], laps[1], ctx.feed,
-                 decay, ctx.da, ctx.db, ctx.dt, ctx.unit_dt, &next_a, &next_b);
+      if (!is_packed(state)) {
+        /* Version 4 written out from the definition: Q15 codes, 20-fold
+         * Laplacian sums, exact products, the rate clamped to int32. */
+        const uint16_t *pa = plane(state, RD_SPECIES_A);
+        const uint16_t *pb = plane(state, RD_SPECIES_B);
+        int64_t sums[SPECIES_COUNT] = {0, 0};
+        for (int dy = -1; dy <= 1; dy++) {
+          for (int dx = -1; dx <= 1; dx++) {
+            int weight = dx == 0 && dy == 0 ? -20 : dx == 0 || dy == 0 ? 4 : 1;
+            int index =
+                ((y + dy + state->height) % state->height) * state->width +
+                (x + dx + state->width) % state->width;
+            sums[0] += weight * pa[index];
+            sums[1] += weight * pb[index];
+          }
+        }
+        int64_t a = pa[cell_index], b = pb[cell_index];
+        int64_t fold_a = (state->da + 10) / 20, fold_b = (state->db + 10) / 20;
+        int64_t ab = a * b;
+        int64_t reaction = (ab >> 15) * b + (((ab & 32767) * b) >> 15);
+        int64_t rate_a =
+            fold_a * sums[0] - reaction + state->feed * (32768 - a);
+        int64_t rate_b = fold_b * sums[1] + reaction - (int64_t)decay * b;
+        assert(rate_a >= INT32_MIN && rate_a <= INT32_MAX);
+        rate_b = rate_b < INT32_MIN   ? INT32_MIN
+                 : rate_b > INT32_MAX ? INT32_MAX
+                                      : rate_b;
+        int64_t dt = state->dt;
+        next_a = (int32_t)((a << 9) + ((rate_a * dt + (1 << 20)) >> 21));
+        next_b = (int32_t)((b << 9) + ((rate_b * dt + (1 << 20)) >> 21));
+      } else {
+        react_cell(rd_get(state, x, y, RD_SPECIES_A),
+                   rd_get(state, x, y, RD_SPECIES_B), laps[0], laps[1],
+                   ctx.feed, decay, ctx.da, ctx.db, ctx.dt, ctx.unit_dt,
+                   &next_a, &next_b);
+      }
       uint32_t dither =
           is_packed(state) ? cell_dither(ctx.step_salt, cell_index) : 0;
       unsigned code_a =
@@ -208,25 +241,24 @@ static void check_laplacian(void) {
       for (int x = 0; x < width; x++) {
         expected[x] = laplacian_reference(up, cur, down, x, width);
       }
-      /* The Q15 code form gives the Laplacians of the decoded codes. */
+      /* laplacian_sums gives the 20-fold sums of a row of Q15 codes. */
       uint16_t *codes = malloc(3 * width * sizeof(uint16_t));
-      int32_t *decoded = malloc(3 * width * sizeof(int32_t));
-      int32_t *from_codes = malloc(width * sizeof(int32_t));
+      int32_t *sums = malloc(width * sizeof(int32_t));
       for (int x = 0; x < 3 * width; x++) {
         const int32_t *source = x < width ? up : x < 2 * width ? cur : down;
         codes[x] = (uint16_t)((uint32_t)source[x % width] >> Q15_SHIFT);
-        decoded[x] = decode_q15(codes[x]);
       }
-      laplacian_codes(codes, codes + width, codes + 2 * width, from_codes,
-                      width);
+      laplacian_sums(codes, codes + width, codes + 2 * width, sums, width);
       for (int x = 0; x < width; x++) {
-        assert(from_codes[x] == laplacian_reference(decoded, decoded + width,
-                                                    decoded + 2 * width, x,
-                                                    width));
+        int left = (x + width - 1) % width, right = (x + 1) % width;
+        const uint16_t *u = codes, *c = codes + width, *d = codes + 2 * width;
+        int32_t expected_sum =
+            LAPLACIAN_AXIAL_WEIGHT * (c[left] + c[right] + u[x] + d[x]) +
+            (u[left] + u[right] + d[left] + d[right]) - LAPLACIAN_SCALE * c[x];
+        assert(sums[x] == expected_sum);
       }
       free(codes);
-      free(decoded);
-      free(from_codes);
+      free(sums);
       laplacian_row(up, cur, down, width);
       for (int x = 0; x < width; x++) {
         assert(up[x] == expected[x]);
@@ -434,7 +466,7 @@ static void check_rgb2(State *state) {
  * that of the core before interpolated rendering was added: a clock mask,
  * 300 steps, every palette, rd_row with flags 0 and 1, and rd_row_rgb2. */
 static void check_nearest_unchanged(void) {
-  const uint32_t expected[3] = {1597135921u, 1718569397u, 1149036341u};
+  const uint32_t expected[3] = {1597135921u, 4011507537u, 1149036341u};
   for (int mode = 0; mode < 3; mode++) {
     void *memory = malloc(rd_bytes(mode));
     void *state = rd_init(memory, rd_bytes(mode), mode, 42);
@@ -775,6 +807,27 @@ int main(int argc, char **argv) {
         assert(rd_get(state, x, y, RD_SPECIES_A) == RD_VALUE_ONE);
         assert(rd_get(state, x, y, RD_SPECIES_B) == 0);
       }
+    }
+    if (!is_packed(state)) {
+      /* The rate of B saturates instead of wrapping: a cell with
+       * B = 1 among B = 0 neighbors under feed = kill = 1 has an exact rate
+       * of about -3 * 2^30, and must end at B = 0, not 1. A cell with A = 0
+       * among A = 1 neighbors reaches the largest possible A rate. */
+      int edge = 5 * state->width + 5;
+      store_codes(state, edge, 0, Q15_FULL_A);
+      rd_params(state, RD_Q15_ONE, RD_Q15_ONE, RD_Q15_ONE, RD_Q15_ONE / 2,
+                RD_Q15_ONE);
+      memcpy(reference_memory, memory, size);
+      rd_step(state, 1);
+      reference(reference_state);
+      assert(rd_get(state, 5, 5, RD_SPECIES_B) == 0);
+      assert(rd_get(state, 5, 5, RD_SPECIES_A) == RD_VALUE_ONE);
+      assert(rd_hash(state) == rd_hash(reference_state));
+      for (int i = 0; i < state->width * state->height; i++) {
+        store_codes(state, i, Q15_FULL_A, 0);
+      }
+      memset(residual_row(state, RD_SPECIES_A), 0,
+             (size_t)SPECIES_COUNT * state->width * sizeof(int32_t));
     }
     /* Dithered rounding and error diffusion mass conservation. */
     check_dither(state);

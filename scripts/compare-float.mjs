@@ -84,10 +84,16 @@ for (const mode of [0, 1, 2, 3]) {
         feed: preset.feed,
         kill: preset.kill,
       };
+      // The Q15 modes fold da and db with the 1/20 of the Laplacian into
+      // round(D / 20) / 20 (version 4), as the core computes with.
+      const fold = (key, value) =>
+        (mode === 1 || mode === 3) && (key === 'da' || key === 'db')
+          ? (Math.round(q15(value) / 20) * 20) / 32768
+          : effective(value);
       const parameters = Object.fromEntries(
         Object.entries(requested).map(([key, value]) => [
           key,
-          effective(value),
+          fold(key, value),
         ]),
       );
       assert.equal(

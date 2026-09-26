@@ -122,7 +122,7 @@ sh scripts/precision-sweep.sh
 sh scripts/precision-sweep.sh 100 1000 3000
 ```
 
-`tests/precision.c` is a self-contained candidate simulator that compares storage codes, rounding schemes, and arithmetic precision against the Float32 reference. `scripts/precision-configs.txt` lists the candidates and `scripts/precision-aggregate.mjs` prints the Markdown summary. The sweep uses every core and takes a few minutes. [Storage precision study](precision-optimization.md) records its results.
+`tests/precision.c` is a self-contained candidate simulator that compares storage codes, rounding schemes, and arithmetic precision against the Float32 reference. `scripts/precision-configs.txt` lists the candidates and `scripts/precision-aggregate.mjs` prints the Markdown summary. The sweep uses every core and takes a few minutes. `PRECISION_CONFIGS` names another candidate list and `PRECISION_OUT` another result file, `g=120` runs the watch grid, and `i=q15x32c2` is the version 4 arithmetic of the Q15 modes. [Storage precision study](precision-optimization.md) records its results.
 
 ## Font provenance
 
