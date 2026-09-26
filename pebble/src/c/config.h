@@ -2,11 +2,20 @@
 #define RD_MODE 3
 #endif
 #define RD_SEED 42u
-#define RD_FEED 950
-#define RD_KILL 1868
-#define RD_DA 32768
-#define RD_DB 16384
-#define RD_DT 32768
+/* The model and its Q15 parameter vector (core/rd.h) the face starts with:
+ * 0 Gray-Scott (feed, kill, da, db, dt) or 1 FitzHugh-Nagumo (du, dv, ru,
+ * rv, av, k, dt, rest, init), which runs only in modes 1 and 3. The build
+ * includes both models unless RD_MODEL (RD_BUILD_MODEL) folds the core to
+ * one. */
+#ifndef RD_DEFAULT_MODEL
+#define RD_DEFAULT_MODEL 0
+#endif
+#ifndef RD_DEFAULT_PARAMS
+#define RD_DEFAULT_PARAMS 950, 1868, 32768, 16384, 32768
+#endif
+#if RD_DEFAULT_MODEL == 1 && RD_MODE != 1 && RD_MODE != 3
+#error "FitzHugh-Nagumo (RD_DEFAULT_MODEL 1) runs only in modes 1 and 3"
+#endif
 #define RD_PALETTE 0
 /* rd_row_rgb2 flags: 2 (RD_ROW_BILINEAR) interpolates B between cells,
  * the default for grids that are not the display or half of it. */

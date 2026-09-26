@@ -572,11 +572,13 @@ static void init(void) {
     APP_LOG(APP_LOG_LEVEL_ERROR, "Core allocation failed");
     return;
   }
-  state = rd_init(allocation, rd_bytes(RD_MODE), RD_MODE, RD_SEED);
+  static const int PARAMS[] = {RD_DEFAULT_PARAMS};
+  state =
+      rd_init_model(allocation, rd_bytes(RD_MODE), RD_MODE, RD_DEFAULT_MODEL,
+                    RD_SEED, PARAMS, (int)(sizeof PARAMS / sizeof PARAMS[0]));
   if (!state) {
     return;
   }
-  rd_params(state, RD_FEED, RD_KILL, RD_DA, RD_DB, RD_DT);
   font_clock = fonts_get_system_font(cm_layout(RD_FONT)->time_key);
   font_date = fonts_get_system_font(cm_layout(RD_FONT)->date_key);
   time_t now = time(NULL);
@@ -603,8 +605,9 @@ static void init(void) {
   startup_start_ms = now_ms();
 #if RD_LOG
   APP_LOG(APP_LOG_LEVEL_INFO,
-          "RD init mode=%d font=%d core_bytes=%lu heap_min=%lu mask_ms=%lu",
-          RD_MODE, RD_FONT, (unsigned long)rd_bytes(RD_MODE),
+          "RD init mode=%d model=%d font=%d core_bytes=%lu heap_min=%lu "
+          "mask_ms=%lu",
+          RD_MODE, RD_DEFAULT_MODEL, RD_FONT, (unsigned long)rd_bytes(RD_MODE),
           (unsigned long)min_heap, (unsigned long)mask_ms);
 #endif
   schedule(SCHEDULE_NOW_MS);
