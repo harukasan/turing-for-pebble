@@ -241,6 +241,10 @@ typedef struct {
  * column. The row loop keeps a copy in registers. */
 typedef struct {
   int32_t carry, pending, wrap;
+  /* The value of residual[x - 1] so far (its below share plus the pending
+   * share it received), stored once the below-left share of cell x is
+   * known, instead of a read-modify-write per cell. */
+  int32_t held;
 } Shares;
 
 typedef struct {
@@ -838,26 +842,28 @@ static inline void react_codes(unsigned a, unsigned b, int32_t sum_a,
   }
 }
 
-/* The 20-fold nine-point Laplacian sum of a row of Q15 codes. */
+/* The 20-fold nine-point Laplacian sum of a row of Q15 codes, written to
+ * every stride-th entry of out, so both species can share one row of
+ * pairs. */
 static void laplacian_sums(const uint16_t *restrict up,
                            const uint16_t *restrict cur,
                            const uint16_t *restrict down, int32_t *restrict out,
-                           int width) {
+                           int stride, int width) {
   int last = width - 1;
   int32_t s_first = up[0] + down[0], c_first = cur[0];
   int32_t s_prev = up[last] + down[last], c_prev = cur[last];
   int32_t s_cur = s_first, c_cur = c_first;
   for (int x = 0; x < last; x++) {
     int32_t s_next = up[x + 1] + down[x + 1], c_next = cur[x + 1];
-    out[x] = LAPLACIAN_AXIAL_WEIGHT * (s_cur + c_prev + c_next) + s_prev +
-             s_next - LAPLACIAN_SCALE * c_cur;
+    out[x * stride] = LAPLACIAN_AXIAL_WEIGHT * (s_cur + c_prev + c_next) +
+                      s_prev + s_next - LAPLACIAN_SCALE * c_cur;
     s_prev = s_cur;
     c_prev = c_cur;
     s_cur = s_next;
     c_cur = c_next;
   }
-  out[last] = LAPLACIAN_AXIAL_WEIGHT * (s_cur + c_prev + c_first) + s_prev +
-              s_first - LAPLACIAN_SCALE * c_cur;
+  out[last * stride] = LAPLACIAN_AXIAL_WEIGHT * (s_cur + c_prev + c_first) +
+                       s_prev + s_first - LAPLACIAN_SCALE * c_cur;
 }
 
 /* Fill the step context and derive the dither salt before a step. The
@@ -883,7 +889,7 @@ static void begin_step(State *state, StepContext *ctx) {
   for (int species = 0; species < SPECIES_COUNT; species++) {
     ctx->residual[species] = residual_row(state, species);
     ctx->shares[species].carry = ctx->shares[species].pending =
-        ctx->shares[species].wrap = 0;
+        ctx->shares[species].wrap = ctx->shares[species].held = 0;
   }
 }
 
@@ -1036,12 +1042,12 @@ static inline unsigned encode_cell(int packed, int species,
     below = error * DIFFUSION_BELOW / DIFFUSION_DENOMINATOR;
   }
   shares->carry = right;
-  residual[x] = shares->pending + below;
   if (x > 0) {
-    residual[x - 1] += below_left;
+    residual[x - 1] = shares->held + below_left;
   } else {
     shares->wrap = below_left;
   }
+  shares->held = shares->pending + below;
   shares->pending = error - right - below_left - below;
   return code;
 }
@@ -1052,7 +1058,10 @@ static inline unsigned encode_cell(int packed, int species,
  * share of the cell to its left passes through to the row below. */
 static inline void encode_masked(int32_t *restrict residual, Shares *shares,
                                  int x) {
-  residual[x] = shares->pending;
+  if (x > 0) {
+    residual[x - 1] = shares->held;
+  }
+  shares->held = shares->pending;
   shares->carry = 0;
   shares->pending = 0;
 }
@@ -1062,10 +1071,53 @@ static inline void encode_masked(int32_t *restrict residual, Shares *shares,
 static void finish_row(StepContext *ctx) {
   for (int species = 0; species < SPECIES_COUNT; species++) {
     int32_t *residual = ctx->residual[species];
-    residual[ctx->width - 1] += ctx->shares[species].wrap;
-    residual[0] += ctx->shares[species].pending;
-    ctx->shares[species].wrap = ctx->shares[species].pending = 0;
+    Shares *shares = &ctx->shares[species];
+    residual[ctx->width - 1] = shares->held + shares->wrap;
+    residual[0] += shares->pending;
+    shares->wrap = shares->pending = shares->held = 0;
   }
+}
+
+/* The Q15 modes write a row in three passes, each with few live values so
+ * that the Cortex-M keeps them in registers: react_row computes the new
+ * Q24 values of both species from the old codes and the Laplacian sums
+ * into a row of pairs, then encode_row writes one species with its error
+ * diffusion. Inlined at both calls in step_codes, so rows away from the
+ * mask run without the level lookups. */
+static ALWAYS_INLINE void
+react_row(StepContext *ctx, const uint16_t *restrict cur_a,
+          const uint16_t *restrict cur_b, const int32_t *restrict lap,
+          int32_t *restrict next, const uint8_t *restrict levels) {
+  const int32_t feed = ctx->feed, decay = ctx->decay, fold_da = ctx->fold_da,
+                fold_db = ctx->fold_db, dt = ctx->dt;
+  const int unit_dt = ctx->unit_dt, width = ctx->width;
+  for (int x = 0; x < width; x++) {
+    react_codes(cur_a[x], cur_b[x], lap[2 * x], lap[2 * x + 1], feed,
+                levels ? ctx->level_decay[levels[x]] : decay, fold_da, fold_db,
+                dt, unit_dt, &next[2 * x], &next[2 * x + 1]);
+  }
+}
+
+/* Encode one species of a row from every second entry of the pair row,
+ * holding B at 0 in masked cells (levels is NULL for A and away from the
+ * mask). */
+static ALWAYS_INLINE void encode_row(StepContext *ctx, int species,
+                                     const int32_t *restrict values,
+                                     uint16_t *restrict cells,
+                                     const uint8_t *restrict levels) {
+  int32_t *restrict residual = ctx->residual[species];
+  Shares shares = ctx->shares[species];
+  const int width = ctx->width;
+  for (int x = 0; x < width; x++) {
+    if (levels && levels[x] == 0) {
+      encode_masked(residual, &shares, x);
+      cells[x] = 0;
+    } else {
+      cells[x] = (uint16_t)encode_cell(0, species, residual, &shares, x,
+                                       values[2 * x], 0);
+    }
+  }
+  ctx->shares[species] = shares;
 }
 
 /* Write row y from its old values and Laplacians: react and encode every
@@ -1074,8 +1126,7 @@ static void finish_row(StepContext *ctx) {
  * (levels NULL) runs the loop without the level lookup. */
 static ALWAYS_INLINE void
 update_row(StepContext *ctx, int y, const int32_t *restrict cur_a,
-           const int32_t *restrict cur_b, const uint16_t *restrict codes_a,
-           const uint16_t *restrict codes_b, const int32_t *restrict lap_a,
+           const int32_t *restrict cur_b, const int32_t *restrict lap_a,
            const int32_t *restrict lap_b, uint16_t *restrict cells_a,
            uint16_t *restrict cells_b, const uint8_t *restrict levels) {
   int32_t *restrict res_a = ctx->residual[0], *restrict res_b =
@@ -1091,17 +1142,9 @@ update_row(StepContext *ctx, int y, const int32_t *restrict cur_a,
     int32_t next_a, next_b;
     uint32_t dither = packed ? cell_dither(step_salt, row_index + x) : 0;
     int level = levels ? levels[x] : RD_MASK_RAMP;
-    /* The Q15 row loop passes the old codes and their 20-fold Laplacian
-     * sums, the packed loop Q24 values and Q24 Laplacians. */
-    if (codes_a) {
-      react_codes(codes_a[x], codes_b[x], lap_a[x], lap_b[x], feed,
-                  levels ? ctx->level_decay[level] : decay, ctx->fold_da,
-                  ctx->fold_db, dt, unit_dt, &next_a, &next_b);
-    } else {
-      react_cell(cur_a[x], cur_b[x], lap_a[x], lap_b[x], feed,
-                 levels ? ctx->level_decay[level] : decay, da, db, dt, unit_dt,
-                 &next_a, &next_b);
-    }
+    react_cell(cur_a[x], cur_b[x], lap_a[x], lap_b[x], feed,
+               levels ? ctx->level_decay[level] : decay, da, db, dt, unit_dt,
+               &next_a, &next_b);
     unsigned code_a = encode_cell(packed, RD_SPECIES_A, res_a, &shares_a, x,
                                   next_a, dither & DITHER_MASK);
     unsigned code_b = 0;
@@ -1125,15 +1168,18 @@ update_row(StepContext *ctx, int y, const int32_t *restrict cur_a,
 /* The row loop of the Q15 modes, on the codes themselves: the stored rows
  * below are still unwritten and are read in place, and only the old row
  * being rewritten is copied, to serve as the row above of the next row.
- * The saved-row buffers hold the old rows above and at the row, the
- * original first row, and the two rows of 20-fold Laplacian sums. */
+ * The saved-row buffers hold the row of Laplacian pairs, the row of new
+ * value pairs, and the old rows above and at the row and the original
+ * first row as 16-bit codes. */
 static void step_codes(State *state, int count) {
   int width = state->width, height = state->height;
   size_t row_bytes = (size_t)width * sizeof(uint16_t);
   uint16_t *restrict cells_a = plane(state, RD_SPECIES_A);
   uint16_t *restrict cells_b = plane(state, RD_SPECIES_B);
-  int32_t *lap_a = saved_rows(state), *lap_b = lap_a + width;
-  uint16_t *codes = (uint16_t *)(lap_b + width);
+  /* Saved-row area: a row of Laplacian pairs, a row of next-value pairs,
+   * and the rows of codes. */
+  int32_t *lap = saved_rows(state), *next = lap + 2 * width;
+  uint16_t *codes = (uint16_t *)(next + 2 * width);
   StepContext ctx;
   for (int iteration = 0; iteration < count; iteration++) {
     uint16_t *up[SPECIES_COUNT] = {codes, codes + width};
@@ -1152,14 +1198,17 @@ static void step_codes(State *state, int count) {
           y == height - 1 ? first[0] : cells_a + row + width;
       const uint16_t *down_b =
           y == height - 1 ? first[1] : cells_b + row + width;
-      laplacian_sums(up[0], cur[0], down_a, lap_a, width);
-      laplacian_sums(up[1], cur[1], down_b, lap_b, width);
+      laplacian_sums(up[0], cur[0], down_a, lap, 2, width);
+      laplacian_sums(up[1], cur[1], down_b, lap + 1, 2, width);
       if (y >= state->mask_first && y < state->mask_end) {
-        update_row(&ctx, y, NULL, NULL, cur[0], cur[1], lap_a, lap_b, cells_a,
-                   cells_b, mask_levels(state) + row);
+        const uint8_t *levels = mask_levels(state) + row;
+        react_row(&ctx, cur[0], cur[1], lap, next, levels);
+        encode_row(&ctx, RD_SPECIES_A, next, cells_a + row, NULL);
+        encode_row(&ctx, RD_SPECIES_B, next + 1, cells_b + row, levels);
       } else {
-        update_row(&ctx, y, NULL, NULL, cur[0], cur[1], lap_a, lap_b, cells_a,
-                   cells_b, NULL);
+        react_row(&ctx, cur[0], cur[1], lap, next, NULL);
+        encode_row(&ctx, RD_SPECIES_A, next, cells_a + row, NULL);
+        encode_row(&ctx, RD_SPECIES_B, next + 1, cells_b + row, NULL);
       }
       finish_row(&ctx);
       /* The old row just copied becomes the row above. */
@@ -1220,11 +1269,11 @@ int rd_step(void *handle, int count) {
       laplacian_row(prev[0], cur[0], next[0], width);
       laplacian_row(prev[1], cur[1], next[1], width);
       if (y >= state->mask_first && y < state->mask_end) {
-        update_row(&ctx, y, cur[0], cur[1], NULL, NULL, prev[0], prev[1],
-                   cells_a, cells_b, mask_levels(state) + (size_t)y * width);
+        update_row(&ctx, y, cur[0], cur[1], prev[0], prev[1], cells_a, cells_b,
+                   mask_levels(state) + (size_t)y * width);
       } else {
-        update_row(&ctx, y, cur[0], cur[1], NULL, NULL, prev[0], prev[1],
-                   cells_a, cells_b, NULL);
+        update_row(&ctx, y, cur[0], cur[1], prev[0], prev[1], cells_a, cells_b,
+                   NULL);
       }
       finish_row(&ctx);
       /* Rotate: the row just finished becomes the row above, and the buffer

@@ -8,11 +8,54 @@
  * with independent neighbor indexing, so the row-buffer scheme in rd_step is
  * checked against a straightforward implementation. The Laplacian rounding is
  * written out on purpose instead of calling laplacian_row(). Cells are
- * encoded in row order through the shared error diffusion functions, and
- * the masked cell rule is written out as docs/core.md states it. */
+ * encoded in row order through reference_encode, which keeps the error
+ * diffusion on a plain residual row, and the masked cell rule is written
+ * out as docs/core.md states it. */
 /* Mask levels of the cells for the oracle, from level_reference, or NULL
  * for no mask. */
 static const int *oracle_levels;
+
+/* The write of one species as docs/core.md states it, on a plain residual
+ * row: the value plus the shares it received, clamped, rounded to a code,
+ * and the error divided with C integer division to the right neighbor
+ * (carry), the lower-left neighbor (wrap at column 0), the neighbor below,
+ * and the lower-right neighbor (pending). */
+static unsigned reference_encode(int packed, int species, int32_t *residual,
+                                 int32_t *carry, int32_t *pending,
+                                 int32_t *wrap, int x, int32_t value,
+                                 uint32_t random) {
+  value += residual[x] + *carry;
+  int32_t limit = value_limit(packed, species);
+  value = value < 0 ? 0 : value > limit ? limit : value;
+  unsigned code;
+  int32_t low;
+  if (!packed) {
+    code = (unsigned)(value + 256) >> 9;
+    low = (int32_t)(code << 9);
+  } else {
+    code = floor_code(packed, species, value);
+    low = decode(packed, species, code);
+    if (code < code_limit(packed, species)) {
+      int32_t high = decode(packed, species, code + 1);
+      if (rounds_up(packed, species, value, low, high, random)) {
+        code++;
+        low = high;
+      }
+    }
+  }
+  int32_t error = value - low;
+  int32_t right = error * 7 / 16, below_left = error * 3 / 16,
+          below = error * 5 / 16;
+  *carry = right;
+  residual[x] = *pending + below;
+  if (x > 0) {
+    residual[x - 1] += below_left;
+  } else {
+    *wrap = below_left;
+  }
+  *pending = error - right - below_left - below;
+  return code;
+}
 
 static void reference(State *state) {
   int cells = state->width * state->height;
@@ -22,6 +65,8 @@ static void reference(State *state) {
   uint16_t *saved = plane(state, 0);
   StepContext ctx;
   begin_step(state, &ctx);
+  int32_t carry_a = 0, pending_a = 0, wrap_a = 0;
+  int32_t carry_b = 0, pending_b = 0, wrap_b = 0;
   for (int y = 0; y < state->height; y++) {
     for (int x = 0; x < state->width; x++) {
       int cell_index = y * state->width + x;
@@ -81,17 +126,18 @@ static void reference(State *state) {
       }
       uint32_t dither =
           is_packed(state) ? cell_dither(ctx.step_salt, cell_index) : 0;
-      unsigned code_a =
-          encode_cell(is_packed(state), RD_SPECIES_A, ctx.residual[0],
-                      &ctx.shares[0], x, next_a, dither & DITHER_MASK);
+      unsigned code_a = reference_encode(
+          is_packed(state), RD_SPECIES_A, ctx.residual[0], &carry_a, &pending_a,
+          &wrap_a, x, next_a, dither & DITHER_MASK);
       unsigned code_b = 0;
       if (level == 0) {
         /* Masked: B is held at 0, and only the pending share passes. */
-        ctx.residual[1][x] = ctx.shares[1].pending;
-        ctx.shares[1].carry = ctx.shares[1].pending = 0;
+        ctx.residual[1][x] = pending_b;
+        carry_b = pending_b = 0;
       } else {
-        code_b = encode_cell(is_packed(state), RD_SPECIES_B, ctx.residual[1],
-                             &ctx.shares[1], x, next_b,
+        code_b =
+            reference_encode(is_packed(state), RD_SPECIES_B, ctx.residual[1],
+                             &carry_b, &pending_b, &wrap_b, x, next_b,
                              (dither >> DITHER_B_SHIFT) & DITHER_MASK);
       }
       if (is_packed(state)) {
@@ -101,7 +147,12 @@ static void reference(State *state) {
         next_planes[cells + cell_index] = (uint16_t)code_b;
       }
     }
-    finish_row(&ctx);
+    /* Row end: the wrapped shares reach the last column and column 0. */
+    ctx.residual[0][state->width - 1] += wrap_a;
+    ctx.residual[1][state->width - 1] += wrap_b;
+    ctx.residual[0][0] += pending_a;
+    ctx.residual[1][0] += pending_b;
+    wrap_a = pending_a = wrap_b = pending_b = 0;
   }
   memcpy(saved, next_planes, plane_bytes * planes(state));
   free(next_planes);
@@ -248,7 +299,7 @@ static void check_laplacian(void) {
         const int32_t *source = x < width ? up : x < 2 * width ? cur : down;
         codes[x] = (uint16_t)((uint32_t)source[x % width] >> Q15_SHIFT);
       }
-      laplacian_sums(codes, codes + width, codes + 2 * width, sums, width);
+      laplacian_sums(codes, codes + width, codes + 2 * width, sums, 1, width);
       for (int x = 0; x < width; x++) {
         int left = (x + width - 1) % width, right = (x + 1) % width;
         const uint16_t *u = codes, *c = codes + width, *d = codes + 2 * width;
@@ -595,10 +646,13 @@ static void check_mask(int mode) {
 /* The masked share rule on one cell. */
 static void check_encode_masked(void) {
   int32_t residual[2] = {17, 99};
-  Shares shares = {7, 5, 3};
+  Shares shares = {7, 5, 3, 11};
   encode_masked(residual, &shares, 1);
-  assert(residual[0] == 17 && residual[1] == 5);
-  assert(shares.carry == 0 && shares.pending == 0 && shares.wrap == 3);
+  /* The held value of column 0 is stored, the pending share becomes the
+   * held value of column 1, and the incoming residual is dropped. */
+  assert(residual[0] == 11 && residual[1] == 99);
+  assert(shares.carry == 0 && shares.pending == 0 && shares.wrap == 3 &&
+         shares.held == 5);
 }
 
 /* Row callback of cm_draw over a 200 x 228 byte screen. */

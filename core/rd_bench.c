@@ -73,8 +73,8 @@ static int32_t bench_rows_codes(State *state, int react) {
   size_t row_bytes = (size_t)width * sizeof(uint16_t);
   uint16_t *cells_a = plane(state, RD_SPECIES_A);
   uint16_t *cells_b = plane(state, RD_SPECIES_B);
-  int32_t *lap_a = saved_rows(state), *lap_b = lap_a + width;
-  uint16_t *codes = (uint16_t *)(lap_b + width);
+  int32_t *lap = saved_rows(state), *next = lap + 2 * width;
+  uint16_t *codes = (uint16_t *)(next + 2 * width);
   uint16_t *up[SPECIES_COUNT] = {codes, codes + width};
   uint16_t *cur[SPECIES_COUNT] = {codes + 2 * width, codes + 3 * width};
   uint16_t *first[SPECIES_COUNT] = {codes + 4 * width, codes + 5 * width};
@@ -91,18 +91,13 @@ static int32_t bench_rows_codes(State *state, int react) {
     memcpy(cur[1], cells_b + row, row_bytes);
     const uint16_t *down_a = y == height - 1 ? first[0] : cells_a + row + width;
     const uint16_t *down_b = y == height - 1 ? first[1] : cells_b + row + width;
-    laplacian_sums(up[0], cur[0], down_a, lap_a, width);
-    laplacian_sums(up[1], cur[1], down_b, lap_b, width);
+    laplacian_sums(up[0], cur[0], down_a, lap, 2, width);
+    laplacian_sums(up[1], cur[1], down_b, lap + 1, 2, width);
     if (react) {
-      for (int x = 0; x < width; x++) {
-        int32_t next_a, next_b;
-        react_codes(cur[0][x], cur[1][x], lap_a[x], lap_b[x], ctx.feed,
-                    ctx.decay, ctx.fold_da, ctx.fold_db, ctx.dt, ctx.unit_dt,
-                    &next_a, &next_b);
-        sum += next_a ^ next_b;
-      }
+      react_row(&ctx, cur[0], cur[1], lap, next, NULL);
+      sum += next[0] ^ next[2 * width - 1];
     } else {
-      sum += lap_a[0] ^ lap_b[width - 1];
+      sum += lap[0] ^ lap[2 * width - 1];
     }
     for (int species = 0; species < SPECIES_COUNT; species++) {
       uint16_t *tmp = up[species];
