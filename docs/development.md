@@ -44,7 +44,24 @@ pnpm run dev --host 127.0.0.1
 
 The local URL is normally `http://127.0.0.1:5173/`. No deployment is required. The development server is not an on-watch performance benchmark. The standalone Web build uses Vite and Panda CSS. `pnpm run typecheck`, `pnpm run dev`, and `pnpm run build` regenerate ignored `styled-system/` with `panda codegen`. See [Web core and demo](web.md).
 
-`mise run test-core` runs `tests/core.c` at `-O2`, then under AddressSanitizer and UndefinedBehaviorSanitizer, then `tests/wasm.mjs` (native versus Wasm field hashes and rendered rows) and `tests/adapter.mjs` (the TypeScript adapters and the clock masks). `pnpm run test:optimization` (`scripts/check-optimization.sh`) compiles the core at `-O0` and `-O3` and compares every field hash with `tests/golden-hashes.txt`, whose lines hold mode, steps, hash, and optionally the seven clock-mask arguments of `build/core-test`. `pnpm run compare:float` (`scripts/compare-float.mjs`) measures the Wasm core against the Float32 reference at the effective parameters and writes `docs/float-precision.json`.
+`mise run test-core` runs `tests/core.c` at `-O2`, then under AddressSanitizer and UndefinedBehaviorSanitizer, then `tests/wasm.mjs` (native versus Wasm field hashes and rendered rows of both models) and `tests/adapter.mjs` (the TypeScript adapters of both models, the default parameter vectors, and the clock masks). `pnpm run test:optimization` (`scripts/check-optimization.sh`) compiles the core at `-O0` and `-O3` and compares every field hash with `tests/golden-hashes.txt`, whose lines hold model, mode, steps, hash, and optionally the seven clock-mask arguments of `build/core-test`. `pnpm run compare:float` (`scripts/compare-float.mjs`) measures the Wasm core against the Float32 references of both models at the effective parameters and writes `docs/float-precision.json`.
+
+`build/core-test`, built by `test-core` from `tests/core.c`, runs every check without arguments and otherwise prints one value for the scripts, always with seed 42 and the default parameters of the model (maze for model 0, Gray–Scott, and fhn-stripes for model 1, FitzHugh–Nagumo):
+
+```sh
+build/core-test MODEL MODE STEPS [font hour minute year month day halo]  # field hash
+build/core-test render MODEL MODE STEPS                                  # hash of the interpolated rows
+build/core-test defaults MODEL                                           # the default parameter vector
+```
+
+The presets live in `lib/presets.ts`, each with a stable id (`maze`, `coral`, `mitosis`, `spots`, `thin-line`, `fhn-stripes`, `fhn-hex`, `fhn-spiral`), a model, and its parameters. `node --experimental-transform-types scripts/list-presets.mjs` prints them as JSON with the model number and the Q15 parameter vector of `RD_PARAM_MAX` entries, which the Python scripts pass to the C harnesses.
+
+`scripts/fhn-explore.mjs` runs one FitzHugh–Nagumo parameter set on the Float32 prototype, under the LECO clock mask unless `--no-mask` is given, and prints fill, amplitude, feature size, motion, chessboard, halo, and connected-region measures per checkpoint while writing `build/fhn/<label>-<step>.ppm`. Parameters start from `--preset` and are replaced one by one, negative values with `=`:
+
+```sh
+node --experimental-transform-types scripts/fhn-explore.mjs --preset fhn-hex --k=-0.25 --steps 1500,5000
+node --experimental-transform-types scripts/fhn-explore.mjs --preset fhn-spiral --width 100 --pull 0.0625
+```
 
 ## Lint and format
 
@@ -75,7 +92,7 @@ Exclusions:
 mise run build-pebble
 ```
 
-This builds modes 0, 1, and 3 and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. The sources are compiled with `-O3` after the SDK's own flags (`RD_BUILD_OPT` overrides it; `-O3` measured 6% faster steps than `-O2` on the watch), `RD_BUILD_PROFILE=1` adds the clock calibration loop and the periodic profile log, and the script fails if an ELF's load size exceeds 20,480 bytes (mode 3 is about 15.6 KB without logs: the row passes are duplicated so that rows away from the digits run without the mask levels, while the glyph traversal, the renderer, and the rare color fallback are kept out of line), because code shares the 128 KiB app region with the core allocation. Production builds leave out the diagnostic logs. `RD_BUILD_LOG=1` keeps them (the `RD init`, `RD startup`, `RD light`, and progress lines used for measurements), and `RD_BUILD_PROFILE=1`, `RD_BENCH`, and `RD_FRAME_BENCH` builds include them too. `RD_BUILD_MODE` selects the mode (default 3), `RD_BUILD_FONT` the clock font set (0 LECO, 1 Bitham), `RD_BUILD_RENDER` overrides the `rd_row_rgb2` flags (2 interpolates, the default for mode 3 and 0 for the others), and `RD_BUILD_DEFINES` adds space-separated defines such as `RD_STARTUP_MS=20000` for study builds. The shared UUID means installing one mode replaces another in an emulator or watch.
+This builds modes 0, 1, and 3 and saves their `.pbw`, `.elf`, and compiler stack-usage files under `build/pebble/`. Only the selected storage implementation is compiled into each watchface. Modes 1 and 3 include both models, Gray–Scott and FitzHugh–Nagumo, and mode 0 folds to Gray–Scott, the only model of the packed storage. `RD_BUILD_MODEL=0` or `1` folds the core to one model (`RD_MODEL`). The script then builds mode 3 folded to each model once more and prints those load sizes for reference without keeping the builds. The sources are compiled with `-O3` after the SDK's own flags (`RD_BUILD_OPT` overrides it, and `-O3` measured 6% faster steps than `-O2` on the watch), `RD_BUILD_PROFILE=1` adds the clock calibration loop and the periodic profile log, and the script fails if an ELF's load size exceeds 20,480 bytes (mode 3 of numerical definition version 4, Gray–Scott only, was about 15.6 KB without logs: the row passes are duplicated so that rows away from the digits run without the mask levels, while the glyph traversal, the renderer, and the rare color fallback are kept out of line), because code shares the 128 KiB app region with the core allocation. Production builds leave out the diagnostic logs. `RD_BUILD_LOG=1` keeps them (the `RD init`, `RD startup`, `RD light`, and progress lines used for measurements), and `RD_BUILD_PROFILE=1`, `RD_BENCH`, and `RD_FRAME_BENCH` builds include them too. `RD_BUILD_MODE` selects the mode (default 3), `RD_BUILD_MODEL` folds the model, `RD_BUILD_FONT` the clock font set (0 LECO, 1 Bitham), `RD_BUILD_RENDER` overrides the `rd_row_rgb2` flags (2 interpolates, the default for mode 3 and 0 for the others), and `RD_BUILD_DEFINES` adds space-separated defines such as `RD_STARTUP_MS=20000` for study builds. The shared UUID means installing one mode replaces another in an emulator or watch.
 
 ```sh
 pnpm run emulator              # build if needed, then install mode 3
@@ -102,9 +119,21 @@ Keep `--vnc` consistent across emulator commands. Changing emulator launch optio
 
 Mode 0 is 200 × 228 with packed 16-bit storage (A 7-bit, B 9-bit). Mode 1 is 100 × 114 and mode 3, the default, 120 × 136, both with 16-bit storage. The build script sets `RD_BUILD_MODE` explicitly. To build the mode selected in an exported `config.h`, copy it to `pebble/src/c/config.h` and run `mise exec -- pebble build --sdk 4.33.1` from `pebble/` after setting the corresponding `RD_BUILD_MODE`. The mode override takes precedence over the header's default.
 
-`RD_BUILD_DEFINES=RD_BENCH` builds a watchface that logs `RD bench` with the time of each phase of a step 3 s after launch. `RD_BUILD_DEFINES="RD_FRAME_BENCH RD_STARTUP_MS=0"` builds one that logs `RD frames`, the frames the OS renders in 5 s with the normal draw and then with an empty draw. `mkdir -p build && cc -O3 -std=c11 -DRD_MODE=3 tests/bench.c -o build/bench && build/bench 3 500` runs the same timing on the host (`build/bench MODE [COUNT]`; a binary built without `RD_MODE` accepts every mode). The host ranks the phases differently from the watch, so only the watch numbers decide.
+The face starts with `RD_DEFAULT_MODEL` and `RD_DEFAULT_PARAMS` of `config.h`, Gray–Scott with the maze preset by default, until the planned settings mechanism sends a model and a parameter vector from the phone. A FitzHugh–Nagumo measurement build overrides both through `RD_BUILD_DEFINES`, with the vector written without spaces. `config.h` stops such a build in modes 0 and 2, so build mode 3 directly instead of through `build-pebble`:
 
-`mise exec -- python scripts/fill.py grids` and `fill.py seeds` rerun the growth comparison of the resolution study and write contact sheets and `build/fill/<study>.jsonl` under `build/fill/` (`grids` is the default study). They drive `tests/fill.c` as `build/fill-run mode preset seed disks min_radius radius_range out_prefix checkpoint...`.
+```sh
+cd pebble
+RD_BUILD_MODE=3 RD_BUILD_LOG=1 \
+  RD_BUILD_DEFINES="RD_DEFAULT_MODEL=1 RD_DEFAULT_PARAMS=6554,0,8192,410,32768,-9830,32768,-21935,1" \
+  mise exec -- pebble build --sdk 4.33.1
+mise exec -- pebble install --emulator emery --vnc build/pebble.pbw
+```
+
+The vector is `fhn-spiral`. `scripts/list-presets.mjs` prints the others, `fhn-stripes` is `1638,32768,328,819,19661,0,32768,0,0` and `fhn-hex` `1311,32768,573,1434,19661,-7209,32768,-9585,0`. The `RD init` log line reports the model.
+
+`RD_BUILD_DEFINES=RD_BENCH` builds a watchface that logs `RD bench` with the time of each phase of a step 3 s after launch. `RD_BUILD_DEFINES="RD_FRAME_BENCH RD_STARTUP_MS=0"` builds one that logs `RD frames`, the frames the OS renders in 5 s with the normal draw and then with an empty draw. `mkdir -p build && cc -O3 -std=c11 -DRD_MODE=3 tests/bench.c -o build/bench && build/bench 3 500` runs the same timing on the host (`build/bench MODE [COUNT]`, and a binary built without `RD_MODE` accepts every mode). The host ranks the phases differently from the watch, so only the watch numbers decide.
+
+`mise exec -- python scripts/fill.py grids` and `fill.py seeds` rerun the growth comparison of the resolution study and write contact sheets and `build/fill/<study>.jsonl` under `build/fill/` (`grids` is the default study). `--presets` takes preset ids (default `maze,thin-line`), and FitzHugh–Nagumo presets run only in the Q15 configurations. They drive `tests/fill.c` as `build/fill-run mode model p0 ... p9 seed disks min_radius radius_range out_prefix checkpoint...`, with the model and the vector of `scripts/list-presets.mjs`.
 
 ## Regenerating comparison artifacts
 
@@ -113,7 +142,7 @@ mise exec -- python scripts/compare.py
 mise exec -- python scripts/build-report.py
 ```
 
-`compare.py` runs 10,000 steps for the five presets, two seeds, and the four modes 0 to 3. It creates PNGs and JSON under `public/reports/`, including `thin-lines.png` for the thin-line preset described in `docs/behavior.md`. Mode 2 is a diagnostic 100 × 114 configuration with the packed cells of mode 0 that the Web UI does not expose, and `thin-lines.png` shows modes 0, 1, and 3.
+`compare.py` runs 10,000 steps for every preset of `scripts/list-presets.mjs` with two seeds, the Gray–Scott presets in the four modes 0 to 3 and the FitzHugh–Nagumo presets in modes 1 and 3, through `tests/compare.c` (`build/compare mode model p0 ... p9 seed steps out.ppm`). It creates `mode-M-preset-<id>-seed-S.png` and `comparison.json` under `public/reports/`, with `comparison.png` (maze, coral, mitosis, and spots in every mode), `thin-lines.png` for the thin-line preset described in `docs/behavior.md` (modes 0, 1, and 3), and `fhn.png` (the three FitzHugh–Nagumo presets in modes 1 and 3). Mode 2 is a diagnostic 100 × 114 configuration with the packed cells of mode 0 that the Web UI does not expose. `compare.py` rewrites `comparison.json` from scratch, so run `build-report.py` after it to add the ARM, stack, and physical sections back.
 
 The report builder reads ARM ELF section sizes and `.su` stack reports and `docs/hardware-measurements.json`, and rewrites `public/reports/comparison.json` in place, so run `mise run build-pebble` and `compare.py` first with `arm-none-eabi-size` from the SDK toolchain on `PATH`. Runtime measurements must retain their measured build and observation scope. Do not substitute theoretical remaining RAM for measured minimum free heap.
 
@@ -135,7 +164,7 @@ The glyphs in `public/fonts/clock-fonts.json` and `core/clock_glyphs.h` were ext
 - `resources/normal/base/pbf/BITHAM_42_BOLD.pbf`
 - `resources/normal/base/pbf/BITHAM_30_BLACK.pbf`
 
-The font sets are listed in `SETS` of `scripts/extract-fonts.py`. Only the digits and the separator of each line are kept. `extract-fonts.py /path/to/PebbleOS --list 'BITHAM_*'` prints the height and the printable characters of the matching PBFs; BITHAM_18_LIGHT_SUBSET and BITHAM_34_LIGHT_SUBSET contain no digits.
+The font sets are listed in `SETS` of `scripts/extract-fonts.py`. Only the digits and the separator of each line are kept. `extract-fonts.py /path/to/PebbleOS --list 'BITHAM_*'` prints the height and the printable characters of the matching PBFs. BITHAM_18_LIGHT_SUBSET and BITHAM_34_LIGHT_SUBSET contain no digits.
 
 Source: [coredevices/PebbleOS](https://github.com/coredevices/PebbleOS/tree/119cb96e3f47be0f61191c0b90a502bb01f2d9bc). License: Apache-2.0, copied to `public/fonts/LICENSE`. Per-file SHA-256 values and the source revision are embedded in the JSON. Glyph dimensions, bearings, advances, and monochrome pixels are preserved. The extractor requires a local checkout of that revision and its official `pbf_extract.py`:
 

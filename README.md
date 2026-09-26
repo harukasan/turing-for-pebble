@@ -1,6 +1,6 @@
 # Turing Pattern Watchface for Pebble
 
-A local Gray–Scott pattern explorer and Emery watchface sharing one fixed-point C core.
+A local reaction-diffusion pattern explorer and Emery watchface sharing one fixed-point C core, with the Gray–Scott model and, in its 16-bit Q15 modes, the FitzHugh–Nagumo model for Turing stripes and spots and rotating spirals.
 
 ```sh
 mise trust

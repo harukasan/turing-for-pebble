@@ -19,7 +19,7 @@
     }
   },
   "author": "harukasan",
-  "description": "Shared fixed-point Gray-Scott watchface",
+  "description": "Shared fixed-point reaction-diffusion watchface (Gray-Scott and FitzHugh-Nagumo)",
   "keywords": [
     "pebble-app"
   ]
