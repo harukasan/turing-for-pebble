@@ -27,15 +27,7 @@ The thin-line preset remains the most sensitive case for the packed modes. Its t
 
 ## Change from version 1
 
-Version 1 stored 8-bit linear codes with stochastic rounding in modes 0 and 2, and rounded every product to Q15 in every mode. The same script produced these results for it:
-
-| Core mode     | Grid and storage       | B MAE after 1 step, mean | B MAE after 100 steps, mean | B MAE after 1,000 steps, mean | B MAE after 1,000 steps, worst case | Lowest B spatial correlation after 1,000 steps |
-| ------------- | ---------------------- | -----------------------: | --------------------------: | ----------------------------: | ----------------------------------: | ---------------------------------------------: |
-| 0             | 200 × 228, 8-bit       |                 0.000158 |                     0.00119 |                       0.01458 |                             0.03547 |                                          0.763 |
-| 1             | 100 × 114, Q15 storage |               0.00000132 |                    0.000190 |                       0.00450 |                             0.01280 |                                          0.953 |
-| 2, diagnostic | 100 × 114, 8-bit       |                 0.000176 |                     0.00211 |                       0.01771 |                             0.03678 |                                          0.804 |
-
-Mode 0 now has 7.2 times less B error at 1,000 steps in the mean and 7.1 times less in the worst case, with the same field memory. Mode 1 has about 114 times less error, because its previous error came almost entirely from Q15 intermediate rounding rather than from its 16-bit storage. Diagnostic mode 2 has 3.9 times less error. The version 1 thin-line mean at 1,000 steps was 0.03489 for mode 0 and 0.01082 for mode 1. [Storage precision study](precision-optimization.md) explains which technique contributes what.
+Version 1 stored 8-bit linear codes with stochastic rounding in modes 0 and 2 and rounded every product to Q15 in every mode. The same script measured its B mean absolute error at 1,000 steps at 0.01458 for mode 0, 0.00450 for mode 1, and 0.01771 for diagnostic mode 2, so mode 0 now has about 7 times less error with the same field memory and mode 1 about 110 times less, because its previous error came almost entirely from Q15 intermediate rounding rather than from its 16-bit storage. [Storage precision study](precision-optimization.md) explains which technique contributes what.
 
 `scripts/check-optimization.sh` compiles the C core with `-O0` and `-O3`. Its field hashes match exactly for all four modes at 1, 100, and 1,000 steps with seed 42, and with the clock mask for modes 0, 1, and 3, and match the hashes recorded in `tests/golden-hashes.txt`. The existing native-versus-Wasm checks cover the optimized Wasm build. These are deterministic checks of the fixed-point implementation. They do not imply equality with Float32.
 

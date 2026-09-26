@@ -616,38 +616,11 @@
       },
       "conservativeAppStackSumBytes": 1308,
       "stackLimit": "Nonrecursive app frames only. OS callbacks and library stack are additional, not measured.",
-      "minimumFreeHeapBytes": 32888,
-      "emulatorObservation": {
-        "mode": 0,
-        "minimumFreeHeapBytes": 32888,
-        "lastObservedStep": 2176,
-        "observation": "Startup completion, several subsequent minute updates, and a back-button backlight animation that ended by 00:10:12 on 2026-09-25. Heap remained 32888 B through 00:12:01.",
-        "source": "docs/emery-mode-0.log",
-        "measuredLoadBytes": 4221,
-        "clockInvalid": true,
-        "normalOperationGate": "observed pass, hardware confirmation pending"
-      },
-      "physicalFrameMs": 87.2,
-      "physicalStartupMs": 186084,
-      "physicalStepsPerSecond": 11.4,
-      "physicalMinimumFreeHeapBytes": 21104,
-      "physicalMeasurement": {
-        "commit": "fa2ecb4 plus the uncommitted speed-up changes (-O2, scheduling, rd_row_rgb2, bit-exact core)",
-        "mode": 0,
-        "date": "2026-09-25",
-        "firmware": "unknown",
-        "startupWallMs": 186084,
-        "stepsPerSecond": 11.4,
-        "avgStepUs": 81212,
-        "maxStepMs": 136,
-        "avgDrawUs": 3162,
-        "avgTextUs": 2810,
-        "minimumFreeHeapBytes": 21104,
-        "loopMs": 0,
-        "clockInvalid": false,
-        "interrupted": true,
-        "note": "First physical run. The startup was interrupted once by a watchface switch, so wall_ms includes a resumed run; the steady rate from the periodic log was 256 steps per 22.5 s. Pebble Time 2 via the phone developer connection."
-      }
+      "physicalFrameMs": null,
+      "physicalStartupMs": null,
+      "physicalStepsPerSecond": null,
+      "physicalMinimumFreeHeapBytes": null,
+      "physicalMeasurement": null
     },
     {
       "mode": 1,
@@ -698,38 +671,11 @@
       },
       "conservativeAppStackSumBytes": 1492,
       "stackLimit": "Nonrecursive app frames only. OS callbacks and library stack are additional, not measured.",
-      "minimumFreeHeapBytes": 78688,
-      "emulatorObservation": {
-        "mode": 1,
-        "minimumFreeHeapBytes": 78688,
-        "lastObservedStep": 2064,
-        "observation": "Startup completion and a subsequent minute update, emulator timestamps 23:57:26 through 23:58:01 on 2026-09-24",
-        "source": "docs/emery-mode-1-observations.log",
-        "measuredLoadBytes": 4015,
-        "clockInvalid": true,
-        "normalOperationGate": "observed pass, hardware confirmation pending"
-      },
-      "physicalFrameMs": 51.2,
-      "physicalStartupMs": 28129,
-      "physicalStepsPerSecond": 63.9,
-      "physicalMinimumFreeHeapBytes": 49624,
-      "physicalMeasurement": {
-        "commit": "a36458c (digit avoidance with graded kill, LECO)",
-        "mode": 1,
-        "date": "2026-09-25",
-        "firmware": "unknown",
-        "startupWallMs": 28129,
-        "stepsPerSecond": 63.9,
-        "avgStepUs": 14913,
-        "maxStepMs": 39,
-        "avgDrawUs": 3914,
-        "avgTextUs": 2504,
-        "minimumFreeHeapBytes": 49624,
-        "loopMs": 0,
-        "clockInvalid": false,
-        "interrupted": false,
-        "note": "Baseline before the resolution work, with the digit mask active. The 300-step burst after a minute change took about 4.7 s at the logged rate."
-      }
+      "physicalFrameMs": null,
+      "physicalStartupMs": null,
+      "physicalStepsPerSecond": null,
+      "physicalMinimumFreeHeapBytes": null,
+      "physicalMeasurement": null
     },
     {
       "mode": 3,
@@ -781,14 +727,12 @@
       },
       "conservativeAppStackSumBytes": 1504,
       "stackLimit": "Nonrecursive app frames only. OS callbacks and library stack are additional, not measured.",
-      "minimumFreeHeapBytes": null,
-      "emulatorObservation": null,
       "physicalFrameMs": 49.2,
       "physicalStartupMs": 29978,
       "physicalStepsPerSecond": 55.4,
       "physicalMinimumFreeHeapBytes": 21904,
       "physicalMeasurement": {
-        "commit": "6619c59 plus the backlight animation at the work pacing (RD_BUILD_LOG=1)",
+        "commit": "53a4a19",
         "mode": 3,
         "date": "2026-09-26",
         "firmware": "unknown",
@@ -806,15 +750,30 @@
       }
     }
   ],
-  "fontVerification": {
-    "screenshot": "emery-mode-0.png",
-    "time": "14:50",
-    "date": "2026.09.24",
-    "expectedWhitePixels": 2427,
-    "actualWhitePixels": 2427,
-    "missing": 0,
-    "extra": 0
-  },
+  "fontVerification": [
+    {
+      "screenshot": "emery-mode-3-leco.png",
+      "font": "leco",
+      "time": "21:38",
+      "date": "2026.09.26",
+      "glyphPixels": 2601,
+      "missing": 0,
+      "extra": 0,
+      "haloPixels": 1265,
+      "haloNotBlack": 0
+    },
+    {
+      "screenshot": "emery-mode-3-bitham.png",
+      "font": "bitham",
+      "time": "21:39",
+      "date": "2026.09.26",
+      "glyphPixels": 3539,
+      "missing": 0,
+      "extra": 0,
+      "haloPixels": 1649,
+      "haloNotBlack": 0
+    }
+  ],
   "browserUiVerification": "unavailable: no connected browser",
   "emulatorTiming": "RTC seconds and millisecond ticks are not synchronized. clock_invalid marks discontinuities. Emulator timing cannot qualify hardware."
 }

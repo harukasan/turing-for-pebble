@@ -1,4 +1,0 @@
-Selected lines transcribed from pebble-tool output captured during validation.
-[23:55:13] main.c:51> RD init mode=1 heap_min=78688
-[23:57:26] main.c:38> RD mode=1 step=2048 heap_min=78688 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1
-[23:58:01] main.c:38> RD mode=1 step=2064 heap_min=78688 compute_max_ms=1000 draw_max_ms=1000 clock_invalid=1

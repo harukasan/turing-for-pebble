@@ -6,7 +6,6 @@ type Arm = {
   dataBytes: number;
   bssBytes: number;
   remainingBeforeOsAllocationsBytes: number;
-  minimumFreeHeapBytes: number | null;
   conservativeAppStackSumBytes: number;
   physicalStartupMs: number | null;
   physicalStepsPerSecond: number | null;
@@ -34,12 +33,8 @@ export function PebbleMemory({ mode }: { mode: number }) {
     <p>
       Pebble ARM実測: コード {row.textBytes} B / 静的領域{' '}
       {row.dataBytes + row.bssBytes} B。OS追加確保前の空き見積もり{' '}
-      {row.remainingBeforeOsAllocationsBytes} B。エミュレーター最小空きヒープ{' '}
-      {row.minimumFreeHeapBytes === null
-        ? '未測定'
-        : `${row.minimumFreeHeapBytes} B`}
-      。アプリのスタック上限見積もり {row.conservativeAppStackSumBytes}{' '}
-      B（OS・ライブラリ分は別）。
+      {row.remainingBeforeOsAllocationsBytes} B。アプリのスタック上限見積もり{' '}
+      {row.conservativeAppStackSumBytes} B（OS・ライブラリ分は別）。
       {row.physicalStartupMs === null
         ? '実機は未測定です。'
         : `実機: 起動 ${(row.physicalStartupMs / 1000).toFixed(1)} 秒、毎秒 ${row.physicalStepsPerSecond} ステップ、最小空きヒープ ${row.physicalMinimumFreeHeapBytes} B。`}

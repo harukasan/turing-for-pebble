@@ -42,7 +42,7 @@ Timing uses the public `time_ms` API. The emulator's wall-clock seconds and tick
 The UI separates these categories:
 
 1. Core allocation, obtained directly from C for Wasm modes, including fields, scratch rows, control data, the rendering rows and tables, alignment, and the digit mask levels (`memory[0]` to `memory[5]`, with the total and the Wasm linear memory after them). Float32 instead reports four JavaScript concentration arrays. The watch's clock mask bitmap is a separate allocation outside the core.
-2. Pebble ELF code and static data, core dynamic allocation, the measured emulator minimum free heap (recorded for the version 1 builds of modes 0 and 1 only, so mode 3 shows it as unmeasured), and the newest physical measurement of the mode (startup, steps per second, minimum free heap). Runtime minimum free heap already includes allocations and must not be added to an estimate of remaining heap.
+2. Pebble ELF code and static data, core dynamic allocation, and the newest physical measurement of the mode (startup, steps per second, minimum free heap). Runtime minimum free heap already includes allocations and must not be added to an estimate of remaining heap.
 3. Web linear-memory allocation when Wasm is selected and known pixel buffers for both implementations. Core memory is contained inside linear memory. Canvas pixel-equivalent bytes are not a measurement of browser process memory or GPU allocations.
 
 The acceptance thresholds are a 128 KiB app region and at least 16 KiB minimum free heap during normal operation. Compiler stack reports describe application functions. OS and library stack contributions are additional. Mode 3 is the watch build.

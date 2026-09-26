@@ -10,7 +10,6 @@
     "bun.lock",
     "bun.lockb",
     "public/reports/**",
-    "public/fonts/clock-fonts.json",
-    "docs/emulator-measurements.json"
+    "public/fonts/clock-fonts.json"
   ]
 }

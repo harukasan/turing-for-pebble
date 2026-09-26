@@ -66,7 +66,7 @@ Style settings live in `.editorconfig`, `.clang-format`, `ruff.toml`, `.oxlintrc
 Exclusions:
 
 - `components/ui/` is vendored shadcn output. oxlint skips it, oxfmt still formats it.
-- oxfmt skips `public/reports/`, `public/fonts/clock-fonts.json`, and `docs/emulator-measurements.json`. Generated files: `public/reports/` (`scripts/compare.py` and `scripts/build-report.py`), `public/fonts/clock-fonts.json` (`scripts/extract-fonts.py`), `core/clock_glyphs.h` (`scripts/gen-clock-glyphs.py`), `public/wasm/rd.wasm` (`mise run build-wasm`), and `docs/float-precision.json` (`npm run compare:float`). `docs/emulator-measurements.json` and `docs/hardware-measurements.json` are hand-maintained inputs of the report builder.
+- oxfmt skips `public/reports/` and `public/fonts/clock-fonts.json`. Generated files: `public/reports/` (`scripts/compare.py` and `scripts/build-report.py`), `public/fonts/clock-fonts.json` (`scripts/extract-fonts.py`), `core/clock_glyphs.h` (`scripts/gen-clock-glyphs.py`), `public/wasm/rd.wasm` (`mise run build-wasm`), and `docs/float-precision.json` (`npm run compare:float`). `docs/hardware-measurements.json` is the hand-maintained input of the report builder.
 - `pebble/wscript` is the SDK build template. ruff skips it.
 
 ## Emery builds
@@ -115,7 +115,7 @@ mise exec -- python scripts/build-report.py
 
 `compare.py` runs 10,000 steps for the five presets, two seeds, and the four modes 0 to 3. It creates PNGs and JSON under `public/reports/`, including `thin-lines.png` for the thin-line preset described in `docs/behavior.md`. Mode 2 is a diagnostic 100 × 114 configuration with the packed cells of mode 0 that the Web UI does not expose, and `thin-lines.png` shows modes 0, 1, and 3.
 
-The report builder reads ARM ELF section sizes and `.su` stack reports, `docs/emulator-measurements.json`, and `docs/hardware-measurements.json`, and rewrites `public/reports/comparison.json` in place, so run `mise run build-pebble` and `compare.py` first with `arm-none-eabi-size` from the SDK toolchain on `PATH`. Runtime measurements must retain their measured build and observation scope. Do not substitute theoretical remaining RAM for measured minimum free heap.
+The report builder reads ARM ELF section sizes and `.su` stack reports and `docs/hardware-measurements.json`, and rewrites `public/reports/comparison.json` in place, so run `mise run build-pebble` and `compare.py` first with `arm-none-eabi-size` from the SDK toolchain on `PATH`. Runtime measurements must retain their measured build and observation scope. Do not substitute theoretical remaining RAM for measured minimum free heap.
 
 ## Storage precision experiment
 

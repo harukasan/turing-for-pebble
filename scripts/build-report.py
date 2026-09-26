@@ -7,9 +7,6 @@ from pathlib import Path
 out = Path('public/reports/comparison.json')
 r = json.loads(out.read_text())
 r['arm'] = []
-measurements = json.loads(Path('docs/emulator-measurements.json').read_text())[
-    'measurements'
-]
 hardware = json.loads(Path('docs/hardware-measurements.json').read_text())[
     'measurements'
 ]
@@ -23,7 +20,6 @@ for mode in [0, 1, 3]:
         .split()
     )
     text, data, bss = map(int, values[:3])
-    emulator = next((m for m in measurements if m.get('mode') == mode), None)
     # The newest physical-watch measurement of this mode, if any.
     physical = next((m for m in reversed(hardware) if m['mode'] == mode), None)
     stack = {}
@@ -49,10 +45,6 @@ for mode in [0, 1, 3]:
             'stackFramesBytes': stack,
             'conservativeAppStackSumBytes': sum(stack.values()),
             'stackLimit': 'Nonrecursive app frames only. OS callbacks and library stack are additional, not measured.',
-            'minimumFreeHeapBytes': None
-            if emulator is None
-            else emulator['minimumFreeHeapBytes'],
-            'emulatorObservation': emulator,
             # One animation frame: the steps of a 30 ms slice (a slice ends
             # after the step that crosses the budget) plus the field and
             # text draw.
@@ -79,15 +71,30 @@ for mode in [0, 1, 3]:
             'physicalMeasurement': physical,
         }
     )
-r['fontVerification'] = {
-    'screenshot': 'emery-mode-0.png',
-    'time': '14:50',
-    'date': '2026.09.24',
-    'expectedWhitePixels': 2427,
-    'actualWhitePixels': 2427,
-    'missing': 0,
-    'extra': 0,
-}
+r['fontVerification'] = [
+    {
+        'screenshot': 'emery-mode-3-leco.png',
+        'font': 'leco',
+        'time': '21:38',
+        'date': '2026.09.26',
+        'glyphPixels': 2601,
+        'missing': 0,
+        'extra': 0,
+        'haloPixels': 1265,
+        'haloNotBlack': 0,
+    },
+    {
+        'screenshot': 'emery-mode-3-bitham.png',
+        'font': 'bitham',
+        'time': '21:39',
+        'date': '2026.09.26',
+        'glyphPixels': 3539,
+        'missing': 0,
+        'extra': 0,
+        'haloPixels': 1649,
+        'haloNotBlack': 0,
+    },
+]
 r['browserUiVerification'] = 'unavailable: no connected browser'
 r['emulatorTiming'] = (
     'RTC seconds and millisecond ticks are not synchronized. clock_invalid marks discontinuities. Emulator timing cannot qualify hardware.'
