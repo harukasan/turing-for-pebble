@@ -392,7 +392,7 @@ function showAndCopy() {
 }
 
 /** Fill the page from a settings file's text. `source` names the text,
- * for example a file name, in the messages. */
+ * for example a file name, in the message when it is not settings. */
 function load(text: string, source: string) {
   const loaded = fromFileJson(text);
   if (!loaded) {
@@ -401,7 +401,7 @@ function load(text: string, source: string) {
   }
   Object.assign(settings, loaded);
   changed("field");
-  fileStatus.textContent = `${source}から設定を読み込みました。保存を押すと watch に送ります。`;
+  fileStatus.textContent = "設定を読み込みました。";
 }
 
 /** The settings file through the share sheet where the web view offers one,
@@ -422,8 +422,8 @@ element("export").addEventListener("click", async () => {
   }
   if (inApp) {
     fileStatus.textContent = showAndCopy()
-      ? "Pebble アプリではファイルを保存できないため、設定をコピーしました。メモなどに貼り付けて残せます。"
-      : "Pebble アプリではファイルを保存できません。上の文字列をコピーして残してください。";
+      ? "Pebbleアプリではファイルを保存できないため、設定をコピーしました。ファイルやメモにペーストして保存してください。"
+      : "Pebbleアプリではファイルを保存できません。上の文字列をコピーして、ファイルやメモにペーストして保存してください。";
     return;
   }
   const url = URL.createObjectURL(file);
@@ -433,12 +433,6 @@ element("export").addEventListener("click", async () => {
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   fileStatus.textContent = `${SETTINGS_FILE_NAME} を書き出しました。`;
-});
-
-element("copy").addEventListener("click", () => {
-  fileStatus.textContent = showAndCopy()
-    ? "設定をコピーしました。"
-    : "コピーできませんでした。上の文字列を選んでコピーしてください。";
 });
 
 const importInput = element<HTMLInputElement>("import");
