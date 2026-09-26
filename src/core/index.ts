@@ -9,3 +9,4 @@ export {
   isFloat,
 } from "./modes";
 export type { Engine, ParameterKey, PlayerSettings } from "./modes";
+export type { Model, Parameters } from "../../lib/simulation";

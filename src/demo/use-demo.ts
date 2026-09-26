@@ -1,5 +1,9 @@
 import { useEffect, useReducer, useRef, useState } from "react";
-import { presetById, presetParameters } from "../../lib/simulation";
+import {
+  presetById,
+  presetParameters,
+  type Parameters,
+} from "../../lib/simulation";
 import {
   TuringPlayer,
   defaultParameters,
@@ -188,7 +192,7 @@ export function useDemo(assetBaseUrl: string) {
   function updateParam(key: ParameterKey, value: number) {
     setOptions((current) => ({
       ...current,
-      params: { ...current.params, [key]: value },
+      params: { ...current.params, [key]: value } as Parameters,
     }));
   }
 

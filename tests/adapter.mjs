@@ -27,7 +27,14 @@ const api = await loadCore();
 await loadFonts();
 const VALUE_ONE = 2 ** 24;
 const pixels = { data: new Uint8ClampedArray(200 * 228 * 4) };
-const params = { feed: 0.029, kill: 0.057, da: 1, db: 0.5, dt: 1 };
+const params = {
+  model: 'gray-scott',
+  feed: 0.029,
+  kill: 0.057,
+  da: 1,
+  db: 0.5,
+  dt: 1,
+};
 assert.equal(effective(params).feed, 950 / 32768);
 for (let i = 0; i < 30; i++) {
   const s = new WasmSimulation(api, i % 2, 42);

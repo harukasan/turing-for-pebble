@@ -1,22 +1,51 @@
 /** @jsxImportSource react */
 import { useEffect, useId, useState, type CSSProperties } from "react";
-import { type Engine, type ParameterKey } from "../../core";
+import { type Engine, type Model, type ParameterKey } from "../../core";
 import { styles as s } from "../styles";
 
-export const bounds: Record<ParameterKey, [number, number, number]> = {
-  feed: [0.01, 0.1, 0.0001],
-  kill: [0.03, 0.075, 0.0001],
-  da: [0.1, 1, 0.01],
-  db: [0.01, 0.5, 0.01],
-  dt: [0.1, 1, 0.1],
+/** The parameters shown as sliders: every one but the initial condition. */
+export type SliderKey<M extends Model> = Exclude<ParameterKey<M>, "init">;
+
+export const bounds: {
+  [M in Model]: Record<SliderKey<M>, [number, number, number]>;
+} = {
+  "gray-scott": {
+    feed: [0.01, 0.1, 0.0001],
+    kill: [0.03, 0.075, 0.0001],
+    da: [0.1, 1, 0.01],
+    db: [0.01, 0.5, 0.01],
+    dt: [0.1, 1, 0.1],
+  },
+  fhn: {
+    du: [0.01, 1, 0.01],
+    dv: [0, 1, 0.01],
+    ru: [0.01, 0.25, 0.001],
+    rv: [0.001, 1, 0.001],
+    av: [0, 1, 0.01],
+    k: [-1, 1, 0.01],
+    dt: [0.1, 1, 0.1],
+    rest: [-1, 1, 0.0001],
+  },
 };
 
-export const labels: Record<ParameterKey, string> = {
-  feed: "Feed / A の供給",
-  kill: "Kill / B の除去",
-  da: "Da / A の拡散",
-  db: "Db / B の拡散",
-  dt: "dt / 時間刻み",
+export const labels: { [M in Model]: Record<SliderKey<M>, string> } = {
+  "gray-scott": {
+    feed: "Feed / A の供給",
+    kill: "Kill / B の除去",
+    da: "Da / A の拡散",
+    db: "Db / B の拡散",
+    dt: "dt / 時間刻み",
+  },
+  fhn: {
+    du: "Du / u の拡散",
+    dv: "Dv / v の拡散",
+    ru: "ru / u の反応速度",
+    rv: "rv / v の反応速度",
+    av: "av / v の減衰",
+    k: "k / u の偏り",
+    dt: "dt / 時間刻み",
+    rest: "rest / u の安静値",
+  },
 };
 
 export const engines: [Engine, string][] = [

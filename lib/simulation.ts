@@ -6,9 +6,26 @@ export type GrayScottParameters = {
   db: number;
   dt: number;
 };
-export type Parameters = GrayScottParameters;
+/** FitzHugh-Nagumo in the form of numerical definition version 5: u is the
+ * displayed species, rest its resting value, and init selects the initial
+ * condition (0 disks, 1 a broken wave). */
+export type FhnParameters = {
+  model: "fhn";
+  du: number;
+  dv: number;
+  ru: number;
+  rv: number;
+  av: number;
+  k: number;
+  dt: number;
+  rest: number;
+  init: number;
+};
+export type Parameters = GrayScottParameters | FhnParameters;
 export type Model = Parameters["model"];
 export {
+  defaultParametersFor,
+  modelIndex,
   presets,
   presetById,
   presetParameters,

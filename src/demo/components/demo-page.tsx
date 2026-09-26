@@ -125,26 +125,40 @@ export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
               パターン
             </h2>
             <div className={s.row}>
-              {presets.map((preset) => (
-                <button
-                  key={preset.id}
-                  className={s.button}
-                  type="button"
-                  data-preset={preset.id}
-                  onClick={() => demo.choosePreset(preset.id)}
-                >
-                  {preset.name}
-                </button>
-              ))}
+              {presets
+                .filter((preset) => preset.model === options.params.model)
+                .map((preset) => (
+                  <button
+                    key={preset.id}
+                    className={s.button}
+                    type="button"
+                    data-preset={preset.id}
+                    onClick={() => demo.choosePreset(preset.id)}
+                  >
+                    {preset.name}
+                  </button>
+                ))}
             </div>
-            {(Object.keys(bounds) as ParameterKey[]).map((key) => {
-              const [min, max, step] = bounds[key];
+            {(
+              Object.entries(bounds[options.params.model]) as [
+                ParameterKey,
+                [number, number, number],
+              ][]
+            ).map(([key, [min, max, step]]) => {
+              const values = options.params as unknown as Record<
+                ParameterKey,
+                number
+              >;
+              const names = labels[options.params.model] as Record<
+                ParameterKey,
+                string
+              >;
               return (
                 <NumberSlider
                   key={key}
                   name={key}
-                  label={labels[key]}
-                  value={options.params[key]}
+                  label={names[key]}
+                  value={values[key]}
                   min={min}
                   max={max}
                   step={step}

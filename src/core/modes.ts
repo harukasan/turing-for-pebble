@@ -1,4 +1,4 @@
-import type { Parameters } from "../../lib/simulation";
+import type { Model, Parameters } from "../../lib/simulation";
 import type { ClockFont } from "../../lib/clock-fonts";
 
 export type Engine =
@@ -11,8 +11,12 @@ export const engineMode = (engine: Engine) =>
 export const isFloat = (engine: Engine) => engine.startsWith("float");
 export const HALO = 1;
 
-/** The numeric parameters, without the model name. */
-export type ParameterKey = Exclude<keyof Parameters, "model">;
+type KeysOf<P> = P extends Parameters ? Exclude<keyof P, "model"> : never;
+/** The numeric parameters of a model (of every model by default), without
+ * the model name. */
+export type ParameterKey<M extends Model = Model> = KeysOf<
+  Extract<Parameters, { model: M }>
+>;
 
 export const defaultParameters: Parameters = {
   model: "gray-scott",

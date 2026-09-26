@@ -14,7 +14,7 @@
     "lint": "eslint src lib scripts/*.mjs",
     "format": "prettier --write src lib scripts/*.mjs index.html panda.config.ts vite.config.ts postcss.config.cjs eslint.config.mjs docs/web.md",
     "format:check": "prettier --check src lib scripts/*.mjs index.html panda.config.ts vite.config.ts postcss.config.cjs eslint.config.mjs docs/web.md",
-    "test": "node --experimental-transform-types --test lib/simulation.test.ts src/demo/serialization.test.ts",
+    "test": "node --experimental-transform-types --test lib/simulation.test.ts lib/fhn-simulation.test.ts src/demo/serialization.test.ts",
     "typecheck": "panda codegen && tsc --noEmit",
     "build:wasm": "sh scripts/build-wasm.sh",
     "compare:float": "node --experimental-transform-types scripts/compare-float.mjs",

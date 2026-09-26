@@ -72,10 +72,12 @@ export function buildMask(
     api.free(pointer);
   }
 }
-/** Ramp of the mask levels and the kill rate at the mask (RD_MASK_RAMP and
- * RD_MASK_KILL of core/rd.h). */
+/** Ramp of the mask levels, the Gray-Scott kill rate at the mask, and the
+ * FitzHugh-Nagumo pull toward rest at the mask (RD_MASK_RAMP,
+ * RD_MASK_KILL, and RD_MASK_PULL of core/rd.h). */
 export const MASK_RAMP = 5;
 export const MASK_KILL = 2458 / 32768;
+export const MASK_PULL = 4096 / 32768;
 /** Mask levels as rd_mask derives them: 0 in a masked cell, else the
  * chessboard distance to the nearest masked cell without wrapping, capped
  * at MASK_RAMP. */
@@ -187,6 +189,8 @@ export class WasmSimulation {
     return this.api.memory.buffer.byteLength;
   }
   step(p: Parameters, count = 1) {
+    if (p.model !== "gray-scott")
+      throw new Error("The core does not run this model yet");
     if (
       this.api.rd_params(
         this.state,
