@@ -2,9 +2,10 @@
  * Emery watchface: runs the shared core in timer slices and draws the field
  * with a LECO or Bitham clock on top, whose digits the field avoids. The
  * scheduling model is described in docs/behavior.md:
- *   - startup advances STARTUP_STEPS steps in consecutive slices of at most
+ *   - startup runs steps for STARTUP_MS after launch (at most
+ *     STARTUP_STEPS_MAX of them) in consecutive slices of at most
  *     STARTUP_SLICE_BUDGET_MS, rescheduled SCHEDULE_NOW_MS apart, with the
- *     screen redrawn at most every WORK_FRAME_INTERVAL_MS,
+ *     screen redrawn about every WORK_FRAME_INTERVAL_MS,
  *   - every minute rebuilds the digit mask and raises the pending steps to
  *     RD_MINUTE_STEPS (adds them without avoidance), run the same way,
  *   - a backlight-on event animates for at most BACKLIGHT_WINDOW_MS, at most
@@ -18,7 +19,8 @@
 #include "config.h"
 #include <pebble.h>
 
-#define STARTUP_STEPS RD_STARTUP_STEPS
+#define STARTUP_MS RD_STARTUP_MS
+#define STARTUP_STEPS_MAX RD_STARTUP_STEPS_MAX
 #define STEPS_PER_SLICE 8
 #define SLICE_BUDGET_MS 8
 #define STARTUP_SLICE_BUDGET_MS 30
@@ -46,7 +48,13 @@ static void *allocation, *state;
 static uint8_t *clock_mask;
 static bool focused = true, lit;
 static bool timing_unreliable;
-static int pending = STARTUP_STEPS;
+/* Steps owed to minute changes and, while startup_active, the startup
+ * itself, which ends at its deadline or step cap. A minute change during
+ * the startup is covered by the startup steps, except for the RD_MINUTE_STEPS
+ * it is still owed at the deadline. */
+static int pending;
+static bool startup_active = true, tick_in_startup;
+static uint32_t startup_steps, steps_since_tick;
 static size_t min_heap = (size_t)-1;
 static uint32_t max_compute, max_draw, max_step;
 /* When the screen was last marked dirty, and whether it ever was. */
@@ -109,7 +117,7 @@ static uint32_t calibrate(void) {
 /* Display limit study: mark the layer dirty as often as the OS allows for
  * FRAME_BENCH_MS with the normal draw (phase 1), then with an empty draw
  * (phase 2), and log the frames and the draw time of each phase. Built
- * with RD_STARTUP_STEPS=0 so that no compute competes. */
+ * with RD_STARTUP_MS=0 so that no compute competes. */
 #define FRAME_BENCH_MS 5000
 static int frame_phase;
 static uint32_t frame_count, frame_phase_start, frame_phase_count,
@@ -327,7 +335,7 @@ static void update(void *context) {
     return;
   }
   uint32_t start = now_ms();
-  bool working = pending > 0;
+  bool working = startup_active || pending > 0;
   if (working && slice_seen) {
     /* A backwards clock is a clock fault, a long gap an interruption. */
     int32_t gap = since_ms(last_slice_end_ms);
@@ -341,7 +349,10 @@ static void update(void *context) {
   }
   bool animate = lit;
   uint32_t budget = working ? STARTUP_SLICE_BUDGET_MS : SLICE_BUDGET_MS;
-  int target = working ? pending : animate ? STEPS_PER_SLICE : 0;
+  int target = startup_active ? (int)(STARTUP_STEPS_MAX - startup_steps)
+               : working      ? pending
+               : animate      ? STEPS_PER_SLICE
+                              : 0;
   int done = 0;
   while (done < target) {
     uint32_t step_start = now_ms();
@@ -355,9 +366,20 @@ static void update(void *context) {
       break;
     }
   }
-  if (working) {
+  if (startup_active) {
+    startup_steps += (uint32_t)done;
+    steps_since_tick += (uint32_t)done;
+    if (since_ms(startup_start_ms) >= (int32_t)STARTUP_MS ||
+        startup_steps >= STARTUP_STEPS_MAX) {
+      startup_active = false;
+      pending = tick_in_startup && steps_since_tick < RD_MINUTE_STEPS
+                    ? (int)(RD_MINUTE_STEPS - steps_since_tick)
+                    : 0;
+    }
+  } else if (working) {
     pending -= done;
   }
+  bool remaining = startup_active || pending > 0;
   uint32_t elapsed = elapsed_ms(start);
   if (elapsed > max_compute) {
     max_compute = elapsed;
@@ -375,14 +397,14 @@ static void update(void *context) {
     int32_t interval = working
                            ? WORK_FRAME_INTERVAL_MS - STARTUP_SLICE_BUDGET_MS
                            : FRAME_INTERVAL_MS;
-    if (!marked || pending == 0 || since < 0 || since >= interval) {
+    if (!marked || !remaining || since < 0 || since >= interval) {
       layer_mark_dirty(layer);
       last_mark_ms = now_ms();
       marked = true;
     }
   }
   sample_heap();
-  if (pending > 0) {
+  if (remaining) {
     last_slice_end_ms = now_ms();
     slice_seen = true;
     schedule(SCHEDULE_NOW_MS);
@@ -390,7 +412,7 @@ static void update(void *context) {
     schedule(FRAME_INTERVAL_MS);
   }
 #if RD_LOG
-  if (pending == 0 && !startup_logged) {
+  if (!remaining && !startup_logged) {
     startup_logged = true;
     log_summary();
   } else if (rd_steps(state) >= next_log_step) {
@@ -430,7 +452,7 @@ static void light_expired(void *context) {
 static void backlight(bool on) {
   if (!on) {
     stop();
-    if (pending) {
+    if (pending || startup_active) {
       schedule(SCHEDULE_NOW_MS);
     }
     return;
@@ -438,7 +460,7 @@ static void backlight(bool on) {
   if (!lit && focused) {
     lit = true;
     light_timer = app_timer_register(BACKLIGHT_WINDOW_MS, light_expired, NULL);
-    schedule(pending ? SCHEDULE_NOW_MS : FRAME_INTERVAL_MS);
+    schedule(pending || startup_active ? SCHEDULE_NOW_MS : FRAME_INTERVAL_MS);
   }
 }
 
@@ -446,12 +468,12 @@ static void focus(bool on) {
   focused = on;
   if (!on) {
     stop();
-    if (pending > 0 && !startup_logged) {
+    if (startup_active) {
       interrupted = true;
     }
   } else {
     layer_mark_dirty(layer);
-    if (pending) {
+    if (pending || startup_active) {
       schedule(SCHEDULE_NOW_MS);
     }
   }
@@ -487,7 +509,11 @@ static void tick(struct tm *tick_time, TimeUnits units_changed) {
   clock_time = *tick_time;
   rebuild_mask();
 #ifndef RD_FRAME_BENCH
-  if (RD_AVOID) {
+  if (startup_active) {
+    /* The startup steps refill the digits; the deadline settles the rest. */
+    tick_in_startup = true;
+    steps_since_tick = 0;
+  } else if (RD_AVOID) {
     if (pending < RD_MINUTE_STEPS) {
       pending = RD_MINUTE_STEPS;
     }
@@ -559,8 +585,6 @@ static void init(void) {
           "RD init mode=%d font=%d core_bytes=%lu heap_min=%lu mask_ms=%lu",
           RD_MODE, RD_FONT, (unsigned long)rd_bytes(RD_MODE),
           (unsigned long)min_heap, (unsigned long)mask_ms);
-#else
-  (void)startup_start_ms;
 #endif
   schedule(SCHEDULE_NOW_MS);
 }

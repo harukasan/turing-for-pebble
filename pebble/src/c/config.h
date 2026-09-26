@@ -23,10 +23,13 @@
 #define RD_LOG 0
 #endif
 #endif
-/* Steps run at startup before the face settles to minute updates. */
-#ifndef RD_STARTUP_STEPS
-#define RD_STARTUP_STEPS 1250
+/* The startup animation runs for RD_STARTUP_MS after launch, or until
+ * RD_STARTUP_STEPS_MAX steps, about 45 s at the measured 55 steps per
+ * second, whichever comes first. */
+#ifndef RD_STARTUP_MS
+#define RD_STARTUP_MS 30000
 #endif
+#define RD_STARTUP_STEPS_MAX 2500
 /* Clock font set: 0 LECO, 1 Bitham (CM_FONT_* in core/clock_mask.h). */
 #ifndef RD_FONT
 #define RD_FONT 0

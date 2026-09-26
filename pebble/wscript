@@ -46,7 +46,7 @@ def build(ctx):
         if os.environ.get('RD_BUILD_RENDER'):
             cflags.append('-DRD_RENDER_FLAGS=' + os.environ['RD_BUILD_RENDER'])
         # RD_BUILD_DEFINES adds space-separated defines for study builds,
-        # for example RD_MASK_PACKED3 or RD_STARTUP_STEPS=1000.
+        # for example RD_STARTUP_MS=20000.
         cflags += ['-D' + d for d in os.environ.get('RD_BUILD_DEFINES', '').split()]
         # RD_BUILD_LOG=1 keeps the diagnostic logs of a measurement build.
         if os.environ.get('RD_BUILD_LOG') == '1':
