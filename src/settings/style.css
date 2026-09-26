@@ -32,9 +32,21 @@
   display: none !important;
 }
 
-/* The page background also covers what the web view shows when the page
- * bounces past its ends. */
-html {
+/* The Pebble app's web view shows black past the ends of a bouncing page,
+ * whatever the page background. So the document stays still and the page
+ * scrolls, and bounces, inside .scroll, over that element's background. */
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--bg);
+}
+
+.scroll {
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: var(--bg);
 }
 
