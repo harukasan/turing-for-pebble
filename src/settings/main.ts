@@ -14,7 +14,7 @@ import {
 } from "../../lib/palettes.ts";
 import { presets, type Parameters } from "../../lib/simulation.ts";
 import { parameterBounds } from "../core/modes.ts";
-import { PREVIEW_STEPS, PreviewView } from "./preview.ts";
+import { PREVIEW_SPEED, PreviewView } from "./preview.ts";
 import {
   customStops,
   fromFileJson,
@@ -222,8 +222,9 @@ function customPicker(
 const progress = element<HTMLParagraphElement>("progress");
 let view: PreviewView | null = null;
 try {
-  view = new PreviewView(element("preview"), (steps) => {
-    progress.textContent = `ステップ ${steps} / ${PREVIEW_STEPS}`;
+  // The caption replaces the loading message once the preview draws.
+  view = new PreviewView(element("preview"), () => {
+    progress.textContent = `プレビュー（${PREVIEW_SPEED}倍速）`;
   });
 } catch {
   progress.textContent = "この環境ではプレビューを表示できません";
