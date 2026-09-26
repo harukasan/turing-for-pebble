@@ -1,4 +1,4 @@
-# Turing Pattern Face for Pebble
+# Turing Pattern Watchface for Pebble
 
 A local Gray–Scott pattern explorer and Emery watchface sharing one fixed-point C core.
 

@@ -3,6 +3,7 @@
 #
 # Feel free to customize this to your needs.
 #
+import json
 import os.path
 import os
 
@@ -26,6 +27,15 @@ def configure(ctx):
 
 def build(ctx):
     ctx.load('pebble_sdk')
+
+    # The SDK copies displayName into both names of the bundle. The watch
+    # menu shows shortName, so pebble.shortName in package.json replaces it.
+    with open(os.path.join(ctx.path.abspath(), 'package.json')) as f:
+        short_name = json.load(f)['pebble'].get('shortName')
+    if short_name:
+        for env in [ctx.env] + list(ctx.all_envs.values()):
+            if env.PROJECT_INFO:
+                env.PROJECT_INFO['shortName'] = short_name
 
     build_worker = os.path.exists('worker_src')
     binaries = []

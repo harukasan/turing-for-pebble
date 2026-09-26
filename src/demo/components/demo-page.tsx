@@ -33,7 +33,7 @@ export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
   return (
     <main className={s.page}>
       <header>
-        <h1 className={s.title}>Turing Pattern Face for Pebble</h1>
+        <h1 className={s.title}>Turing Pattern Watchface for Pebble</h1>
       </header>
       <div className={s.layout}>
         <div>

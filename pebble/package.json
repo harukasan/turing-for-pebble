@@ -1,10 +1,11 @@
 {
-  "name": "turing-pattern-face",
+  "name": "turing-pattern-watchface",
   "version": "1.0.0",
   "private": true,
   "license": "MIT",
   "pebble": {
-    "displayName": "Turing Pattern Face for Pebble",
+    "displayName": "Turing Pattern Watchface for Pebble",
+    "shortName": "Turing",
     "uuid": "c9f7a341-6a8f-4adf-b23a-05bc21712021",
     "sdkVersion": "3",
     "targetPlatforms": [
