@@ -44,8 +44,8 @@ export const SETTING_MAX: WatchSettings = {
 export const DEFAULT_SETTINGS: WatchSettings = {
   feed: 950,
   kill: 1868,
-  da: 32768,
-  db: 16384,
+  da: 22938,
+  db: 11469,
   dt: 32768,
   palette: 0,
   low: 0x001e12,
@@ -111,6 +111,22 @@ export const toJson = (settings: WatchSettings) =>
   );
 
 export const q15 = (value: number) => Math.round(value * Q15);
+
+/** Stripe widths: Da and Db in the ratio 2:1. Smaller rates draw thinner
+ * stripes and spread more slowly. At 細い the presets cover about as much
+ * of the face within the watch's 30 s startup as at 太い, and below about
+ * 0.6 the coral preset leaves empty areas. */
+export const DIFFUSION_PRESETS = [
+  { name: "太い", da: 1, db: 0.5 },
+  { name: "やや細い", da: 0.8, db: 0.4 },
+  { name: "細い", da: 0.7, db: 0.35 },
+];
+
+/** The index of the stripe width with the settings' Da and Db, or -1. */
+export const diffusionPresetOf = (settings: WatchSettings) =>
+  DIFFUSION_PRESETS.findIndex(
+    (p) => q15(p.da) === settings.da && q15(p.db) === settings.db
+  );
 
 /** The index of the preset with the settings' feed and kill, or -1. */
 export const presetOf = (settings: WatchSettings) =>

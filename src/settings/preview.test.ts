@@ -33,6 +33,8 @@ function golden(font?: number) {
 }
 
 const date = new Date(2046, 7, 29, 13, 57);
+/** The golden hashes use the core's default coefficients, Da 1 and Db 0.5. */
+const base = { ...DEFAULT_SETTINGS, da: 32768, db: 16384 };
 const run = (settings: WatchSettings) => {
   const field = new PreviewField(core);
   field.start(settings, date);
@@ -43,10 +45,10 @@ const run = (settings: WatchSettings) => {
 test("the preview runs the watch's field", () => {
   assert.equal(PREVIEW_MODE, 3);
   assert.equal(PREVIEW_SEED, 42);
-  assert.equal(run(DEFAULT_SETTINGS).hash(), golden(0));
-  assert.equal(run({ ...DEFAULT_SETTINGS, font: 1 }).hash(), golden(1));
-  assert.equal(run({ ...DEFAULT_SETTINGS, clock: 0 }).hash(), golden());
-  assert.equal(run({ ...DEFAULT_SETTINGS, avoid: 0 }).hash(), golden());
+  assert.equal(run(base).hash(), golden(0));
+  assert.equal(run({ ...base, font: 1 }).hash(), golden(1));
+  assert.equal(run({ ...base, clock: 0 }).hash(), golden());
+  assert.equal(run({ ...base, avoid: 0 }).hash(), golden());
 });
 
 test("recoloring keeps the field and custom stops draw like the palette", () => {
@@ -55,19 +57,19 @@ test("recoloring keeps the field and custom stops draw like the palette", () => 
     field.render(pixels);
     return pixels.data;
   };
-  const field = run(DEFAULT_SETTINGS);
+  const field = run(base);
   const lime = draw(field);
-  field.recolor({ ...DEFAULT_SETTINGS, palette: PALETTE_CUSTOM });
+  field.recolor({ ...base, palette: PALETTE_CUSTOM });
   assert.equal(field.hash(), golden(0));
   assert.deepEqual(draw(field), lime);
   field.recolor({
-    ...DEFAULT_SETTINGS,
+    ...base,
     palette: PALETTE_CUSTOM,
     low: 0x00002d,
     high: 0x55ffff,
   });
   const custom = draw(field);
-  field.recolor({ ...DEFAULT_SETTINGS, palette: 1 });
+  field.recolor({ ...base, palette: 1 });
   assert.deepEqual(custom, draw(field));
   assert.notDeepEqual(custom, lime);
 });

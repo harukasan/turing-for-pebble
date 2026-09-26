@@ -10,6 +10,8 @@ import {
   initialSettings,
   PEBBLE_COLORS,
   presetOf,
+  DIFFUSION_PRESETS,
+  diffusionPresetOf,
   q15,
   SETTING_KEYS,
   SETTING_MAX,
@@ -37,6 +39,7 @@ test("the settings follow the watch's message keys and defaults", () => {
   }
   assert.equal(SETTING_MAX.palette, PALETTE_COUNT - 1);
   assert.equal(presetOf(DEFAULT_SETTINGS), 0);
+  assert.equal(diffusionPresetOf(DEFAULT_SETTINGS), 2);
 });
 
 test("validation accepts integers up to each maximum and nothing else", () => {
@@ -92,6 +95,16 @@ test("presets are found by their Q15 feed and kill", () => {
     )
   );
   assert.equal(presetOf({ ...DEFAULT_SETTINGS, feed: 951 }), -1);
+});
+
+test("stripe widths are found by their Q15 Da and Db", () => {
+  DIFFUSION_PRESETS.forEach((p, i) =>
+    assert.equal(
+      diffusionPresetOf({ ...DEFAULT_SETTINGS, da: q15(p.da), db: q15(p.db) }),
+      i
+    )
+  );
+  assert.equal(diffusionPresetOf({ ...DEFAULT_SETTINGS, da: 32767 }), -1);
 });
 
 test("the color picker offers the 64 watch colors", () => {

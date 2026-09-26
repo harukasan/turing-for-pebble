@@ -17,6 +17,8 @@ import { parameterBounds } from "../core/modes.ts";
 import { PREVIEW_STEPS, PreviewView } from "./preview.ts";
 import {
   customStops,
+  DIFFUSION_PRESETS,
+  diffusionPresetOf,
   initialSettings,
   PEBBLE_COLORS,
   presetOf,
@@ -177,6 +179,18 @@ const setPreset = chips(
     changed("field");
   }
 );
+const setDiffusion = chips(
+  element("diffusion-presets"),
+  "diffusion",
+  [...DIFFUSION_PRESETS.map((p) => p.name), "カスタム"],
+  (index) => {
+    if (index < DIFFUSION_PRESETS.length) {
+      settings.da = q15(DIFFUSION_PRESETS[index].da);
+      settings.db = q15(DIFFUSION_PRESETS[index].db);
+    }
+    changed("field");
+  }
+);
 const patternSliders = element("pattern-sliders");
 const diffusionSliders = element("diffusion-sliders");
 const sliders = [
@@ -252,6 +266,8 @@ avoid.addEventListener("change", () => {
 function update() {
   const preset = presetOf(settings);
   setPreset(preset < 0 ? presets.length : preset);
+  const diffusion = diffusionPresetOf(settings);
+  setDiffusion(diffusion < 0 ? DIFFUSION_PRESETS.length : diffusion);
   sliders.forEach((show) => show());
   paletteInputs.forEach(
     (input, index) => (input.checked = index === settings.palette)

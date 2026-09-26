@@ -47,7 +47,12 @@ const defines = (text: string) =>
   );
 
 test("config.h defines what pebble/src/c/config.h defines, with its defaults", () => {
-  const header = defines(makeHeader(input));
+  const header = defines(
+    makeHeader({
+      ...input,
+      params: { ...input.params, da: 0.7, db: 0.35 },
+    })
+  );
   const watch = defines(
     readFileSync(
       new URL("../../pebble/src/c/config.h", import.meta.url),
