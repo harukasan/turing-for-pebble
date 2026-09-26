@@ -1,5 +1,5 @@
 {
-  "description": "The measurement of the production watch build on the physical Pebble Time 2, taken from the four RD startup lines and the RD light line of a build made with RD_BUILD_LOG=1 and installed with PEBBLE_PHONE=<ip> npm run device. One entry per measured mode; scripts/build-report.py copies each into public/reports/comparison.json.",
+  "description": "The measurement of the production watch build on the physical Pebble Time 2, taken from the four RD startup lines and the RD light line of a build made with RD_BUILD_LOG=1 and installed with PEBBLE_PHONE=<ip> pnpm run device. One entry per measured mode; scripts/build-report.py copies each into public/reports/comparison.json.",
   "fields": {
     "commit": "git commit of the measured build",
     "mode": "0, 1, or 3",

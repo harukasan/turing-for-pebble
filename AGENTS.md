@@ -27,7 +27,7 @@ This repository is a local Gray–Scott reaction-diffusion experiment for Pebble
 
 The Web offers 200 × 228 packed 16-bit Wasm (A 7-bit, B 9-bit), 120 × 136 Q15 Wasm (mode 3, the watch build, shown with interpolated rendering), 100 × 114 Q15 Wasm, and Float32 at each of these grid sizes. Mode 2 in the C core is a diagnostic 100 × 114 configuration with the packed cells of mode 0. Mode switching resets to the same seed. The Float32 implementation is a reference, not a Pebble build. The `細線` preset is intended to expose narrow-band differences. See [docs/behavior.md](docs/behavior.md) and [docs/float-precision.md](docs/float-precision.md).
 
-The standalone Web demo uses React, Vite, and Panda CSS. `panda.config.ts` was copied from harukasan-dev for the standalone build. pnpm 10.33.0 is pinned in `mise.toml` and `package.json`. Regenerate the ignored `styled-system/` directory with `pnpm run typecheck` or `pnpm run build`. The reusable Web API and demo boundary are in [docs/web.md](docs/web.md). Web TypeScript, JavaScript, CSS, and Markdown use harukasan-dev's Prettier style. C, Python, and shell keep their existing formatters.
+The standalone Web demo uses React, Vite, and Panda CSS. pnpm 10.33.0 is pinned in `mise.toml` and `package.json`. Regenerate the ignored `styled-system/` directory with `pnpm run typecheck` or `pnpm run build`. The reusable Web API and demo boundary are in [docs/web.md](docs/web.md). Web TypeScript, JavaScript, CSS, and Markdown are formatted with Prettier. C, Python, and shell keep their existing formatters.
 
 ## Environment and checks
 

@@ -39,10 +39,6 @@ Timing uses the public `time_ms` API. The emulator's wall-clock seconds and tick
 
 ## Memory reporting
 
-The Web UI displays a memory summary for the selected simulation mode. Detailed build and validation measurements remain in [Validation](validation.md) and `public/reports/`. Memory accounting distinguishes these categories:
-
-1. Core allocation, obtained directly from C for Wasm modes, including fields, scratch rows, control data, the rendering rows and tables, alignment, and the digit mask levels (`memory[0]` to `memory[5]`, with the total and the Wasm linear memory after them). Float32 instead reports four JavaScript concentration arrays. The watch's clock mask bitmap is a separate allocation outside the core.
-2. Pebble ELF code and static data, core dynamic allocation, and the newest physical measurement of the mode (startup, steps per second, minimum free heap). Runtime minimum free heap already includes allocations and must not be added to an estimate of remaining heap.
-3. Web linear-memory allocation when Wasm is selected and known pixel buffers for both implementations. Core memory is contained inside linear memory. Canvas pixel-equivalent bytes are not a measurement of browser process memory or GPU allocations.
+The Web UI shows one memory figure for the selected implementation: the total core allocation reported by the C core for the Wasm modes (fields, scratch rows, control data, the rendering rows and tables, alignment, and the digit mask levels), or the four JavaScript concentration arrays for Float32. The watch's clock mask bitmap is a separate allocation outside the core. Build sizes, compiler stack reports, and the physical measurement of the watch (startup, steps per second, minimum free heap) are in [Validation](validation.md) and `public/reports/comparison.json`. Runtime minimum free heap already includes allocations and must not be added to an estimate of remaining heap.
 
 The acceptance thresholds are a 128 KiB app region and at least 16 KiB minimum free heap during normal operation. Compiler stack reports describe application functions. OS and library stack contributions are additional. Mode 3 is the watch build.
