@@ -6,7 +6,7 @@ This repository is a local Gray–Scott reaction-diffusion experiment for Pebble
 
 - Do not push commits or create, edit, comment on, or merge pull requests without the user's explicit approval for that specific action. Local commits are allowed when the user requests them. Do not add a `Codex-Session:` commit trailer. Keep `Co-Authored-By` only when co-authoring a commit.
 - Do not use semicolons in English or Japanese prose. Semicolons in code are fine.
-- Preserve the local-only scope. Do not deploy the Web demo unless the user explicitly changes that scope.
+- Preserve the local-only scope. The watch settings page is embedded in the phone script and needs no hosting. Do not deploy the Web demo or host the settings page unless the user explicitly changes that scope.
 - Before changing generated files, identify their source and regeneration command. Keep reports tied to the exact build and observation that produced them.
 - Do not treat emulator timing or heap observations as physical-device acceptance evidence. The measured acceptance status is in [docs/validation.md](docs/validation.md).
 
@@ -23,13 +23,15 @@ This repository is a local Gray–Scott reaction-diffusion experiment for Pebble
 | `licenses/`                                    | Origins and licenses of third-party palette data          |
 | `src/core/`                                    | Reusable Canvas, Wasm, and playback API                   |
 | `src/demo/`                                    | React demo UI, Panda styles, and downloads                |
+| `src/settings/`                                | Watch settings page with the Wasm preview                 |
+| `pebble/src/pkjs/`                             | Phone script, generated with the embedded page            |
 | `tests/`, `scripts/`                           | Core, adapter, numerical comparison, and build checks     |
 | `public/reports/`                              | Generated images and build or emulator measurements       |
 | `docs/`                                        | Detailed design, setup, validation, and numerical results |
 
 The Web offers 200 × 228 packed 16-bit Wasm (A 7-bit, B 9-bit), 120 × 136 Q15 Wasm (mode 3, the watch build, shown with interpolated rendering), 100 × 114 Q15 Wasm, and Float32 at each of these grid sizes. Mode 2 in the C core is a diagnostic 100 × 114 configuration with the packed cells of mode 0. Mode switching resets to the same seed. The Float32 implementation is a reference, not a Pebble build. The `細線` preset is intended to expose narrow-band differences. See [docs/behavior.md](docs/behavior.md) and [docs/float-precision.md](docs/float-precision.md).
 
-The standalone Web demo uses React, Vite, and Panda CSS. pnpm 10.33.0 is pinned in `mise.toml` and `package.json`. Regenerate the ignored `styled-system/` directory with `pnpm run typecheck` or `pnpm run build`. The reusable Web API and demo boundary are in [docs/web.md](docs/web.md). Web TypeScript, JavaScript, CSS, and Markdown are formatted with Prettier. C, Python, and shell keep their existing formatters.
+The standalone Web demo uses React, Vite, and Panda CSS. pnpm 10.33.0 is pinned in `mise.toml` and `package.json`. Regenerate the ignored `styled-system/` directory with `pnpm run typecheck` or `pnpm run build`. The reusable Web API, the demo, and the settings page are in [docs/web.md](docs/web.md), and the watch settings in [docs/behavior.md](docs/behavior.md#watch-settings). `pnpm run build:settings` builds the settings page and the phone script, and `mise run build-pebble` and `mise run test-core` run it. Web TypeScript, JavaScript, CSS, and Markdown are formatted with Prettier. C, Python, and shell keep their existing formatters.
 
 ## Environment and checks
 
