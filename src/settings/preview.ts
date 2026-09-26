@@ -16,6 +16,10 @@ export const PREVIEW_MODE = 3;
 export const PREVIEW_SEED = 42;
 /** About the steps of the 30 s startup on the watch (docs/behavior.md). */
 export const PREVIEW_STEPS = 1650;
+/** The preview runs at this multiple of the watch's startup pace, so the
+ * startup takes 30 s / PREVIEW_SPEED. */
+export const PREVIEW_SPEED = 2;
+const WATCH_STARTUP_MS = 30000;
 /** Compute time per animation frame, the watch's slice budget. */
 const SLICE_MS = 30;
 
@@ -72,12 +76,13 @@ export class PreviewField {
   }
 }
 
-/** The preview on a 200 × 228 canvas, stepped within SLICE_MS per frame up
- * to PREVIEW_STEPS. */
+/** The preview on a 200 × 228 canvas, stepped at PREVIEW_SPEED times the
+ * watch's startup pace, within SLICE_MS per frame, up to PREVIEW_STEPS. */
 export class PreviewView {
   private field: PreviewField | null = null;
   private settings: WatchSettings | null = null;
   private frame = 0;
+  private started = 0;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly pixels: ImageData;
 
@@ -102,6 +107,7 @@ export class PreviewView {
     cancelAnimationFrame(this.frame);
     this.settings = settings;
     this.field.start(settings, new Date());
+    this.started = performance.now();
     this.frame = requestAnimationFrame(this.tick);
   }
 
@@ -117,7 +123,14 @@ export class PreviewView {
     const field = this.field;
     if (!field) return;
     const start = performance.now();
-    while (field.steps < PREVIEW_STEPS && performance.now() - start < SLICE_MS)
+    const due = Math.min(
+      PREVIEW_STEPS,
+      Math.floor(
+        ((start - this.started) * PREVIEW_SPEED * PREVIEW_STEPS) /
+          WATCH_STARTUP_MS
+      )
+    );
+    while (field.steps < due && performance.now() - start < SLICE_MS)
       field.step(1);
     this.paint();
     if (field.steps < PREVIEW_STEPS)
