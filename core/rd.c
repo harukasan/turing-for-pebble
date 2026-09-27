@@ -1114,7 +1114,8 @@ static inline void react_codes(unsigned a, unsigned b, int32_t sum_a,
  * u^2, u^3, and av v are floored to Q13 by arithmetic shifts. A Q15
  * coefficient times a Q13 value is the Q30 rate of the stored fraction
  * (x + 2) / 4, the 1/4 of the storage being the step from Q15 to Q13. With
- * |x| <= 2, ru <= RD_FHN_RU_MAX, and pull <= 8192 both rates fit int32
+ * |x| <= 2, ru <= RD_FHN_RU_MAX, and pull <= RD_MASK_PULL (4096) both
+ * rates fit int32, and the bound holds for a pull up to 8192
  * (docs/core.md has the bounds). The new values are formed as in
  * react_codes. */
 static inline void react_fhn_codes(unsigned v, unsigned u, int32_t sum_v,
@@ -1279,10 +1280,12 @@ static inline unsigned encode_cell(int packed, int species,
   return code;
 }
 
-/* B in a masked cell: held at code 0, which the caller stores, so the cell
- * has no rounding error of its own. The shares it received from the row
- * above and from the cell to its left are dropped, and the below-right
- * share of the cell to its left passes through to the row below. */
+/* The displayed species in a masked cell: held at the model's resting code,
+ * B = 0 for Gray-Scott and u = rest for FitzHugh-Nagumo (masked_code),
+ * which the caller stores, so the cell has no rounding error of its own. The
+ * shares it received from the row above and from the cell to its left are
+ * dropped, and the below-right share of the cell to its left passes through to
+ * the row below. */
 static inline void encode_masked(int32_t *restrict residual, Shares *shares,
                                  int x) {
   if (x > 0) {
