@@ -190,10 +190,8 @@ The patterns scale with the diffusion rates, so some values of the literature be
 - **Worms.** `worms` is the first example of Pearson's type μ, stripes that grow from each end among inert spots. It grows slowly, so it has the lowest fill at 1,650 steps. The second μ example (0.058, 0.065) grows longer worms but fills only about 0.3 of the blocks at 1,650 steps. pmneila's Worms (0.078, 0.061) and every candidate from feed 0.07 at kill 0.057 to 0.062 lost every seed disk within 300 steps.
 - **Moving spots.** `moving-spots` is the second example of Pearson's type ε, spots that crowd each other out, die, and split. It fills the face and still changes 7% to 14% of the display pixels every 20 steps at 10,000 steps. pmneila's Moving spots (0.014, 0.054) keeps moving but fills only 0.67 to 0.80 of the blocks at 10,000 steps.
 - **Chaos.** Chaos (0.026, 0.051), Chaos and holes (0.034, 0.056), Spots and loops (0.018, 0.051), and Waves (0.014, 0.045) either spread into flat saturated areas or keep large empty areas, and were not kept.
-- **Duplicates.** Solitons (0.03, 0.062), Pulsating solitons (0.025, 0.06), and the former `spots` (0.035, 0.065) give spot arrays like `mitosis`, and so does Pearson's type η (0.034, 0.063), a mixture of spots and worms whose worms break up into spots on this grid. The Default of pmneila (0.037, 0.06) gives a labyrinth like `maze`, and 0.058 and 0.062 looks like `coral`.
+- **Duplicates.** Solitons (0.03, 0.062) and Pulsating solitons (0.025, 0.06) give spot arrays like `mitosis`, and so does Pearson's type η (0.034, 0.063), a mixture of spots and worms whose worms break up into spots on this grid. The Default of pmneila (0.037, 0.06) gives a labyrinth like `maze`, and 0.058 and 0.062 looks like `coral`.
 - **Narrow diffusion.** At Da 0.16 and Db 0.08, the rates of some Web demos with finer grids, `mitosis`, `coral`, and `cells` freeze into grid-aligned squares on this grid.
-
-The former `thin-line` preset (0.023, 0.052), added to expose narrow-band differences, was removed. Its numbers stay in `scripts/compare-float.mjs` as a numerical reference case with `spots` ([Float32 precision comparison](float-precision.md)).
 
 ## Second model
 
