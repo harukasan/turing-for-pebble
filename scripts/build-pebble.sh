@@ -13,11 +13,14 @@
 # first, and RD_BUILD_CONFIG_URL makes the phone open a hosted copy of the
 # page instead of the embedded one. The load size of each ELF (text + data +
 # bss, which all live in the 128 KiB app region next to the core allocation)
-# must stay within LOAD_LIMIT bytes. A measurement build with RD_BUILD_LOG=1
-# carries about 3 KB of logs and may raise the limit with
-# RD_BUILD_LOAD_LIMIT. Production builds keep the default.
+# must stay within LOAD_LIMIT bytes, provisionally 22 KiB: with both models
+# and both faces mode 3 loads about 21.3 KB, past the earlier 20,480 B, and
+# the minimum free heap on the watch decides whether that holds
+# (docs/validation.md). A measurement build with RD_BUILD_LOG=1 carries
+# about 3.4 KB of logs and may raise the limit with RD_BUILD_LOAD_LIMIT.
+# Production builds keep the default.
 set -eu
-LOAD_LIMIT=${RD_BUILD_LOAD_LIMIT:-20480}
+LOAD_LIMIT=${RD_BUILD_LOAD_LIMIT:-22528}
 size_tool=$(command -v arm-none-eabi-size || true)
 if [ -z "$size_tool" ]; then
   size_tool=.local/share/pebble-sdk/SDKs/4.33.1/toolchain/arm-none-eabi/bin/arm-none-eabi-size
