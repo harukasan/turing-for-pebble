@@ -353,6 +353,23 @@ legend {
 }
 
 /* iOS-style switches in the Pebble app's orange. */
+/* A labeled row of chips in the clock section: the label on the left and
+ * the chips on the right, spaced like the switches below. */
+.choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.choice + .choice {
+  margin-top: 12px;
+}
+
+.choice .chips {
+  justify-content: flex-end;
+}
+
 .switch {
   display: flex;
   align-items: center;
