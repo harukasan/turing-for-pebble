@@ -515,15 +515,23 @@ static uint8_t *mask_levels(State *state) {
   return (uint8_t *)(interpolation_row(state) + state->width);
 }
 
-/* Mask updates run at launch and on clock changes, outside the step loop,
- * so optimizing GCC builds, the watch builds among them, compile them for
- * size. -O0 builds keep them unoptimized as the reference of
- * scripts/check-optimization.sh, and clang ignores the GCC attribute. */
+/* Code that runs only at initialization, on new parameters, and on clock
+ * changes, outside the step loop: optimizing GCC builds, the watch builds
+ * among them, compile it for size, and the parameter check is kept as one
+ * copy instead of inlined into each caller. -O0 builds keep it unoptimized
+ * as the reference of scripts/check-optimization.sh, and clang ignores the
+ * GCC attributes. */
 #if defined(__OPTIMIZE__) && defined(__GNUC__) && !defined(__clang__)
-#define MASK_SIZE_OPT __attribute__((optimize("Os")))
+#define SIZE_OPT __attribute__((optimize("Os")))
+#define NOINLINE __attribute__((noinline))
 #else
-#define MASK_SIZE_OPT
+#define SIZE_OPT
+#define NOINLINE
 #endif
+
+/* Mask updates run at launch and on clock changes, outside the step loop,
+ * so they are compiled for size (SIZE_OPT). */
+#define MASK_SIZE_OPT SIZE_OPT
 
 /* Horizontal distance of every cell of grid row r to the nearest masked
  * cell of that row, capped at RD_MASK_RAMP; RD_MASK_RAMP outside the grid.
@@ -753,7 +761,8 @@ static State *checked_state(void *handle) {
 
 /* Whether values is a valid parameter vector of the model: count entries,
  * each within the range of its parameter (core/rd.h). */
-static int params_valid(int model, const int *values, int count) {
+static SIZE_OPT NOINLINE int params_valid(int model, const int *values,
+                                          int count) {
   if (!values || !model_supported(model) || count != PARAM_COUNT[model]) {
     return 0;
   }
@@ -775,7 +784,7 @@ static int params_valid(int model, const int *values, int count) {
   return 1;
 }
 
-int rd_set_params(void *handle, const int *values, int count) {
+SIZE_OPT int rd_set_params(void *handle, const int *values, int count) {
   State *state = checked_state(handle);
   if (!state || !params_valid(state_model(state), values, count)) {
     return -1;
@@ -784,7 +793,8 @@ int rd_set_params(void *handle, const int *values, int count) {
   return 0;
 }
 
-int rd_params(void *handle, int feed, int kill, int da, int db, int dt) {
+SIZE_OPT int rd_params(void *handle, int feed, int kill, int da, int db,
+                       int dt) {
   State *state = checked_state(handle);
   if (!state || state_model(state) != RD_MODEL_GRAY_SCOTT) {
     return -1;
@@ -798,11 +808,11 @@ int rd_model(void *handle) {
   return state ? state_model(state) : -1;
 }
 
-int rd_param_count(int model) {
+SIZE_OPT int rd_param_count(int model) {
   return model >= 0 && model < RD_MODEL_COUNT ? PARAM_COUNT[model] : -1;
 }
 
-int rd_check_params(int model, const int *values, int count) {
+SIZE_OPT int rd_check_params(int model, const int *values, int count) {
   return params_valid(model, values, count) ? 0 : -1;
 }
 
@@ -836,7 +846,7 @@ static int wrap_delta(int delta, int size) {
 /* Seed a disk given in display coordinates, except in masked cells: A = 0.5
  * and B = 0.25 inside it, or u = rest + 0.5 with v unchanged. Each grid
  * cell samples the display coordinate it covers. */
-int rd_seed(void *handle, int x, int y, int radius) {
+SIZE_OPT int rd_seed(void *handle, int x, int y, int radius) {
   State *state = checked_state(handle);
   if (!state || x < 0 || x >= RD_DISPLAY_WIDTH || y < 0 ||
       y >= RD_DISPLAY_HEIGHT || radius < 1 || radius > MAX_SEED_RADIUS) {
@@ -895,7 +905,7 @@ static void axis_sample(int p, int n, int size, int *index, int *weight) {
 /* The resting field of the model everywhere: A = 1 and B = 0, or u = rest
  * and v = rest / av (0 if av is 0) with one integer division, both clamped
  * to the codes. */
-static void fill_rest(State *state) {
+static SIZE_OPT void fill_rest(State *state) {
   unsigned code_a = is_packed(state) ? PACKED_FULL_A : Q15_FULL_A, code_b = 0;
   if (state_model(state) == RD_MODEL_FHN) {
     int32_t av = state->params[FHN_AV];
@@ -912,7 +922,7 @@ static void fill_rest(State *state) {
 /* The broken wave of init 1 over the resting field: u = 1 in the excited
  * band and v = 1 in the refractory band above it, each grid cell sampling
  * the display coordinate it covers. No LCG is used. */
-static void seed_wave(State *state) {
+static SIZE_OPT void seed_wave(State *state) {
   for (int grid_y = 0; grid_y < state->height; grid_y++) {
     int display_y = grid_y * RD_DISPLAY_HEIGHT / state->height;
     int species =
@@ -934,8 +944,8 @@ static void seed_wave(State *state) {
  * INITIAL_DISKS disks at LCG-chosen display positions and radii, or the
  * broken wave of FitzHugh-Nagumo init 1. Every argument is checked before
  * the block is written. */
-void *rd_init_model(void *memory, size_t bytes, int mode, int model,
-                    uint32_t seed, const int *params, int count) {
+SIZE_OPT void *rd_init_model(void *memory, size_t bytes, int mode, int model,
+                             uint32_t seed, const int *params, int count) {
   size_t required = rd_bytes(mode);
   if (!memory || required == 0 || bytes < required || !model_supported(model) ||
       (model == RD_MODEL_FHN && MODE_PLANES(mode) == 1) ||
@@ -983,7 +993,7 @@ void *rd_init_model(void *memory, size_t bytes, int mode, int model,
   return state;
 }
 
-void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
+SIZE_OPT void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
   return rd_init_model(memory, bytes, mode, RD_MODEL_GRAY_SCOTT, seed, NULL, 0);
 }
 
