@@ -17,7 +17,7 @@ The Pebble build (`pebble/build/pebble.pbw`) contains the watch program and the 
   - Apache License 2.0, see [licenses/palettes.txt](licenses/palettes.txt).
 - **cividis** by Jamie R. Nuñez, Christopher R. Anderton, and Ryan S. Renslow, Copyright 2017 Battelle Memorial Institute.
   - Used in the same files as the colormaps above.
-  - A BSD-style license of Battelle Memorial Institute that is not on the SPDX License List, see [licenses/palettes.txt](licenses/palettes.txt).
+  - BSD-style license of Battelle Memorial Institute, see [licenses/palettes.txt](licenses/palettes.txt).
 - **[fflate](https://github.com/101arrowz/fflate)** by Arjun Barrett.
   - Used in the settings page to unpack its gzipped Wasm core and clock glyphs.
   - MIT License, see [licenses/fflate.txt](licenses/fflate.txt).
