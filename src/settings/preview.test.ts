@@ -10,9 +10,11 @@ import {
 import { hourAngle, minuteAngle } from "../../lib/clock-face.ts";
 import { HALO } from "../core/modes.ts";
 import { PreviewField, PREVIEW_MODE, PREVIEW_SEED } from "./preview.ts";
+import { presetById } from "../../lib/presets.ts";
 import {
   DEFAULT_SETTINGS,
   toParameters,
+  withPreset,
   type WatchSettings,
 } from "./settings.ts";
 
@@ -26,25 +28,27 @@ const core = await loadCore("rd.wasm");
 
 /** The mode 3 field hash after 1,000 steps in tests/golden-hashes.txt,
  * without a mask or with the mask of a font at 13:57 2046.08.29. */
-function golden(font?: number) {
+function golden(font?: number, model = 0, vector?: string) {
   const lines = readFileSync(new URL("tests/golden-hashes.txt", root), "utf8")
     .split("\n")
     .filter((line) => !line.startsWith("#"))
     .map((line) => line.trim().split(/\s+/));
   const mask = font === undefined ? [] : [font, 13, 57, 2046, 8, 29, 1];
+  const rest = [...mask.map(String), ...(vector ? [`p=${vector}`] : [])];
   const line = lines.find(
     (l) =>
-      l[0] === "3" &&
-      l[1] === "1000" &&
-      l.slice(3).join() === mask.map(String).join()
+      l[0] === String(model) &&
+      l[1] === "3" &&
+      l[2] === "1000" &&
+      l.slice(4).join() === rest.join()
   );
-  assert(line, `golden ${font}`);
-  return Number(line[2]);
+  assert(line, `golden ${font} ${model} ${vector}`);
+  return Number(line[3]);
 }
 
 const date = new Date(2046, 7, 29, 13, 57);
 /** The golden hashes use the core's default coefficients, Da 1 and Db 0.5. */
-const base = { ...DEFAULT_SETTINGS, da: 32768, db: 16384 };
+const base = { ...DEFAULT_SETTINGS, p2: 32768, p3: 16384 };
 const run = (settings: WatchSettings) => {
   const field = new PreviewField(core);
   field.start(settings, date);
@@ -59,6 +63,18 @@ test("the preview runs the watch's field", () => {
   assert.equal(run({ ...base, font: 1 }).hash(), golden(1));
   assert.equal(run({ ...base, clock: 0 }).hash(), golden());
   assert.equal(run({ ...base, avoid: 0 }).hash(), golden());
+  // FitzHugh-Nagumo from the settings: the default fhn-stripes vector and
+  // the spiral's cut wave, with and without the mask.
+  const stripes = withPreset(base, presetById("fhn-stripes")!);
+  assert.equal(run(stripes).hash(), golden(0, 1));
+  assert.equal(run({ ...stripes, clock: 0 }).hash(), golden(undefined, 1));
+  const spiral = withPreset(base, presetById("fhn-spiral")!);
+  const vector = "6554,0,8192,410,32768,-9830,32768,-21935,1";
+  assert.equal(run(spiral).hash(), golden(0, 1, vector));
+  assert.equal(
+    run({ ...spiral, avoid: 0 }).hash(),
+    golden(undefined, 1, vector)
+  );
 });
 
 test("the analog face masks the hands of the time and the date", () => {

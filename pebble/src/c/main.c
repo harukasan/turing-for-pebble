@@ -17,10 +17,10 @@
  *   - focus loss cancels timers and snaps a sweep, and focus restore
  *     resumes pending work,
  *   - settings from the phone (settings.h) restart the field and its startup
- *     for new coefficients, rebuild the mask and refill for a new font or
- *     mask, and redraw for a new palette.
- * With RD_LOG, timing counters feed the startup summary log; RD_PROFILE
- * adds a clock calibration loop and a periodic profile log.
+ *     for a new model or parameters, rebuild the mask and refill for a new font
+ * or mask, and redraw for a new palette. With RD_LOG, timing counters feed the
+ * startup summary log; RD_PROFILE adds a clock calibration loop and a periodic
+ * profile log.
  */
 #include "../../../core/clock_mask.h"
 #include "../../../core/rd.h"
@@ -832,11 +832,23 @@ static void apply_palette(void) {
   rd_palette(state, stops, count);
 }
 
-/* The pattern coefficients from the settings. */
-static void apply_params(void) {
-  rd_params(state, (int)setting(SETTING_FEED), (int)setting(SETTING_KILL),
-            (int)setting(SETTING_DA), (int)setting(SETTING_DB),
-            (int)setting(SETTING_DT));
+/* A field of the settings' model and parameter vector from the seed, or of
+ * the build defaults if the core rejects them, which settings.c prevents
+ * and config.h keeps valid for the build. */
+static void init_field(void) {
+  int params[RD_PARAM_MAX];
+  for (int i = 0; i < RD_PARAM_MAX; i++) {
+    params[i] = (int)setting(SETTING_P0 + i);
+  }
+  int model = (int)setting(SETTING_MODEL);
+  state = rd_init_model(allocation, rd_bytes(RD_MODE), RD_MODE, model, RD_SEED,
+                        params, rd_param_count(model));
+  if (!state) {
+    static const int defaults[] = {RD_DEFAULT_PARAMS};
+    state = rd_init_model(allocation, rd_bytes(RD_MODE), RD_MODE,
+                          RD_DEFAULT_MODEL, RD_SEED, defaults,
+                          (int)(sizeof defaults / sizeof defaults[0]));
+  }
 }
 
 /* Start the startup animation: its accounting starts over and the first
@@ -864,8 +876,7 @@ static void begin_startup(void) {
  * slice. */
 static void restart(void) {
   stop();
-  state = rd_init(allocation, rd_bytes(RD_MODE), RD_MODE, RD_SEED);
-  apply_params();
+  init_field();
   apply_palette();
   rebuild_mask();
   layer_mark_dirty(layer);
@@ -943,11 +954,10 @@ static void init(void) {
     APP_LOG(APP_LOG_LEVEL_ERROR, "Core allocation failed");
     return;
   }
-  state = rd_init(allocation, rd_bytes(RD_MODE), RD_MODE, RD_SEED);
+  init_field();
   if (!state) {
     return;
   }
-  apply_params();
   apply_palette();
   load_fonts();
   time_t now = time(NULL);
@@ -977,9 +987,9 @@ static void init(void) {
 #endif
 #if RD_LOG
   APP_LOG(APP_LOG_LEVEL_INFO,
-          "RD init mode=%d font=%d face=%d core_bytes=%lu heap_min=%lu "
-          "mask_ms=%lu",
-          RD_MODE, settings_font(), settings_analog(),
+          "RD init mode=%d model=%d font=%d face=%d core_bytes=%lu "
+          "heap_min=%lu mask_ms=%lu",
+          RD_MODE, rd_model(state), settings_font(), settings_analog(),
           (unsigned long)rd_bytes(RD_MODE), (unsigned long)min_heap,
           (unsigned long)mask_ms);
 #endif

@@ -37,11 +37,16 @@ export class PreviewField {
 
   constructor(private readonly api: CoreAPI) {}
 
-  /** A new field from the seed with the coefficients, custom stops, and
-   * clock mask of the settings, as the watch starts one. */
+  /** A new field of the settings' model from the seed with its
+   * parameters, custom stops, and clock mask, as the watch starts one. */
   start(settings: WatchSettings, date: Date) {
     this.sim?.dispose();
-    const sim = new WasmSimulation(this.api, PREVIEW_MODE, PREVIEW_SEED);
+    const sim = new WasmSimulation(
+      this.api,
+      PREVIEW_MODE,
+      PREVIEW_SEED,
+      toParameters(settings)
+    );
     this.sim = sim;
     this.settings = settings;
     sim.setPalette(customStops(settings));

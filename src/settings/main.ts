@@ -12,8 +12,9 @@ import {
   paletteSwatch,
   type Rgb,
 } from "../../lib/palettes.ts";
-import { presets, type Parameters } from "../../lib/simulation.ts";
-import { parameterBounds } from "../core/modes.ts";
+import { presets, type Model } from "../../lib/simulation.ts";
+import { parameterOrder, parameterRanges } from "../../lib/presets.ts";
+import { models, parameterBounds, type SliderKey } from "../core/modes.ts";
 import {
   detectLang,
   langOf,
@@ -34,11 +35,16 @@ import {
   DIFFUSION_PRESETS,
   diffusionPresetOf,
   initialSettings,
+  modelOf,
+  paramKey,
   PEBBLE_COLORS,
   presetOf,
+  presetsOf,
   q15,
   toJson,
   valueOf,
+  withModel,
+  withPreset,
   type WatchSettings,
 } from "./settings.ts";
 
@@ -117,17 +123,23 @@ function chips(
     inputs.forEach((input, i) => (input.checked = i === index));
 }
 
-/** A slider for a Q15 coefficient with its value in a number field. The
- * field takes any value from 0 to 1, the range the watch accepts, also
+/** A slider for a Q15 parameter of a model with its value in a number
+ * field. The field takes any value in the range the watch accepts, also
  * outside the slider's range, and applies it when the entry is committed. */
-function slider(
+function slider<M extends Model>(
   container: HTMLElement,
-  key: keyof Parameters,
+  model: M,
+  key: SliderKey<M>,
   label: string,
   digits: number,
   onInput: () => void
 ) {
-  const [min, max, step] = parameterBounds[key];
+  const [min, max, step] = parameterBounds[model][key];
+  const setting = paramKey(model, key);
+  const [low, high] =
+    parameterRanges(model)[
+      (parameterOrder[model] as readonly string[]).indexOf(key)
+    ];
   const row = document.createElement("div");
   row.className = "slider";
   const name = document.createElement("span");
@@ -141,19 +153,19 @@ function slider(
   const field = document.createElement("input");
   field.type = "number";
   field.inputMode = "decimal";
-  field.min = "0";
-  field.max = "1";
+  field.min = String(low / 32768);
+  field.max = String(high / 32768);
   field.step = "any";
   text(() => field.setAttribute("aria-label", t().value(label)));
   row.append(name, input, field);
   container.append(row);
   const show = () => {
-    const value = settings[key] / 32768;
+    const value = settings[setting] / 32768;
     input.value = String(value);
     if (document.activeElement !== field) field.value = value.toFixed(digits);
   };
   input.addEventListener("input", () => {
-    settings[key] = q15(Number(input.value));
+    settings[setting] = q15(Number(input.value));
     onInput();
   });
   field.addEventListener("focus", () => field.select());
@@ -163,7 +175,7 @@ function slider(
   field.addEventListener("change", () => {
     const value = Number(field.value);
     if (field.value.trim() !== "" && Number.isFinite(value)) {
-      settings[key] = q15(Math.min(1, Math.max(0, value)));
+      settings[setting] = Math.min(high, Math.max(low, q15(value)));
       onInput();
     }
     field.blur();
@@ -288,38 +300,75 @@ function changed(kind: "field" | "palette") {
   rerun = window.setTimeout(() => view?.run({ ...settings }), 300);
 }
 
-const setPreset = chips(
-  element("presets"),
-  "preset",
-  () => [...t().presets, t().custom],
+/** The models in the order of Strings.models and the core's numbers. */
+const MODELS: Model[] = models.map(([model]) => model);
+const setModel = chips(
+  element("models"),
+  "model",
+  () => t().models,
   (index) => {
-    // Custom changes nothing until a slider or field moves.
-    if (index === presets.length) return;
-    settings.feed = q15(presets[index].feed);
-    settings.kill = q15(presets[index].kill);
+    Object.assign(settings, withModel(settings, MODELS[index]));
     changed("field");
   }
 );
+/** One group of preset chips per model, shown for the current model. */
+const presetGroups = MODELS.map((model) => {
+  const container = element(`presets-${model}`);
+  const list = presetsOf(model);
+  const set = chips(
+    container,
+    `preset-${model}`,
+    () => [...list.map((preset) => t().presetNames[preset.id]), t().custom],
+    (index) => {
+      // Custom changes nothing until a slider or field moves.
+      if (index === list.length) return;
+      Object.assign(settings, withPreset(settings, list[index]));
+      changed("field");
+    }
+  );
+  return { model, container, list, set };
+});
 const setDiffusion = chips(
   element("diffusion-presets"),
   "diffusion",
   () => [...t().widths, t().custom],
   (index) => {
     if (index === DIFFUSION_PRESETS.length) return;
-    settings.da = q15(DIFFUSION_PRESETS[index].da);
-    settings.db = q15(DIFFUSION_PRESETS[index].db);
+    settings.p2 = q15(DIFFUSION_PRESETS[index].da);
+    settings.p3 = q15(DIFFUSION_PRESETS[index].db);
     changed("field");
   }
 );
 const patternSliders = element("pattern-sliders");
+const fhnSliders = element("fhn-sliders");
+const diffusion = element("diffusion");
 const diffusionSliders = element("diffusion-sliders");
+const field = () => changed("field");
 const sliders = [
-  slider(patternSliders, "feed", "Feed", 4, () => changed("field")),
-  slider(patternSliders, "kill", "Kill", 4, () => changed("field")),
-  slider(diffusionSliders, "da", "Da", 2, () => changed("field")),
-  slider(diffusionSliders, "db", "Db", 2, () => changed("field")),
-  slider(diffusionSliders, "dt", "Dt", 2, () => changed("field")),
+  slider(patternSliders, "gray-scott", "feed", "Feed", 4, field),
+  slider(patternSliders, "gray-scott", "kill", "Kill", 4, field),
+  slider(diffusionSliders, "gray-scott", "da", "Da", 2, field),
+  slider(diffusionSliders, "gray-scott", "db", "Db", 2, field),
+  slider(diffusionSliders, "gray-scott", "dt", "Dt", 2, field),
+  slider(fhnSliders, "fhn", "du", "Du", 3, field),
+  slider(fhnSliders, "fhn", "dv", "Dv", 3, field),
+  slider(fhnSliders, "fhn", "ru", "ru", 4, field),
+  slider(fhnSliders, "fhn", "rv", "rv", 4, field),
+  slider(fhnSliders, "fhn", "av", "av", 2, field),
+  slider(fhnSliders, "fhn", "k", "k", 3, field),
+  slider(fhnSliders, "fhn", "dt", "Dt", 2, field),
+  slider(fhnSliders, "fhn", "rest", "rest", 4, field),
 ];
+const initial = element("initial");
+const setInit = chips(
+  element("init"),
+  "init",
+  () => t().inits,
+  (index) => {
+    settings[paramKey("fhn", "init")] = index;
+    changed("field");
+  }
+);
 
 const paletteInputs: HTMLInputElement[] = [];
 let customSwatch: HTMLElement | null = null;
@@ -419,10 +468,23 @@ avoid.addEventListener("change", () => {
 
 /** Show the settings in every control. */
 function update() {
+  const model = modelOf(settings) ?? "gray-scott";
+  setModel(MODELS.indexOf(model));
   const preset = presetOf(settings);
-  setPreset(preset < 0 ? presets.length : preset);
-  const diffusion = diffusionPresetOf(settings);
-  setDiffusion(diffusion < 0 ? DIFFUSION_PRESETS.length : diffusion);
+  for (const group of presetGroups) {
+    group.container.hidden = group.model !== model;
+    if (group.model !== model) continue;
+    const index = preset < 0 ? -1 : group.list.indexOf(presets[preset]);
+    group.set(index < 0 ? group.list.length : index);
+  }
+  const gray = model === "gray-scott";
+  patternSliders.hidden = !gray;
+  diffusion.hidden = !gray;
+  fhnSliders.hidden = gray;
+  initial.hidden = gray;
+  const width = diffusionPresetOf(settings);
+  setDiffusion(width < 0 ? DIFFUSION_PRESETS.length : width);
+  if (!gray) setInit(settings[paramKey("fhn", "init")]);
   sliders.forEach((show) => show());
   paletteInputs.forEach(
     (input, index) => (input.checked = index === settings.palette)

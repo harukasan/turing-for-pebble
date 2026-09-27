@@ -6,12 +6,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
+import { presetById } from "../lib/presets.ts";
 import {
   DEFAULT_SETTINGS,
+  FIXED_KEYS,
   SETTING_KEYS,
   SETTING_MAX,
   settingMin,
   toJson,
+  withPreset,
 } from "../src/settings/settings.ts";
 
 const read = (path) =>
@@ -69,8 +72,8 @@ assert(p.opened[0].length < 2 * 1024 * 1024, "within the Android URL limit");
 // and embedded in the page the next time.
 const saved = {
   ...DEFAULT_SETTINGS,
-  feed: 1786,
-  kill: 2032,
+  p0: 1786,
+  p1: 2032,
   palette: 9,
   low: 0x550000,
   high: 0xffaa00,
@@ -90,7 +93,7 @@ assert.equal(p.sent.length, 2);
 for (const response of ["", "{", "%7B", "null"])
   p.listeners.webviewclosed({ response });
 p.listeners.webviewclosed({});
-for (const key of SETTING_KEYS) {
+for (const key of FIXED_KEYS) {
   for (const value of [settingMin(key) - 1, SETTING_MAX[key] + 1, 0.5])
     p.listeners.webviewclosed({
       response: toJson({ ...DEFAULT_SETTINGS, [key]: value }),
@@ -99,20 +102,40 @@ for (const key of SETTING_KEYS) {
     response: toJson({ ...DEFAULT_SETTINGS, [key]: SETTING_MAX[key] }),
   });
 }
-assert.equal(p.sent.length, 2 + SETTING_KEYS.length);
+assert.equal(p.sent.length, 2 + FIXED_KEYS.length);
 assert.deepEqual(
   p.sent.at(-1),
   message({ ...DEFAULT_SETTINGS, face: SETTING_MAX.face })
 );
 
+// The model and its vector follow the model's ranges: a FitzHugh-Nagumo
+// preset with its signed entries is relayed, and an unknown model, an
+// entry out of its range, or a nonzero entry after the model's own are not.
+const spiral = withPreset(DEFAULT_SETTINGS, presetById("fhn-spiral"));
+assert(spiral.p5 < 0);
+p.listeners.webviewclosed({ response: toJson(spiral) });
+assert.deepEqual(p.sent.at(-1), message(spiral));
+for (const bad of [
+  { ...spiral, model: 2 },
+  { ...spiral, p2: 8193 },
+  { ...spiral, p5: -32769 },
+  { ...spiral, p8: 2 },
+  { ...spiral, p9: 1 },
+  { ...DEFAULT_SETTINGS, p0: -1 },
+  { ...DEFAULT_SETTINGS, p5: 1 },
+])
+  p.listeners.webviewclosed({ response: toJson(bad) });
+assert.equal(p.sent.length, 3 + FIXED_KEYS.length);
+
 // The number of stops starts at 2.
 p.listeners.webviewclosed({
   response: toJson({ ...DEFAULT_SETTINGS, stops: 1 }),
 });
-assert.equal(p.sent.length, 2 + SETTING_KEYS.length);
+assert.equal(p.sent.length, 3 + FIXED_KEYS.length);
 
 // Settings stored before the stop count get two stops at launch.
 const old = phone();
+// Those stored before the model carry the Gray-Scott coefficients by name.
 const legacy = {
   ...DEFAULT_SETTINGS,
   palette: 9,
@@ -124,7 +147,17 @@ delete legacy.mid1;
 delete legacy.mid2;
 delete legacy.date;
 delete legacy.face;
-old.storage.set("settings", JSON.stringify(legacy));
+const named = { ...legacy };
+for (let i = 0; i < 10; i++) delete named[`p${i}`];
+delete named.model;
+Object.assign(named, {
+  feed: legacy.p0,
+  kill: legacy.p1,
+  da: legacy.p2,
+  db: legacy.p3,
+  dt: legacy.p4,
+});
+old.storage.set("settings", JSON.stringify(named));
 old.listeners.ready();
 assert.deepEqual(old.sent, [
   message({
@@ -142,7 +175,7 @@ const stored = p.storage;
 const q = phone();
 for (const [key, value] of stored) q.storage.set(key, value);
 q.listeners.ready();
-assert.deepEqual(q.sent, [message({ ...DEFAULT_SETTINGS, face: 1 })]);
+assert.deepEqual(q.sent, [message(spiral)], "the last accepted settings");
 
 // With RD_BUILD_CONFIG_URL the hosted page gets the settings in its query.
 const hosted = phone(

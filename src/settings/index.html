@@ -27,10 +27,17 @@
       <form id="form" class="form">
         <fieldset>
           <legend data-i18n="pattern"></legend>
-          <div id="presets" class="chips"></div>
+          <div id="models" class="chips"></div>
+          <div id="presets-gray-scott" class="chips"></div>
+          <div id="presets-fhn" class="chips" hidden></div>
           <div id="pattern-sliders" class="sliders"></div>
+          <div id="fhn-sliders" class="sliders" hidden></div>
+          <div id="initial" class="initial" hidden>
+            <span data-i18n="initial"></span>
+            <div id="init" class="chips"></div>
+          </div>
         </fieldset>
-        <fieldset>
+        <fieldset id="diffusion">
           <legend data-i18n="diffusion"></legend>
           <div id="diffusion-presets" class="chips"></div>
           <div id="diffusion-sliders" class="sliders"></div>
