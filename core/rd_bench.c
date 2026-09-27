@@ -3,77 +3,27 @@
  * uses its internal functions) by a watch build with RD_BENCH and by
  * tests/bench.c on the host. Each phase runs over the whole field `count`
  * times so that a millisecond clock resolves it:
- *   decode:     every stored row decoded to Q24 rows,
- *   laplacian:  the row loop of rd_step up to the Laplacians (the 20-fold
- *               sums on codes in the Q15 modes),
- *   react:      the same plus react_codes or react_cell for every cell,
+ *   laplacian:  the row loop of rd_step up to the 20-fold Laplacian sums,
+ *               including the row copies,
+ *   react:      the same plus react_codes for every cell,
  *   step:       rd_step itself,
  *   render:     full interpolated frames of rd_row_rgb2 (all 228 rows).
- * Differences give the Laplacian, the reaction, and the encoding and store
- * (step - react). The field advances only in the step phase.
+ * Differences give the reaction and the encoding and store (step - react).
+ * The field advances only in the step phase.
  */
 typedef struct {
-  uint32_t decode, laplacian, react, step, render;
+  uint32_t laplacian, react, step, render;
 } RdBench;
 
-/* The row loop of rd_step without writing: decode, the Laplacians, and with
- * react set react_cell for every cell. Returns a sum so the work is kept. */
+/* The row loop of rd_step without writing: the row copies, the Laplacian
+ * sums, and with react set react_codes for every cell. Returns a sum so the
+ * work is kept. */
 static int32_t bench_rows(State *state, int react) {
-  int width = state->width, height = state->height;
-  size_t row_bytes = (size_t)width * sizeof(int32_t);
-  int32_t *rows = saved_rows(state);
-  int32_t *prev[SPECIES_COUNT], *cur[SPECIES_COUNT], *next[SPECIES_COUNT],
-      *first[SPECIES_COUNT];
-  for (int species = 0; species < SPECIES_COUNT; species++) {
-    prev[species] = rows + (0 * SPECIES_COUNT + species) * width;
-    cur[species] = rows + (1 * SPECIES_COUNT + species) * width;
-    next[species] = rows + (2 * SPECIES_COUNT + species) * width;
-    first[species] = rows + (3 * SPECIES_COUNT + species) * width;
-  }
-  StepContext ctx;
-  begin_step(state, &ctx);
-  int32_t sum = 0;
-  decode_row(state, height - 1, prev[0], prev[1]);
-  decode_row(state, 0, cur[0], cur[1]);
-  memcpy(first[0], cur[0], row_bytes);
-  memcpy(first[1], cur[1], row_bytes);
-  for (int y = 0; y < height; y++) {
-    if (y == height - 1) {
-      memcpy(next[0], first[0], row_bytes);
-      memcpy(next[1], first[1], row_bytes);
-    } else {
-      decode_row(state, y + 1, next[0], next[1]);
-    }
-    laplacian_row(prev[0], cur[0], next[0], width);
-    laplacian_row(prev[1], cur[1], next[1], width);
-    if (react) {
-      for (int x = 0; x < width; x++) {
-        int32_t next_a, next_b;
-        react_cell(cur[0][x], cur[1][x], prev[0][x], prev[1][x], ctx.feed,
-                   ctx.decay, ctx.da, ctx.db, ctx.dt, ctx.unit_dt, &next_a,
-                   &next_b);
-        sum += next_a ^ next_b;
-      }
-    } else {
-      sum += prev[0][0] ^ prev[1][width - 1];
-    }
-    for (int species = 0; species < SPECIES_COUNT; species++) {
-      int32_t *tmp = prev[species];
-      prev[species] = cur[species];
-      cur[species] = next[species];
-      next[species] = tmp;
-    }
-  }
-  return sum;
-}
-
-/* The Q15 row loop without writing, like step_codes. */
-static int32_t bench_rows_codes(State *state, int react) {
-  int width = state->width, height = state->height;
+  const int width = RD_GRID_WIDTH, height = RD_GRID_HEIGHT;
   size_t row_bytes = (size_t)width * sizeof(uint16_t);
   uint16_t *cells_a = plane(state, RD_SPECIES_A);
   uint16_t *cells_b = plane(state, RD_SPECIES_B);
-  int32_t *lap = saved_rows(state), *next = lap + 2 * width;
+  int32_t *lap = scratch(state), *next = lap + 2 * width;
   uint16_t *codes = (uint16_t *)(next + 2 * width);
   uint16_t *up[SPECIES_COUNT] = {codes, codes + width};
   uint16_t *cur[SPECIES_COUNT] = {codes + 2 * width, codes + 3 * width};
@@ -114,22 +64,12 @@ static void rd_bench(void *handle, int count, uint32_t (*now)(void),
   volatile int32_t sink = 0;
   uint32_t start = now();
   for (int i = 0; i < count; i++) {
-    int32_t *rows = saved_rows(state);
-    for (int y = 0; y < state->height; y++) {
-      decode_row(state, y, rows, rows + state->width);
-    }
-    sink += rows[0];
-  }
-  out->decode = now() - start;
-  start = now();
-  int packed = is_packed(state);
-  for (int i = 0; i < count; i++) {
-    sink += packed ? bench_rows(state, 0) : bench_rows_codes(state, 0);
+    sink += bench_rows(state, 0);
   }
   out->laplacian = now() - start;
   start = now();
   for (int i = 0; i < count; i++) {
-    sink += packed ? bench_rows(state, 1) : bench_rows_codes(state, 1);
+    sink += bench_rows(state, 1);
   }
   out->react = now() - start;
   start = now();

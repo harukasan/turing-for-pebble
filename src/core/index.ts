@@ -4,10 +4,8 @@ export {
   defaultParameters,
   defaultParametersFor,
   defaultPlayerSettings,
-  engineMode,
-  engineSupportsModel,
-  engineWidth,
-  gridHeight,
+  GRID_HEIGHT,
+  GRID_WIDTH,
   isFloat,
   models,
 } from "./modes";

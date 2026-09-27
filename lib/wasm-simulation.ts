@@ -11,13 +11,12 @@ type API = {
   memory: WebAssembly.Memory;
   malloc(n: number): number;
   free(p: number): void;
-  rd_bytes(m: number): number;
-  rd_memory(m: number, c: number): number;
-  rd_init(p: number, n: number, m: number, s: number): number;
+  rd_bytes(): number;
+  rd_memory(c: number): number;
+  rd_init(p: number, n: number, s: number): number;
   rd_init_model(
     p: number,
     n: number,
-    m: number,
     model: number,
     s: number,
     params: number,
@@ -215,26 +214,25 @@ export function loadCore(url = "/wasm/rd.wasm") {
   request.catch(() => loaded.delete(url));
   return request;
 }
-/** Diffusion coefficients, folded with the 1/20 of the Laplacian in the
- * Q15 modes, and FitzHugh-Nagumo coefficients kept in Q13. */
+/** Diffusion coefficients, folded with the 1/20 of the Laplacian, and
+ * FitzHugh-Nagumo coefficients kept in Q13. */
 const FOLDED_DIFFUSION = new Set(["da", "db", "du", "dv"]);
 const Q13_PARAMETERS = new Set(["k", "rest"]);
 /** The parameters the core computes with (numerical definition version 5):
- * each rounded to Q15, in the Q15 modes (1 and 3) the diffusion
- * coefficients folded with the 1/20 of the Laplacian into
- * round(D / 20) / 20, and FitzHugh-Nagumo k and rest rounded to Q13 as
- * floor((q + 2) / 4) / 8192. The model and init pass through unchanged. */
-export const effective = (p: Parameters, mode = 0): Parameters =>
+ * each rounded to Q15, the diffusion coefficients folded with the 1/20 of
+ * the Laplacian into round(D / 20) / 20, and FitzHugh-Nagumo k and rest
+ * rounded to Q13 as floor((q + 2) / 4) / 8192. The model and init pass
+ * through unchanged. */
+export const effective = (p: Parameters): Parameters =>
   Object.fromEntries(
     Object.entries(p).map(([k, v]) => {
       if (typeof v !== "number" || k === "init") return [k, v];
       const q = Math.round(v * 32768);
-      const folded =
-        (mode === 1 || mode === 3) && FOLDED_DIFFUSION.has(k)
-          ? Math.round(q / 20) * 20
-          : Q13_PARAMETERS.has(k)
-            ? Math.floor((q + 2) / 4) * 4
-            : q;
+      const folded = FOLDED_DIFFUSION.has(k)
+        ? Math.round(q / 20) * 20
+        : Q13_PARAMETERS.has(k)
+          ? Math.floor((q + 2) / 4) * 4
+          : q;
       return [k, folded / 32768];
     })
   ) as Parameters;
@@ -254,15 +252,12 @@ export class WasmSimulation {
   readonly model: Model;
   constructor(
     private api: API,
-    public mode: number,
     seed: number,
     params: Parameters = defaultParametersFor("gray-scott")
   ) {
     this.model = params.model;
-    this.bytes = api.rd_bytes(mode);
-    this.components = Array.from({ length: 6 }, (_, i) =>
-      api.rd_memory(mode, i)
-    );
+    this.bytes = api.rd_bytes();
+    this.components = Array.from({ length: 6 }, (_, i) => api.rd_memory(i));
     this.allocation = api.malloc(this.bytes);
     this.vector = api.malloc(RD_PARAM_MAX * Int32Array.BYTES_PER_ELEMENT);
     if (!this.allocation || !this.vector) {
@@ -273,7 +268,6 @@ export class WasmSimulation {
     this.state = api.rd_init_model(
       this.allocation,
       this.bytes,
-      mode,
       modelIndex[params.model],
       seed,
       this.writeVector(params),

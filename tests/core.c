@@ -4,13 +4,28 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/* 32-bit integer mixing function (lowbias32) for pseudo-random test data. */
+static uint32_t mix32(uint32_t value) {
+  value ^= value >> 16;
+  value *= 0x7feb352du;
+  value ^= value >> 15;
+  value *= 0x846ca68bu;
+  return value ^ (value >> 16);
+}
+
+/* Read the codes of one cell. */
+static void load_codes(State *state, int cell_index, unsigned *code_a,
+                       unsigned *code_b) {
+  *code_a = plane(state, RD_SPECIES_A)[cell_index];
+  *code_b = plane(state, RD_SPECIES_B)[cell_index];
+}
+
 /* Full-screen oracle: one step computed from a complete copy of both planes
  * with independent neighbor indexing, so the row-buffer scheme in rd_step is
- * checked against a straightforward implementation. The Laplacian rounding is
- * written out on purpose instead of calling laplacian_row(). Cells are
- * encoded in row order through reference_encode, which keeps the error
- * diffusion on a plain residual row, and the masked cell rule is written
- * out as docs/core.md states it. */
+ * checked against a straightforward implementation. Cells are encoded in row
+ * order through reference_encode, which keeps the error diffusion on a plain
+ * residual row, and the masked cell rule is written out as docs/core.md states
+ * it. */
 /* Mask levels of the cells for the oracle, from level_reference, or NULL
  * for no mask. */
 static const int *oracle_levels;
@@ -28,34 +43,17 @@ static unsigned fhn_rest_reference(int rest) {
 }
 
 /* The write of one species as docs/core.md states it, on a plain residual
- * row: the value plus the shares it received, clamped, rounded to a code,
- * and the error divided with C integer division to the right neighbor
- * (carry), the lower-left neighbor (wrap at column 0), the neighbor below,
- * and the lower-right neighbor (pending). */
-static unsigned reference_encode(int packed, int species, int32_t *residual,
-                                 int32_t *carry, int32_t *pending,
-                                 int32_t *wrap, int x, int32_t value,
-                                 uint32_t random) {
+ * row: the value plus the shares it received, clamped, rounded to the
+ * nearest Q15 code, and the error divided with C integer division to the
+ * right neighbor (carry), the lower-left neighbor (wrap at column 0), the
+ * neighbor below, and the lower-right neighbor (pending). */
+static unsigned reference_encode(int32_t *residual, int32_t *carry,
+                                 int32_t *pending, int32_t *wrap, int x,
+                                 int32_t value) {
   value += residual[x] + *carry;
-  int32_t limit = value_limit(packed, species);
-  value = value < 0 ? 0 : value > limit ? limit : value;
-  unsigned code;
-  int32_t low;
-  if (!packed) {
-    code = (unsigned)(value + 256) >> 9;
-    low = (int32_t)(code << 9);
-  } else {
-    code = floor_code(packed, species, value);
-    low = decode(packed, species, code);
-    if (code < code_limit(packed, species)) {
-      int32_t high = decode(packed, species, code + 1);
-      if (rounds_up(packed, species, value, low, high, random)) {
-        code++;
-        low = high;
-      }
-    }
-  }
-  int32_t error = value - low;
+  value = value < 0 ? 0 : value > RD_VALUE_ONE ? RD_VALUE_ONE : value;
+  unsigned code = (unsigned)(value + 256) >> 9;
+  int32_t error = value - (int32_t)(code << 9);
   int32_t right = error * 7 / 16, below_left = error * 3 / 16,
           below = error * 5 / 16;
   *carry = right;
@@ -70,37 +68,24 @@ static unsigned reference_encode(int packed, int species, int32_t *residual,
 }
 
 static void reference(State *state) {
-  int cells = state->width * state->height;
+  int cells = RD_GRID_WIDTH * RD_GRID_HEIGHT;
   const int *params = state->params;
   int fhn = state->model == RD_MODEL_FHN;
   size_t plane_bytes = (size_t)cells * sizeof(uint16_t);
-  uint16_t *next_planes = malloc(plane_bytes * planes(state));
+  uint16_t *next_planes = malloc(plane_bytes * SPECIES_COUNT);
   assert(next_planes);
   uint16_t *saved = plane(state, 0);
   StepContext ctx;
   begin_step(state, &ctx);
   int32_t carry_a = 0, pending_a = 0, wrap_a = 0;
   int32_t carry_b = 0, pending_b = 0, wrap_b = 0;
-  for (int y = 0; y < state->height; y++) {
-    for (int x = 0; x < state->width; x++) {
-      int cell_index = y * state->width + x;
+  for (int y = 0; y < RD_GRID_HEIGHT; y++) {
+    for (int x = 0; x < RD_GRID_WIDTH; x++) {
+      int cell_index = y * RD_GRID_WIDTH + x;
       int level = oracle_levels ? oracle_levels[cell_index] : RD_MASK_RAMP;
       int32_t decay = params[GS_FEED] + params[GS_KILL] +
                       (RD_MASK_KILL - params[GS_KILL]) *
                           (RD_MASK_RAMP - level) / RD_MASK_RAMP;
-      int32_t laps[SPECIES_COUNT];
-      for (int species = 0; species < SPECIES_COUNT; species++) {
-        int32_t sum = 0;
-        for (int dy = -1; dy <= 1; dy++) {
-          for (int dx = -1; dx <= 1; dx++) {
-            int weight = dx == 0 && dy == 0 ? -20 : dx == 0 || dy == 0 ? 4 : 1;
-            sum += weight *
-                   rd_get(state, (x + dx + state->width) % state->width,
-                          (y + dy + state->height) % state->height, species);
-          }
-        }
-        laps[species] = sum < 0 ? -((-sum + 10) / 20) : (sum + 10) / 20;
-      }
       int32_t next_a, next_b;
       if (fhn) {
         /* Version 5 FitzHugh-Nagumo written out from the definition: x in
@@ -114,8 +99,8 @@ static void reference(State *state) {
           for (int dx = -1; dx <= 1; dx++) {
             int weight = dx == 0 && dy == 0 ? -20 : dx == 0 || dy == 0 ? 4 : 1;
             int index =
-                ((y + dy + state->height) % state->height) * state->width +
-                (x + dx + state->width) % state->width;
+                ((y + dy + RD_GRID_HEIGHT) % RD_GRID_HEIGHT) * RD_GRID_WIDTH +
+                (x + dx + RD_GRID_WIDTH) % RD_GRID_WIDTH;
             sums[0] += weight * pv[index];
             sums[1] += weight * pu[index];
           }
@@ -143,7 +128,7 @@ static void reference(State *state) {
                                                  (int64_t)1 << 21));
         next_b = (int32_t)(u * 512 + floor_div64(rate_u * dt + (1 << 20),
                                                  (int64_t)1 << 21));
-      } else if (!is_packed(state)) {
+      } else {
         /* Version 4 written out from the definition: Q15 codes, 20-fold
          * Laplacian sums, exact products, the rate clamped to int32. */
         const uint16_t *pa = plane(state, RD_SPECIES_A);
@@ -153,8 +138,8 @@ static void reference(State *state) {
           for (int dx = -1; dx <= 1; dx++) {
             int weight = dx == 0 && dy == 0 ? -20 : dx == 0 || dy == 0 ? 4 : 1;
             int index =
-                ((y + dy + state->height) % state->height) * state->width +
-                (x + dx + state->width) % state->width;
+                ((y + dy + RD_GRID_HEIGHT) % RD_GRID_HEIGHT) * RD_GRID_WIDTH +
+                (x + dx + RD_GRID_WIDTH) % RD_GRID_WIDTH;
             sums[0] += weight * pa[index];
             sums[1] += weight * pb[index];
           }
@@ -174,17 +159,9 @@ static void reference(State *state) {
         int64_t dt = params[GS_DT];
         next_a = (int32_t)((a << 9) + ((rate_a * dt + (1 << 20)) >> 21));
         next_b = (int32_t)((b << 9) + ((rate_b * dt + (1 << 20)) >> 21));
-      } else {
-        react_cell(rd_get(state, x, y, RD_SPECIES_A),
-                   rd_get(state, x, y, RD_SPECIES_B), laps[0], laps[1],
-                   ctx.feed, decay, ctx.da, ctx.db, ctx.dt, ctx.unit_dt,
-                   &next_a, &next_b);
       }
-      uint32_t dither =
-          is_packed(state) ? cell_dither(ctx.step_salt, cell_index) : 0;
-      unsigned code_a = reference_encode(
-          is_packed(state), RD_SPECIES_A, ctx.residual[0], &carry_a, &pending_a,
-          &wrap_a, x, next_a, dither & DITHER_MASK);
+      unsigned code_a = reference_encode(ctx.residual[0], &carry_a, &pending_a,
+                                         &wrap_a, x, next_a);
       unsigned code_b = fhn ? fhn_rest_reference(params[FHN_REST]) : 0;
       if (level == 0) {
         /* Masked: the displayed species is held at its resting code, and
@@ -192,75 +169,47 @@ static void reference(State *state) {
         ctx.residual[1][x] = pending_b;
         carry_b = pending_b = 0;
       } else {
-        code_b =
-            reference_encode(is_packed(state), RD_SPECIES_B, ctx.residual[1],
-                             &carry_b, &pending_b, &wrap_b, x, next_b,
-                             (dither >> DITHER_B_SHIFT) & DITHER_MASK);
+        code_b = reference_encode(ctx.residual[1], &carry_b, &pending_b,
+                                  &wrap_b, x, next_b);
       }
-      if (is_packed(state)) {
-        next_planes[cell_index] = (uint16_t)((code_a << B_BITS) | code_b);
-      } else {
-        next_planes[cell_index] = (uint16_t)code_a;
-        next_planes[cells + cell_index] = (uint16_t)code_b;
-      }
+      next_planes[cell_index] = (uint16_t)code_a;
+      next_planes[cells + cell_index] = (uint16_t)code_b;
     }
     /* Row end: the wrapped shares reach the last column and column 0. */
-    ctx.residual[0][state->width - 1] += wrap_a;
-    ctx.residual[1][state->width - 1] += wrap_b;
+    ctx.residual[0][RD_GRID_WIDTH - 1] += wrap_a;
+    ctx.residual[1][RD_GRID_WIDTH - 1] += wrap_b;
     ctx.residual[0][0] += pending_a;
     ctx.residual[1][0] += pending_b;
     wrap_a = pending_a = wrap_b = pending_b = 0;
   }
-  memcpy(saved, next_planes, plane_bytes * planes(state));
+  memcpy(saved, next_planes, plane_bytes * SPECIES_COUNT);
   free(next_planes);
   state->step++;
 }
 
-/* Bit-by-bit integer square root, the reference for the table version. */
-static uint32_t isqrt_reference(uint32_t value) {
-  uint32_t result = 0, bit = 1u << 16;
-  while (bit > value) {
-    bit >>= 2;
-  }
-  while (bit) {
-    if (value >= result + bit) {
-      value -= result + bit;
-      result = (result >> 1) + bit;
-    } else {
-      result >>= 1;
-    }
-    bit >>= 2;
-  }
-  return result;
-}
-
-/* Rounding helpers and codes. */
+/* Rounding helpers and the render constants. */
 static void check_codes(void) {
   assert(round_shift(1 << 23, 24) == 1 && round_shift(-(1 << 23), 24) == -1);
   assert(round_shift((1 << 23) - 1, 24) == 0 &&
          round_shift(-(1 << 23) + 1, 24) == 0);
   assert(round_shift((int64_t)3 << 40, 30) == 3 << 10);
-  assert(round_shift_unsigned((1u << 23) - 1, 24) == 0 &&
-         round_shift_unsigned(1u << 23, 24) == 1);
-  /* The branch-free rounding equals the definition, halfway away from
-   * zero, for both signs and every shift used. */
+  /* round_shift equals the definition, halfway away from zero, for both
+   * signs at the shift the renderer uses. */
   for (int i = 0; i < 200000; i++) {
     int64_t value = (int64_t)((uint64_t)mix32((uint32_t)i) << 32 |
                               mix32((uint32_t)i * 7919u)) >>
                     (i % 24);
-    for (int bits = 15; bits <= 30; bits += 15) {
-      int64_t half = (int64_t)1 << (bits - 1);
-      int64_t expected =
-          value < 0 ? -((-value + half) >> bits) : (value + half) >> bits;
-      assert(round_shift(value, bits) == expected);
-    }
+    int64_t half = (int64_t)1 << (Q15_SHIFT - 1);
+    int64_t expected = value < 0 ? -((-value + half) >> Q15_SHIFT)
+                                 : (value + half) >> Q15_SHIFT;
+    assert(round_shift(value, Q15_SHIFT) == expected);
   }
   /* The constants of the 120-cell render loop are the axis samples. */
   for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
     const int offsets[5] = {-1, 0, 1, 1, 2},
               weights[5] = {204, 102, 0, 153, 51};
     int index, weight;
-    axis_sample(x, 120, RD_DISPLAY_WIDTH, &index, &weight);
+    axis_sample(x, RD_GRID_WIDTH, RD_DISPLAY_WIDTH, &index, &weight);
     assert(index == (3 * (x / 5) + offsets[x % 5] + 120) % 120);
     assert(weight == weights[x % 5]);
   }
@@ -275,203 +224,92 @@ static void check_codes(void) {
   }
   assert(lerp256(0, Q15_CODE_MAX, 255) == (Q15_CODE_MAX * 255 + 128) >> 8);
   assert(lerp256(Q15_CODE_MAX, 0, 255) == (Q15_CODE_MAX + 128) >> 8);
-  /* The unit dt shortcut is exact for both signs. */
-  for (int64_t rate = -3000000; rate <= 3000000; rate += 7919) {
-    assert(round_shift(rate * RD_Q15_ONE, RATE_SHIFT) ==
-           round_shift(rate, UNIT_RATE_SHIFT));
-  }
-  /* isqrt is exact for the whole 18-bit domain used by floor_b. */
-  for (uint32_t value = 0; value < 1u << ROOT_BITS; value++) {
-    uint32_t root = isqrt(value);
-    assert(root == isqrt_reference(value));
-    assert(root * root <= value && (root + 1) * (root + 1) > value);
-  }
-  /* Decoding is strictly increasing and floor_* returns the largest code
-   * decoding within the value, for every code and just below the next. The
-   * A table is the rounded division it replaces. */
-  for (unsigned code = 0; code <= A_CODE_MAX; code++) {
-    assert(decode_a(code) ==
-           (int32_t)((((uint32_t)code << RD_VALUE_BITS) + A_CODE_MAX / 2) /
-                     A_CODE_MAX));
-    assert(code == 0 || decode_a(code) > decode_a(code - 1));
-    assert(floor_a(decode_a(code)) == code);
-    assert(code == A_CODE_MAX || floor_a(decode_a(code + 1) - 1) == code);
-  }
-  assert(decode_a(A_CODE_MAX) == RD_VALUE_ONE);
-  for (unsigned code = 0; code <= B_CODE_MAX; code++) {
-    assert(code == 0 || decode_b(code) > decode_b(code - 1));
-    assert(floor_b(decode_b(code)) == code);
-    assert(code == B_CODE_MAX || floor_b(decode_b(code + 1) - 1) == code);
-  }
-  assert(decode_b(B_CODE_MAX) == B_VALUE_MAX);
-  assert(decode_b(PACKED_SEED_B) == RD_VALUE_ONE / 4);
-  for (unsigned code = 0; code <= Q15_CODE_MAX; code++) {
-    assert(floor_q15(decode_q15(code)) == code);
-    assert(code == Q15_CODE_MAX || floor_q15(decode_q15(code + 1) - 1) == code);
-  }
 }
 
-/* Nine-point Laplacian of one column, as the contract states it. */
-static int32_t laplacian_reference(const int32_t *up, const int32_t *cur,
-                                   const int32_t *down, int x, int width) {
-  int left = (x + width - 1) % width;
-  int right = (x + 1) % width;
-  int32_t axial_sum = cur[left] + cur[right] + up[x] + down[x];
-  int32_t diagonal_sum = up[left] + up[right] + down[left] + down[right];
-  int32_t value = LAPLACIAN_AXIAL_WEIGHT * axial_sum + diagonal_sum -
-                  LAPLACIAN_SCALE * cur[x];
-  return value < 0 ? -((-value + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE)
-                   : (value + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE;
-}
-
-/* The in-place row pass equals the per-column definition, including the
- * wrapped columns, on pseudo-random rows of every relevant width. */
+/* laplacian_sums gives the 20-fold nine-point sums of a row of Q15 codes,
+ * including the wrapped columns, on pseudo-random rows of the grid width
+ * and of a minimal width. A uniform row gives zero. */
 static void check_laplacian(void) {
-  const int widths[3] = {RD_DISPLAY_WIDTH, RD_DISPLAY_WIDTH / 2, 3};
-  for (int w = 0; w < 3; w++) {
+  const int widths[2] = {RD_GRID_WIDTH, 3};
+  for (int w = 0; w < 2; w++) {
     int width = widths[w];
-    int32_t *up = malloc(width * sizeof(int32_t));
-    int32_t *cur = malloc(width * sizeof(int32_t));
-    int32_t *down = malloc(width * sizeof(int32_t));
-    int32_t *expected = malloc(width * sizeof(int32_t));
+    uint16_t *codes = malloc(3 * width * sizeof(uint16_t));
+    int32_t *sums = malloc(2 * width * sizeof(int32_t));
     for (int trial = 0; trial < 50; trial++) {
-      for (int x = 0; x < width; x++) {
-        up[x] =
-            (int32_t)(mix32((uint32_t)(trial * 7919 + x)) % (RD_VALUE_ONE + 1));
-        cur[x] = (int32_t)(mix32((uint32_t)(trial * 104729 + x + 1)) %
-                           (RD_VALUE_ONE + 1));
-        down[x] = (int32_t)(mix32((uint32_t)(trial * 15485863 + x + 2)) %
-                            (RD_VALUE_ONE + 1));
-        if (trial == 0) {
-          up[x] = cur[x] = down[x] = RD_VALUE_ONE;
-        }
-      }
-      for (int x = 0; x < width; x++) {
-        expected[x] = laplacian_reference(up, cur, down, x, width);
-      }
-      /* laplacian_sums gives the 20-fold sums of a row of Q15 codes. */
-      uint16_t *codes = malloc(3 * width * sizeof(uint16_t));
-      int32_t *sums = malloc(width * sizeof(int32_t));
       for (int x = 0; x < 3 * width; x++) {
-        const int32_t *source = x < width ? up : x < 2 * width ? cur : down;
-        codes[x] = (uint16_t)((uint32_t)source[x % width] >> Q15_SHIFT);
+        codes[x] = trial == 0 ? Q15_CODE_MAX
+                              : (uint16_t)(mix32((uint32_t)(trial * 7919 + x)) %
+                                           (Q15_CODE_MAX + 1));
       }
-      laplacian_sums(codes, codes + width, codes + 2 * width, sums, 1, width);
+      /* Written to every second entry, as rd_step shares one pair row. */
+      laplacian_sums(codes, codes + width, codes + 2 * width, sums + 1, 2,
+                     width);
       for (int x = 0; x < width; x++) {
         int left = (x + width - 1) % width, right = (x + 1) % width;
         const uint16_t *u = codes, *c = codes + width, *d = codes + 2 * width;
         int32_t expected_sum =
             LAPLACIAN_AXIAL_WEIGHT * (c[left] + c[right] + u[x] + d[x]) +
             (u[left] + u[right] + d[left] + d[right]) - LAPLACIAN_SCALE * c[x];
-        assert(sums[x] == expected_sum);
-      }
-      free(codes);
-      free(sums);
-      laplacian_row(up, cur, down, width);
-      for (int x = 0; x < width; x++) {
-        assert(up[x] == expected[x]);
-        assert(trial != 0 || up[x] == 0);
+        assert(sums[2 * x + 1] == expected_sum);
+        assert(trial != 0 || sums[2 * x + 1] == 0);
       }
     }
-    free(up);
-    free(cur);
-    free(down);
-    free(expected);
+    free(codes);
+    free(sums);
   }
 }
 
 /* Encode one value with the residual rows cleared, returning the code. */
-static unsigned decide(State *state, int species, int32_t value,
-                       uint32_t random) {
+static unsigned decide(State *state, int species, int32_t value) {
   StepContext ctx;
-  memset(residual_row(state, species), 0,
-         (size_t)state->width * sizeof(int32_t));
+  memset(residual_row(state, species), 0, RD_GRID_WIDTH * sizeof(int32_t));
   begin_step(state, &ctx);
-  unsigned code = encode_cell(is_packed(state), species, ctx.residual[species],
-                              &ctx.shares[species], 0, value, random);
-  memset(residual_row(state, species), 0,
-         (size_t)state->width * sizeof(int32_t));
+  unsigned code =
+      encode_cell(ctx.residual[species], &ctx.shares[species], 0, value);
+  memset(residual_row(state, species), 0, RD_GRID_WIDTH * sizeof(int32_t));
   return code;
 }
 
-/* Packed codes: the dithered threshold lies in [1/4, 3/4) of the code
- * step. Q15 codes: the nearest code, halfway upward, whatever the dither. */
-static void check_dither(State *state) {
+/* The nearest code, halfway upward, and clamping at both ends. */
+static void check_rounding(State *state) {
   for (int species = 0; species < SPECIES_COUNT; species++) {
-    int packed = is_packed(state);
     unsigned code = species == RD_SPECIES_A ? 40 : 130;
-    int32_t low = decode(packed, species, code),
-            step = decode(packed, species, code + 1) - low;
-    /* random 2^14 is the midpoint threshold: halfway rounds up, one less
-     * rounds down. */
-    assert(decide(state, species, low + step / 2, DITHER_BASE) == code + 1);
-    assert(decide(state, species, low + step / 2 - 1, DITHER_BASE) == code);
-    if (!packed) {
-      assert(decide(state, species, low + step * 3 / 10, 0) == code);
-      assert(decide(state, species, low + step * 7 / 10, DITHER_MASK) ==
-             code + 1);
-      assert(decide(state, species, low, 0) == code);
-      assert(decide(state, species, low + step / 2, 0) == code + 1);
-      assert(decide(state, species, low + step / 2 - 1, DITHER_MASK) == code);
-      continue;
-    }
-    /* random 0 is a quarter: 30% rounds up. random 2^15 - 1 is just below
-     * three quarters: 70% rounds down, 76% rounds up. */
-    assert(decide(state, species, low + step * 3 / 10, 0) == code + 1);
-    assert(decide(state, species, low + step * 7 / 10, DITHER_MASK) == code);
-    assert(decide(state, species, low + step * 76 / 100, DITHER_MASK) ==
-           code + 1);
-    /* Exact codes never move, whatever the dither. */
-    assert(decide(state, species, low, 0) == code);
-    assert(decide(state, species, low, DITHER_MASK) == code);
-    /* The largest step of the species decides in the same way through the
-     * 32-bit and 64-bit comparisons. */
-    unsigned top = code_limit(packed, species) - 1;
-    int32_t top_low = decode(packed, species, top),
-            top_step = decode(packed, species, top + 1) - top_low;
-    assert(decide(state, species, top_low + top_step / 2, DITHER_BASE) ==
-           top + 1);
-    assert(decide(state, species, top_low + top_step / 2 - 1, DITHER_BASE) ==
-           top);
-    assert(decide(state, species, top_low + top_step - 1, DITHER_MASK) ==
-           top + 1);
-    assert(decide(state, species, top_low + top_step / 4 - 1, 0) == top);
+    int32_t low = decode_q15(code), step = decode_q15(code + 1) - low;
+    assert(decide(state, species, low) == code);
+    assert(decide(state, species, low + step * 3 / 10) == code);
+    assert(decide(state, species, low + step / 2 - 1) == code);
+    assert(decide(state, species, low + step / 2) == code + 1);
+    assert(decide(state, species, low + step * 7 / 10) == code + 1);
+    assert(decide(state, species, -12345) == 0);
+    assert(decide(state, species, RD_VALUE_ONE) == Q15_CODE_MAX);
+    assert(decide(state, species, RD_VALUE_ONE + 12345) == Q15_CODE_MAX);
   }
 }
 
 /* Error diffusion conserves the encoded mass of a row exactly: the decoded
  * codes plus the shares still held equal the sum of the inputs. */
 static void check_diffusion(State *state, int species, int32_t value) {
-  int packed = is_packed(state);
   int32_t *residual = residual_row(state, species);
-  memset(residual, 0, (size_t)state->width * sizeof(int32_t));
+  memset(residual, 0, RD_GRID_WIDTH * sizeof(int32_t));
   StepContext ctx;
   begin_step(state, &ctx);
   int64_t decoded = 0, held = 0;
-  for (int x = 0; x < state->width; x++) {
-    uint32_t random = mix32((uint32_t)x) & DITHER_MASK;
-    decoded += decode(packed, species,
-                      encode_cell(packed, species, ctx.residual[species],
-                                  &ctx.shares[species], x, value, random));
+  for (int x = 0; x < RD_GRID_WIDTH; x++) {
+    decoded += decode_q15(
+        encode_cell(ctx.residual[species], &ctx.shares[species], x, value));
   }
   finish_row(&ctx);
-  for (int x = 0; x < state->width; x++) {
+  for (int x = 0; x < RD_GRID_WIDTH; x++) {
     held += residual[x];
   }
   held += ctx.shares[species].carry;
-  assert(decoded + held == (int64_t)value * state->width);
+  assert(decoded + held == (int64_t)value * RD_GRID_WIDTH);
   /* The decoded row average is within one code step of the input. */
-  unsigned code = floor_code(packed, species, value);
-  int32_t step =
-      decode(packed, species, code + 1) - decode(packed, species, code);
-  assert(llabs(decoded - (int64_t)value * state->width) <=
-         (int64_t)step * state->width);
-  memset(residual, 0, (size_t)state->width * sizeof(int32_t));
+  assert(llabs(decoded - (int64_t)value * RD_GRID_WIDTH) <=
+         (int64_t)decode_q15(1) * RD_GRID_WIDTH);
+  memset(residual, 0, RD_GRID_WIDTH * sizeof(int32_t));
 }
 
-/* rd_row_rgb2 is the quantized rd_row output packed to two bits per
- * channel, for every palette and display row, and every B code goes
- * through the lookup table or its fallback to the same byte. */
 /* Floor of a / b for b > 0, written out for the references. */
 static long floor_ratio(long a, long b) {
   long q = a / b;
@@ -483,7 +321,7 @@ static long floor_ratio(long a, long b) {
  * periodic indices, a vertical then a horizontal lerp in 256ths rounded
  * half up. */
 static unsigned interpolated_reference(State *state, int x, int y) {
-  int w = state->width, h = state->height;
+  int w = RD_GRID_WIDTH, h = RD_GRID_HEIGHT;
   long qx = floor_ratio(((2L * x + 1) * w - RD_DISPLAY_WIDTH) * 256,
                         2L * RD_DISPLAY_WIDTH);
   long qy = floor_ratio(((2L * y + 1) * h - RD_DISPLAY_HEIGHT) * 256,
@@ -532,17 +370,11 @@ static void check_rgb2(State *state) {
     }
     ensure_lookup_table(state, palette);
     const uint8_t *table = lookup_table(state);
-    unsigned limit = code_limit(is_packed(state), RD_SPECIES_B);
-    for (unsigned code = 0; code <= limit; code++) {
-      uint8_t expected = pixel_argb8(state, palette, code);
-      uint8_t value =
-          is_packed(state) ? table[code] : table[code >> LUT_BUCKET_BITS];
-      assert(value == 0 || value == expected);
-    }
-    ensure_value_table(state, palette);
     for (unsigned value = 0; value <= Q15_CODE_MAX; value++) {
-      assert(value_color(state, value_table(state), palette, value) ==
-             value_argb8(state, palette, decode_q15(value)));
+      uint8_t expected = value_argb8(state, palette, decode_q15(value));
+      uint8_t entry = table[value >> LUT_BUCKET_BITS];
+      assert(entry == 0 || entry == expected);
+      assert(value_color(state, table, palette, value) == expected);
     }
   }
   /* rd_row_rgb2_into writes the same bytes into a caller row, only in
@@ -580,9 +412,9 @@ static void check_colors(void) {
   void *memories[RD_MODEL_COUNT];
   State *states[RD_MODEL_COUNT];
   for (int model = 0; model < RD_MODEL_COUNT; model++) {
-    memories[model] = malloc(rd_bytes(3));
+    memories[model] = malloc(rd_bytes());
     states[model] =
-        rd_init_model(memories[model], rd_bytes(3), 3, model, 42, NULL, 0);
+        rd_init_model(memories[model], rd_bytes(), model, 42, NULL, 0);
     assert(states[model]);
   }
   for (int palette = 0; palette < RD_PALETTE_CUSTOM; palette++) {
@@ -681,67 +513,30 @@ static void check_same_palette(State *state, int first, int second) {
 }
 
 /* The custom palette starts as lime, takes the stops rd_palette sets, drops
- * lookup tables built for the old stops, rejects invalid stops without
- * change, and belongs to its handle. Checked in a packed and a Q15 mode,
- * which keep separate lookup tables. */
+ * the lookup table built for the old stops, rejects invalid stops without
+ * change, and belongs to its handle. */
 static void check_custom_palette(void) {
-  for (int mode = 0; mode < MODE_COUNT; mode += 3) {
-    void *memory = malloc(rd_bytes(mode));
-    void *other_memory = malloc(rd_bytes(mode));
-    State *state = rd_init(memory, rd_bytes(mode), mode, 42);
-    State *other = rd_init(other_memory, rd_bytes(mode), mode, 42);
-    check_stop_interpolation(state);
-    rd_step(state, 300);
-    rd_step(other, 300);
-    check_same_palette(state, RD_PALETTE_LIME, RD_PALETTE_CUSTOM);
-    const uint8_t *viridis = PALETTE_STOPS[RD_PALETTE_VIRIDIS][0];
-    assert(rd_palette(NULL, viridis, 8) == -1);
-    assert(rd_palette(state, NULL, 8) == -1);
-    assert(rd_palette(state, viridis, 1) == -1);
-    assert(rd_palette(state, viridis, RD_PALETTE_MAX_STOPS + 1) == -1);
-    check_same_palette(state, RD_PALETTE_CUSTOM, RD_PALETTE_LIME);
-    assert(rd_palette(state, viridis, 8) == 0);
-    check_same_palette(state, RD_PALETTE_CUSTOM, RD_PALETTE_VIRIDIS);
-    assert(rd_palette(state, PALETTE_STOPS[RD_PALETTE_CYAN][0], 2) == 0);
-    check_same_palette(state, RD_PALETTE_CUSTOM, RD_PALETTE_CYAN);
-    check_same_palette(other, RD_PALETTE_CUSTOM, RD_PALETTE_LIME);
-    free(memory);
-    free(other_memory);
-  }
-}
-
-/* The nearest output of every rendering call for modes 0-2, hashed, equals
- * that of the core before interpolated rendering was added: a clock mask,
- * 300 steps, every palette, rd_row with flags 0 and 1, and rd_row_rgb2. */
-static void check_nearest_unchanged(void) {
-  const uint32_t expected[3] = {1597135921u, 4011507537u, 1149036341u};
-  for (int mode = 0; mode < 3; mode++) {
-    void *memory = malloc(rd_bytes(mode));
-    void *state = rd_init(memory, rd_bytes(mode), mode, 42);
-    uint8_t *mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
-    cm_build(mask, rd_width(state), rd_height(state), CM_FONT_BITHAM, 13, 57,
-             2046, 8, 29, 1, 1);
-    rd_mask(state, mask);
-    rd_step(state, 300);
-    uint32_t hash = FNV_OFFSET_BASIS;
-    for (int palette = 0; palette <= RD_PALETTE_MONO; palette++) {
-      for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
-        for (int quantize = 0; quantize < 2; quantize++) {
-          const uint8_t *row = rd_row(state, y, palette, quantize);
-          for (int i = 0; i < RD_ROW_BYTES; i++) {
-            hash = (hash ^ row[i]) * FNV_PRIME;
-          }
-        }
-        const uint8_t *row = rd_row_rgb2(state, y, palette, 0);
-        for (int i = 0; i < RD_DISPLAY_WIDTH; i++) {
-          hash = (hash ^ row[i]) * FNV_PRIME;
-        }
-      }
-    }
-    assert(hash == expected[mode]);
-    free(mask);
-    free(memory);
-  }
+  void *memory = malloc(rd_bytes());
+  void *other_memory = malloc(rd_bytes());
+  State *state = rd_init(memory, rd_bytes(), 42);
+  State *other = rd_init(other_memory, rd_bytes(), 42);
+  check_stop_interpolation(state);
+  rd_step(state, 300);
+  rd_step(other, 300);
+  check_same_palette(state, RD_PALETTE_LIME, RD_PALETTE_CUSTOM);
+  const uint8_t *viridis = PALETTE_STOPS[RD_PALETTE_VIRIDIS][0];
+  assert(rd_palette(NULL, viridis, 8) == -1);
+  assert(rd_palette(state, NULL, 8) == -1);
+  assert(rd_palette(state, viridis, 1) == -1);
+  assert(rd_palette(state, viridis, RD_PALETTE_MAX_STOPS + 1) == -1);
+  check_same_palette(state, RD_PALETTE_CUSTOM, RD_PALETTE_LIME);
+  assert(rd_palette(state, viridis, 8) == 0);
+  check_same_palette(state, RD_PALETTE_CUSTOM, RD_PALETTE_VIRIDIS);
+  assert(rd_palette(state, PALETTE_STOPS[RD_PALETTE_CYAN][0], 2) == 0);
+  check_same_palette(state, RD_PALETTE_CUSTOM, RD_PALETTE_CYAN);
+  check_same_palette(other, RD_PALETTE_CUSTOM, RD_PALETTE_LIME);
+  free(memory);
+  free(other_memory);
 }
 
 /* Mask levels by definition: 0 in a masked cell, else the chessboard
@@ -780,9 +575,9 @@ static int resting_value(State *state) {
 /* rd_mask_level reports the defined levels and the displayed species is at
  * rest in masked cells. */
 static void check_masked_cells(State *state, const int *levels) {
-  for (int y = 0; y < state->height; y++) {
-    for (int x = 0; x < state->width; x++) {
-      int level = levels ? levels[y * state->width + x] : RD_MASK_RAMP;
+  for (int y = 0; y < RD_GRID_HEIGHT; y++) {
+    for (int x = 0; x < RD_GRID_WIDTH; x++) {
+      int level = levels ? levels[y * RD_GRID_WIDTH + x] : RD_MASK_RAMP;
       assert(rd_mask_level(state, x, y) == level);
       if (level == 0) {
         assert(rd_get(state, x, y, RD_SPECIES_B) == resting_value(state));
@@ -795,33 +590,33 @@ static void check_masked_cells(State *state, const int *levels) {
  * oracle with the mask levels by definition, keeps the displayed species at
  * rest in the mask, and continues as an unmasked field once the mask is
  * cleared. */
-static void check_mask(int mode, int model) {
-  size_t size = rd_bytes(mode);
+static void check_mask(int model) {
+  size_t size = rd_bytes();
   uint8_t *memory = malloc(size), *reference_memory = malloc(size);
-  State *state = rd_init_model(memory, size, mode, model, 7, NULL, 0);
+  State *state = rd_init_model(memory, size, model, 7, NULL, 0);
   State *reference_state =
-      rd_init_model(reference_memory, size, mode, model, 7, NULL, 0);
+      rd_init_model(reference_memory, size, model, 7, NULL, 0);
   rd_step(state, 60);
   rd_step(reference_state, 60);
-  assert(rd_memory(mode, RD_COMPONENT_MASK) ==
-         mask_bytes(state->width, state->height));
-  size_t bytes = cm_bytes(state->width, state->height);
+  assert(rd_memory(RD_COMPONENT_MASK) ==
+         (size_t)RD_GRID_WIDTH * RD_GRID_HEIGHT);
+  size_t bytes = cm_bytes(RD_GRID_WIDTH, RD_GRID_HEIGHT);
   uint8_t *mask = calloc(bytes, 1);
-  int stride = (state->width + 7) / 8;
-  for (int y = 0; y < state->height; y++) {
-    for (int x = 0; x < state->width; x++) {
-      int rectangle = x >= state->width / 4 && x < state->width / 2 &&
-                      y >= state->height / 3 && y < state->height / 2;
+  int stride = (RD_GRID_WIDTH + 7) / 8;
+  for (int y = 0; y < RD_GRID_HEIGHT; y++) {
+    for (int x = 0; x < RD_GRID_WIDTH; x++) {
+      int rectangle = x >= RD_GRID_WIDTH / 4 && x < RD_GRID_WIDTH / 2 &&
+                      y >= RD_GRID_HEIGHT / 3 && y < RD_GRID_HEIGHT / 2;
       /* Column 0, the last column, and the last row exercise the wrapped
        * shares and the unwrapped distances. */
-      if (rectangle || mix32((uint32_t)(y * state->width + x)) % 97 == 0 ||
-          (y == 5 && (x == 0 || x == state->width - 1)) ||
-          (y == state->height - 1 && x == 3)) {
+      if (rectangle || mix32((uint32_t)(y * RD_GRID_WIDTH + x)) % 97 == 0 ||
+          (y == 5 && (x == 0 || x == RD_GRID_WIDTH - 1)) ||
+          (y == RD_GRID_HEIGHT - 1 && x == 3)) {
         mask[y * stride + x / 8] |= (uint8_t)(1 << (x % 8));
       }
     }
   }
-  int *levels = level_reference(state->width, state->height, mask);
+  int *levels = level_reference(RD_GRID_WIDTH, RD_GRID_HEIGHT, mask);
   assert(rd_mask(state, mask) == 0 && rd_mask(reference_state, mask) == 0);
   assert(rd_hash(state) == rd_hash(reference_state));
   check_masked_cells(state, levels);
@@ -1175,11 +970,11 @@ static const int *default_params(int model) { return DEFAULT_PARAMS[model]; }
 /* Set every cell of a Q15 state to codes a and b and clear the residual
  * rows, so that the field is exact as after rd_init. */
 static void fill_codes(State *state, unsigned a, unsigned b) {
-  for (int i = 0; i < state->width * state->height; i++) {
+  for (int i = 0; i < RD_GRID_WIDTH * RD_GRID_HEIGHT; i++) {
     store_codes(state, i, a, b);
   }
   memset(residual_row(state, RD_SPECIES_A), 0,
-         (size_t)SPECIES_COUNT * state->width * sizeof(int32_t));
+         (size_t)SPECIES_COUNT * RD_GRID_WIDTH * sizeof(int32_t));
 }
 
 /* The FitzHugh-Nagumo resting code of v, rest / av with C division, as
@@ -1198,19 +993,19 @@ static unsigned fhn_rest_v_reference(const int *params) {
  * among u = v = 1 has the largest rate_u and an unmasked u = 1, v = 0 cell
  * among v = 1 the largest rate_v. The mirror field with k = rest = -1 has
  * the most negative ones. */
-static void check_fhn_extremes(int mode) {
-  size_t size = rd_bytes(mode);
+static void check_fhn_extremes(void) {
+  size_t size = rd_bytes();
   uint8_t *memory = malloc(size), *reference_memory = malloc(size);
   for (int sign = -1; sign <= 1; sign += 2) {
-    State *state = rd_init_model(memory, size, mode, RD_MODEL_FHN, 1, NULL, 0);
+    State *state = rd_init_model(memory, size, RD_MODEL_FHN, 1, NULL, 0);
     const int params[RD_FHN_PARAMS] = {
         RD_Q15_ONE, RD_Q15_ONE,        RD_FHN_RU_MAX,
         RD_Q15_ONE, RD_Q15_ONE,        sign * RD_Q15_ONE,
         RD_Q15_ONE, sign * RD_Q15_ONE, 0};
     assert(rd_set_params(state, params, RD_FHN_PARAMS) == 0);
     unsigned high = sign > 0 ? Q15_CODE_MAX : 0, low = Q15_CODE_MAX - high;
-    int w = state->width, first = 5 * w + 5, second = 20 * w + 20;
-    uint8_t *mask = calloc(cm_bytes(w, state->height), 1);
+    int w = RD_GRID_WIDTH, first = 5 * w + 5, second = 20 * w + 20;
+    uint8_t *mask = calloc(cm_bytes(w, RD_GRID_HEIGHT), 1);
     mask[5 * ((w + 7) / 8)] = 1 << 5;
     fill_codes(state, high, high);
     assert(rd_mask(state, mask) == 0);
@@ -1221,7 +1016,7 @@ static void check_fhn_extremes(int mode) {
     memcpy(reference_memory, memory, size);
     State *reference_state =
         (State *)(reference_memory + ((uint8_t *)state - memory));
-    int *levels = level_reference(w, state->height, mask);
+    int *levels = level_reference(w, RD_GRID_HEIGHT, mask);
     oracle_levels = levels;
     rd_step(state, 1);
     reference(reference_state);
@@ -1237,8 +1032,8 @@ static void check_fhn_extremes(int mode) {
 /* FitzHugh-Nagumo initialization: the resting field with v = rest / av,
  * disks of u = rest + 0.5 that leave v, and the broken wave of init 1,
  * which then steps like the oracle. */
-static void check_fhn_init(int mode) {
-  size_t size = rd_bytes(mode);
+static void check_fhn_init(void) {
+  size_t size = rd_bytes();
   uint8_t *memory = malloc(size), *reference_memory = malloc(size);
   /* fhn-hex and fhn-spiral of lib/presets.ts. */
   const int hex[RD_FHN_PARAMS] = {1311,  32768, 860,   2150, 19661,
@@ -1246,19 +1041,19 @@ static void check_fhn_init(int mode) {
   const int spiral[RD_FHN_PARAMS] = {6554,  0,     8192,   410, 32768,
                                      -9830, 32768, -21936, 1};
   State *state =
-      rd_init_model(memory, size, mode, RD_MODEL_FHN, 42, hex, RD_FHN_PARAMS);
+      rd_init_model(memory, size, RD_MODEL_FHN, 42, hex, RD_FHN_PARAMS);
   unsigned rest = fhn_rest_reference(hex[FHN_REST]);
   unsigned rest_v = fhn_rest_v_reference(hex);
   assert(rest == 13988 && rest_v == 12391);
   int seeded = 0;
-  for (int i = 0; i < state->width * state->height; i++) {
+  for (int i = 0; i < RD_GRID_WIDTH * RD_GRID_HEIGHT; i++) {
     unsigned v, u;
     load_codes(state, i, &v, &u);
     assert(v == rest_v);
     assert(u == rest || u == rest + 4096);
     seeded += u != rest;
   }
-  assert(seeded > 0 && seeded < state->width * state->height / 2);
+  assert(seeded > 0 && seeded < RD_GRID_WIDTH * RD_GRID_HEIGHT / 2);
   /* v = rest / av is clamped to the codes. */
   const int low_v[RD_FHN_PARAMS] = {0, 0, 0, 0, 1, 0, 0, -RD_Q15_ONE, 0};
   const int high_v[RD_FHN_PARAMS] = {0, 0, 0, 0, 1, 0, 0, RD_Q15_ONE, 0};
@@ -1268,43 +1063,41 @@ static void check_fhn_init(int mode) {
   const int no_av[RD_FHN_PARAMS] = {0, 0, 0, 0, 0, 8192, 0, 0, 0};
   assert(fhn_rest_v_reference(no_av) == 16384 + 2048);
   {
-    State *flat = rd_init_model(memory, size, mode, RD_MODEL_FHN, 42, no_av,
-                                RD_FHN_PARAMS);
+    State *flat =
+        rd_init_model(memory, size, RD_MODEL_FHN, 42, no_av, RD_FHN_PARAMS);
     unsigned v, u;
     load_codes(flat, 0, &v, &u);
     assert(v == 16384 + 2048);
   }
   for (int side = 0; side < 2; side++) {
-    State *clamped = rd_init_model(memory, size, mode, RD_MODEL_FHN, 42,
+    State *clamped = rd_init_model(memory, size, RD_MODEL_FHN, 42,
                                    side ? high_v : low_v, RD_FHN_PARAMS);
     unsigned v, u;
     load_codes(clamped, 0, &v, &u);
     assert(v == (side ? Q15_CODE_MAX : 0));
     assert(u == (side ? 24576u : 8192u) || u == (side ? 28672u : 12288u));
   }
-  state =
-      rd_init_model(memory, size, mode, RD_MODEL_FHN, 42, hex, RD_FHN_PARAMS);
+  state = rd_init_model(memory, size, RD_MODEL_FHN, 42, hex, RD_FHN_PARAMS);
   /* A disk at the origin wraps to the opposite corner and leaves v. */
-  store_codes(state, state->width * state->height - 1, 5, rest);
+  store_codes(state, RD_GRID_WIDTH * RD_GRID_HEIGHT - 1, 5, rest);
   assert(rd_seed(state, 0, 0, 8) == 0);
   unsigned v, u;
-  load_codes(state, state->width * state->height - 1, &v, &u);
+  load_codes(state, RD_GRID_WIDTH * RD_GRID_HEIGHT - 1, &v, &u);
   assert(v == 5 && u == rest + 4096);
 
-  state = rd_init_model(memory, size, mode, RD_MODEL_FHN, 42, spiral,
-                        RD_FHN_PARAMS);
-  State *reference_state = rd_init_model(
-      reference_memory, size, mode, RD_MODEL_FHN, 7, spiral, RD_FHN_PARAMS);
+  state = rd_init_model(memory, size, RD_MODEL_FHN, 42, spiral, RD_FHN_PARAMS);
+  State *reference_state = rd_init_model(reference_memory, size, RD_MODEL_FHN,
+                                         7, spiral, RD_FHN_PARAMS);
   rest = fhn_rest_reference(spiral[FHN_REST]);
   rest_v = fhn_rest_v_reference(spiral);
   int excited = 0, refractory = 0;
-  for (int y = 0; y < state->height; y++) {
-    for (int x = 0; x < state->width; x++) {
-      int dx = x * RD_DISPLAY_WIDTH / state->width;
-      int dy = y * RD_DISPLAY_HEIGHT / state->height;
+  for (int y = 0; y < RD_GRID_HEIGHT; y++) {
+    for (int x = 0; x < RD_GRID_WIDTH; x++) {
+      int dx = x * RD_DISPLAY_WIDTH / RD_GRID_WIDTH;
+      int dy = y * RD_DISPLAY_HEIGHT / RD_GRID_HEIGHT;
       int wave = dx < 100 && dy >= 190 && dy < 198;
       int back = dx < 100 && dy >= 174 && dy < 190;
-      load_codes(state, y * state->width + x, &v, &u);
+      load_codes(state, y * RD_GRID_WIDTH + x, &v, &u);
       assert(u == (wave ? 24576 : rest));
       assert(v == (back ? 24576 : rest_v));
       excited += wave;
@@ -1336,15 +1129,14 @@ int main(int argc, char **argv) {
     printf("\n");
     return 0;
   }
-  if (argc == 5 && strcmp(argv[1], "render") == 0) {
+  if (argc == 4 && strcmp(argv[1], "render") == 0) {
     /* Render mode: FNV-1a of every interpolated, quantized lime row after
-     * `steps` steps of `model` (default parameters) in `mode`. */
-    int model = atoi(argv[2]), mode = atoi(argv[3]), count = atoi(argv[4]);
-    void *memory = malloc(rd_bytes(mode));
-    void *state =
-        rd_init_model(memory, rd_bytes(mode), mode, model, 42, NULL, 0);
+     * `steps` steps of `model` (default parameters). */
+    int model = atoi(argv[2]), count = atoi(argv[3]);
+    void *memory = malloc(rd_bytes());
+    void *state = rd_init_model(memory, rd_bytes(), model, 42, NULL, 0);
     if (!state) {
-      fprintf(stderr, "invalid model or mode\n");
+      fprintf(stderr, "invalid model\n");
       return 1;
     }
     rd_step(state, count);
@@ -1362,16 +1154,15 @@ int main(int argc, char **argv) {
   }
   if (argc > 1) {
     /* Hash mode: print the field hash after `count` steps of `model` with
-     * its default parameters in `mode`, optionally with the clock mask of
+     * its default parameters, optionally with the clock mask of
      * `font hour minute year month day halo`, or of the analog face with
      * `analog font hour_angle minute_angle year month day halo`, installed
      * first. A last argument `p=v0,v1,...` replaces the default parameter
      * vector, so a preset other than the default can be pinned by a golden
      * hash. */
-    int model = atoi(argv[1]), mode = argc > 2 ? atoi(argv[2]) : 0;
-    int count = argc > 3 ? atoi(argv[3]) : 100;
+    int model = atoi(argv[1]), count = argc > 2 ? atoi(argv[2]) : 100;
     int params[RD_PARAM_MAX], param_count = 0;
-    if (argc > 4 && strncmp(argv[argc - 1], "p=", 2) == 0) {
+    if (argc > 3 && strncmp(argv[argc - 1], "p=", 2) == 0) {
       const char *cursor = argv[argc - 1] + 2;
       while (*cursor && param_count < RD_PARAM_MAX) {
         char *end;
@@ -1384,18 +1175,18 @@ int main(int argc, char **argv) {
       }
       argc--;
     }
-    void *memory = malloc(rd_bytes(mode));
-    void *state = rd_init_model(memory, rd_bytes(mode), mode, model, 42,
+    void *memory = malloc(rd_bytes());
+    void *state = rd_init_model(memory, rd_bytes(), model, 42,
                                 param_count ? params : NULL, param_count);
     if (!state) {
-      fprintf(stderr, "invalid model, mode, or parameters\n");
+      fprintf(stderr, "invalid model or parameters\n");
       return 1;
     }
-    int analog = argc > 11 && strcmp(argv[4], "analog") == 0;
-    if (argc > 10) {
+    int analog = argc > 10 && strcmp(argv[3], "analog") == 0;
+    if (argc > 9) {
       int v[7];
       for (int i = 0; i < 7; i++) {
-        v[i] = atoi(argv[4 + analog + i]);
+        v[i] = atoi(argv[3 + analog + i]);
       }
       uint8_t *mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
       int built =
@@ -1414,8 +1205,8 @@ int main(int argc, char **argv) {
     free(memory);
     return 0;
   }
-  assert(rd_bytes(-1) == 0);
-  assert(rd_init(NULL, 0, 0, 0) == NULL);
+  assert(rd_memory(-1) == 0 && rd_memory(RD_COMPONENT_COUNT) == 0);
+  assert(rd_init(NULL, 0, 0) == NULL);
   assert(rd_model(NULL) == -1);
   /* The parameter vector queries without a handle. */
   assert(rd_param_count(RD_MODEL_GRAY_SCOTT) == RD_GRAY_SCOTT_PARAMS);
@@ -1437,7 +1228,6 @@ int main(int argc, char **argv) {
   check_encode_masked();
   check_clock_mask();
   check_analog();
-  check_nearest_unchanged();
   check_colors();
   check_custom_palette();
   /* Coefficient endpoints and a non-unit timestep of each model. */
@@ -1452,38 +1242,32 @@ int main(int argc, char **argv) {
       {1638, 32768, 328, 819, 19661, 1000, 12345, -3000, 1}};
   for (int model = 0; model < RD_MODEL_COUNT; model++) {
     int fhn = model == RD_MODEL_FHN, count = PARAM_COUNT[model];
-    for (int mode = 0; mode < MODE_COUNT; mode++) {
-      size_t size = rd_bytes(mode);
+    {
+      size_t size = rd_bytes();
       uint8_t *memory = malloc(size + 16);
       uint8_t *reference_memory = malloc(size);
       uint8_t *snapshot = malloc(size);
       memset(memory, 0xa5, size + 16);
-      /* An undersized block, an unknown model, invalid parameters, and
-       * FitzHugh-Nagumo in a packed mode are rejected without touching the
-       * block. */
-      assert(!rd_init_model(memory, size - 1, mode, model, 42, NULL, 0));
-      assert(!rd_init_model(memory, size, mode, RD_MODEL_COUNT, 42, NULL, 0));
-      assert(!rd_init_model(memory, size, mode, -1, 42, NULL, 0));
-      assert(!rd_init_model(memory, size, mode, model, 42,
-                            default_params(model), count - 1));
+      /* An undersized block, an unknown model, and invalid parameters are
+       * rejected without touching the block. */
+      assert(!rd_init_model(memory, size - 1, model, 42, NULL, 0));
+      assert(!rd_init_model(memory, size, RD_MODEL_COUNT, 42, NULL, 0));
+      assert(!rd_init_model(memory, size, -1, 42, NULL, 0));
+      assert(!rd_init_model(memory, size, model, 42, default_params(model),
+                            count - 1));
       const int bad[RD_PARAM_MAX] = {-1};
-      assert(!rd_init_model(memory, size, mode, model, 42, bad, count));
-      if (fhn && MODE_PLANES(mode) == 1) {
-        assert(!rd_init_model(memory, size, mode, model, 42, NULL, 0));
-      }
+      assert(!rd_init_model(memory, size, model, 42, bad, count));
       for (size_t i = 0; i < size + 16; i++) {
         assert(memory[i] == 0xa5);
       }
-      if (fhn && MODE_PLANES(mode) == 1) {
-        free(memory);
-        free(reference_memory);
-        free(snapshot);
-        continue;
-      }
-      State *state = rd_init_model(memory, size, mode, model, 42, NULL, 0);
+      State *state = rd_init_model(memory, size, model, 42, NULL, 0);
       State *reference_state =
-          rd_init_model(reference_memory, size, mode, model, 42, NULL, 0);
+          rd_init_model(reference_memory, size, model, 42, NULL, 0);
       assert(rd_model(state) == model);
+      /* The memory query is exact: the last area, the mask levels, ends
+       * where the components after the alignment padding end. */
+      assert(mask_levels(state) + CELLS ==
+             (uint8_t *)state + size - rd_memory(RD_COMPONENT_ALIGNMENT));
       if (!fhn) {
         /* Seeds are exact codes: A = 1 outside disks, B = 0.25 inside. */
         assert(rd_get(state, 0, 0, RD_SPECIES_A) == RD_VALUE_ONE ||
@@ -1542,22 +1326,24 @@ int main(int argc, char **argv) {
       assert(!rd_row_rgb2(state, -1, 0, 0));
       assert(rd_get(state, -1, 0, RD_SPECIES_A) == -1);
       assert(rd_mask(NULL, NULL) == -1 && rd_mask_level(state, -1, 0) == -1);
-      assert(rd_mask_level(state, 0, state->height) == -1);
+      assert(rd_mask_level(state, 0, RD_GRID_HEIGHT) == -1);
       assert(rd_width(NULL) == -1);
-      assert(rd_width(state) == state->width &&
-             rd_height(state) == state->height);
+      assert(rd_width(state) == RD_GRID_WIDTH &&
+             rd_height(state) == RD_GRID_HEIGHT);
       assert(memcmp(snapshot, memory, size) == 0);
       for (size_t i = size; i < size + 16; i++) {
         assert(memory[i] == 0xa5);
       }
       /* A disk seeded at the origin wraps around to the opposite corner. */
       rd_seed(state, 0, 0, 8);
-      assert(rd_get(state, state->width - 1, state->height - 1, RD_SPECIES_B) >
-             (fhn ? resting_value(state) : 0));
+      assert(rd_get(state, RD_GRID_WIDTH - 1, RD_GRID_HEIGHT - 1,
+                    RD_SPECIES_B) > (fhn ? resting_value(state) : 0));
       /* Concentrations stay within the codable range. */
-      for (int i = 0; i < state->width * state->height; i++) {
-        int a = rd_get(state, i % state->width, i / state->width, RD_SPECIES_A);
-        int b = rd_get(state, i % state->width, i / state->width, RD_SPECIES_B);
+      for (int i = 0; i < RD_GRID_WIDTH * RD_GRID_HEIGHT; i++) {
+        int a =
+            rd_get(state, i % RD_GRID_WIDTH, i / RD_GRID_WIDTH, RD_SPECIES_A);
+        int b =
+            rd_get(state, i % RD_GRID_WIDTH, i / RD_GRID_WIDTH, RD_SPECIES_B);
         assert(a >= 0 && a <= RD_VALUE_ONE && b >= 0 && b <= RD_VALUE_ONE);
       }
       /* A uniform field stays exactly at the equilibrium A = 1, B = 0, or
@@ -1565,9 +1351,7 @@ int main(int argc, char **argv) {
        * its maximum. The residual rows still hold shares of the previous
        * field. A uniform field is exact only together with zero residuals,
        * as after rd_init. */
-      unsigned uniform_a = fhn                ? FHN_ZERO
-                           : is_packed(state) ? PACKED_FULL_A
-                                              : Q15_FULL_A;
+      unsigned uniform_a = fhn ? FHN_ZERO : Q15_FULL_A;
       unsigned uniform_b = fhn ? FHN_ZERO : 0;
       fill_codes(state, uniform_a, uniform_b);
       const int gs_max[RD_GRAY_SCOTT_PARAMS] = {
@@ -1577,17 +1361,17 @@ int main(int argc, char **argv) {
                                           RD_Q15_ONE, 0,          0};
       assert(!rd_set_params(state, fhn ? fhn_max : gs_max, count));
       rd_step(state, 4);
-      for (int i = 0; i < state->width * state->height; i++) {
+      for (int i = 0; i < RD_GRID_WIDTH * RD_GRID_HEIGHT; i++) {
         unsigned a, b;
         load_codes(state, i, &a, &b);
         assert(a == uniform_a && b == uniform_b);
       }
-      if (!fhn && !is_packed(state)) {
+      if (!fhn) {
         /* The rate of B saturates instead of wrapping: a cell with
          * B = 1 among B = 0 neighbors under feed = kill = 1 has an exact
          * rate of about -3 * 2^30, and must end at B = 0, not 1. A cell with
          * A = 0 among A = 1 neighbors reaches the largest possible A rate. */
-        int edge = 5 * state->width + 5;
+        int edge = 5 * RD_GRID_WIDTH + 5;
         store_codes(state, edge, 0, Q15_FULL_A);
         rd_params(state, RD_Q15_ONE, RD_Q15_ONE, RD_Q15_ONE, RD_Q15_ONE / 2,
                   RD_Q15_ONE);
@@ -1600,11 +1384,11 @@ int main(int argc, char **argv) {
         fill_codes(state, Q15_FULL_A, 0);
       }
       if (fhn) {
-        check_fhn_extremes(mode);
-        check_fhn_init(mode);
+        check_fhn_extremes();
+        check_fhn_init();
       }
-      /* Dithered rounding and error diffusion mass conservation. */
-      check_dither(state);
+      /* Rounding and error diffusion mass conservation. */
+      check_rounding(state);
       check_diffusion(state, RD_SPECIES_A, RD_VALUE_ONE / 3);
       check_diffusion(state, RD_SPECIES_B, RD_VALUE_ONE / 7);
       check_diffusion(state, RD_SPECIES_B, 12345);
@@ -1613,8 +1397,8 @@ int main(int argc, char **argv) {
       for (int alignment = 0; alignment < 4; alignment++) {
         uint8_t *unaligned = malloc(size + 8);
         memset(unaligned, 0xa5, size + 8);
-        State *aligned_state = rd_init_model(unaligned + alignment, size, mode,
-                                             model, 42, NULL, 0);
+        State *aligned_state =
+            rd_init_model(unaligned + alignment, size, model, 42, NULL, 0);
         assert(aligned_state);
         rd_step(aligned_state, 1);
         assert(
@@ -1629,11 +1413,11 @@ int main(int argc, char **argv) {
         }
         free(unaligned);
       }
-      check_mask(mode, model);
-      printf("model %d, mode %d: %zu bytes, "
-             "oracle/laplacian/codes/rgb2/validation/dither/diffusion/mask "
+      check_mask(model);
+      printf("model %d: %zu bytes, "
+             "oracle/laplacian/codes/rgb2/validation/rounding/diffusion/mask "
              "OK\n",
-             model, mode, size);
+             model, size);
       free(memory);
       free(reference_memory);
       free(snapshot);

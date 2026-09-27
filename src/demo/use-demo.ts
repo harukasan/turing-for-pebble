@@ -11,7 +11,6 @@ import {
   defaultParameters,
   defaultParametersFor,
   defaultPlayerSettings,
-  engineSupportsModel,
   isFloat,
   type Engine,
   type Model,
@@ -54,14 +53,10 @@ const initialOptions = (): DemoOptions => ({
 
 const emptyStats: PlayerStats = { steps: 0, stepMs: 0, bytes: null };
 
-/** Options with new parameters, and the watch engine if the current engine
- * does not run their model. */
+/** Options with new parameters. Both engines run every model. */
 const withModel = (options: DemoOptions, params: Parameters): DemoOptions => ({
   ...options,
   params,
-  engine: engineSupportsModel(options.engine, params.model)
-    ? options.engine
-    : "q15-120",
 });
 
 export function useDemo(assetBaseUrl: string) {

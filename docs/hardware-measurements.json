@@ -1,9 +1,8 @@
 {
-  "description": "The measurement of the production watch build on the physical Pebble Time 2, taken from the four RD startup lines and the RD light line of a build made with RD_BUILD_LOG=1 and installed with PEBBLE_PHONE=<ip> pnpm run device. One entry per measured mode; scripts/build-report.py copies each into public/reports/comparison.json.",
+  "description": "The measurement of the production watch build on the physical Pebble Time 2, taken from the four RD startup lines and the RD light line of a build made with RD_BUILD_LOG=1 and installed with PEBBLE_PHONE=<ip> pnpm run device. One entry per measurement; scripts/build-report.py copies the newest of each build and face into public/reports/comparison.json.",
   "fields": {
     "commit": "git commit of the measured build",
-    "mode": "0, 1, or 3",
-    "build": "output name of scripts/build-pebble.sh (mode-<build>.pbw): 0, 1, 3, or 3-analog. Entries without it were measured with the build of their mode",
+    "build": "output name of scripts/build-pebble.sh: watchface, which holds both faces, or watchface-analog. Entries without it were measured with the watchface build or its predecessor",
     "date": "ISO 8601 date",
     "firmware": "watch firmware version",
     "startupWallMs": "wall_ms of the RD startup line: the validated slice and gap times summed until the startup and any minute refill it still owed finished (gaps of 5 s or more are excluded and flagged as interrupted)",
@@ -18,12 +17,11 @@
     "interrupted": "interrupted",
     "note": "free-text context of the entry: steps, frames, burst timings, and what changed",
     "settingsLog": "RD settings lines captured during this run, when available",
-    "face": "face shown, digital or analog (the face setting, or RD_FACE in 3-analog). Entries without it were measured with the digital face"
+    "face": "face shown, digital or analog (the face setting, or RD_FACE in watchface-analog). Entries without it were measured with the digital face"
   },
   "measurements": [
     {
       "commit": "53a4a19",
-      "mode": 3,
       "date": "2026-09-26",
       "firmware": "unknown",
       "startupWallMs": 29978,
@@ -40,7 +38,6 @@
     },
     {
       "commit": "7db03a3",
-      "mode": 3,
       "date": "2026-09-27",
       "firmware": "unknown",
       "startupWallMs": 29954,
@@ -57,7 +54,6 @@
     },
     {
       "commit": "826050e",
-      "mode": 3,
       "date": "2026-09-27",
       "firmware": "unknown",
       "startupWallMs": 29957,
@@ -79,7 +75,6 @@
     },
     {
       "commit": "826050e",
-      "mode": 3,
       "date": "2026-09-27",
       "firmware": "unknown",
       "startupWallMs": 29961,
@@ -96,8 +91,7 @@
     },
     {
       "commit": "ca8ac29",
-      "mode": 3,
-      "build": "3",
+      "build": "watchface",
       "face": "analog",
       "date": "2026-09-27",
       "firmware": "unknown",
@@ -115,8 +109,7 @@
     },
     {
       "commit": "59366ec",
-      "mode": 3,
-      "build": "3",
+      "build": "watchface",
       "face": "analog",
       "date": "2026-09-27",
       "firmware": "unknown",
@@ -139,7 +132,6 @@
     },
     {
       "commit": "2e29e84",
-      "mode": 3,
       "date": "2026-09-27",
       "firmware": "unknown",
       "loopMs": 0,
@@ -156,7 +148,6 @@
     },
     {
       "commit": "2e29e84",
-      "mode": 3,
       "date": "2026-09-27",
       "firmware": "unknown",
       "loopMs": 0,
@@ -173,8 +164,7 @@
     },
     {
       "commit": "2c86e7c",
-      "mode": 3,
-      "build": "3",
+      "build": "watchface",
       "face": "digital",
       "date": "2026-09-27",
       "firmware": "unknown",
@@ -195,6 +185,72 @@
         "RD settings stops=2 mid1=466928 mid2=8cb43f date=0 face=0"
       ],
       "note": "Both models and both faces after the rebase onto the analog face, RD_BUILD_LOG=1 and RD_BUILD_LOAD_LIMIT, 24,720 B load. The phone's stored settings (fhn-stripes at its former rates, the digital face, the date hidden) arrived at launch and restarted the field. Startup 1,911 steps, 671 slices, and 670 draws, with since_init_ms=35,281. The minimum free heap, 14,960 B, is 1,424 B below the 16 KiB target with this logging build, which loads 3,404 B more than the production build."
+    },
+    {
+      "commit": "b5b0f05",
+      "build": "watchface",
+      "face": "digital",
+      "date": "2026-09-27",
+      "firmware": "unknown",
+      "startupWallMs": 29995,
+      "stepsPerSecond": 56.4,
+      "avgStepUs": 13557,
+      "maxStepMs": 39,
+      "avgDrawUs": 6761,
+      "avgTextUs": 697,
+      "minimumFreeHeapBytes": 16656,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "settingsLog": [
+        "RD settings model=1 p0=1638,32768,492,1229,19661 src=p",
+        "RD settings p5=0,32768,0,0,0",
+        "RD settings pal=0 low=001e12 high=d2ff55 font=0 avoid=1 clock=1",
+        "RD settings stops=2 mid1=466928 mid2=8cb43f date=0 face=0"
+      ],
+      "note": "The single-grid core with both models and both faces, RD_BUILD_LOG=1 and RD_BUILD_LOAD_LIMIT, 23,520 B load, relaunched from the watchface menu with the stored fhn-stripes settings, the digital face, and the date hidden. RD init reported core_bytes=88175 and mask_ms=4. Startup 1,692 steps, 567 slices, and 562 draws, with since_init_ms=30,047 and a longest slice of 63 ms. The minimum free heap, 16,656 B, is 272 B above the 16 KiB target with this logging build, which loads 3,364 B more than the production build. An earlier install of the same build before the settings were set measured the same minimum."
+    },
+    {
+      "commit": "b5b0f05",
+      "build": "watchface-analog",
+      "face": "analog",
+      "date": "2026-09-27",
+      "firmware": "unknown",
+      "startupWallMs": 34799,
+      "stepsPerSecond": 53.6,
+      "avgStepUs": 14445,
+      "maxStepMs": 39,
+      "avgDrawUs": 7568,
+      "avgTextUs": 189,
+      "minimumFreeHeapBytes": 18416,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "note": "The build with the analog face fixed, RD_BUILD_LOG=1, 21,760 B load, installed with the stored fhn-stripes settings and the date hidden. The log stream attached after the RD init and RD settings lines. A minute change during the startup swept the hands with 17 mask rebuilds of at most 8 ms in 1,043 ms with 48 steps, and the refill it owed extended the startup to 1,867 steps, 646 slices, and 640 draws, with since_init_ms=34,743 and a longest slice of 62 ms. The minimum free heap, 18,416 B, is 2,032 B above the 16 KiB target with this logging build, which loads 3,364 B more than the production build."
+    },
+    {
+      "commit": "b5b0f05",
+      "build": "watchface",
+      "face": "analog",
+      "date": "2026-09-27",
+      "firmware": "unknown",
+      "startupWallMs": 30019,
+      "stepsPerSecond": 52.4,
+      "avgStepUs": 14643,
+      "maxStepMs": 39,
+      "avgDrawUs": 7757,
+      "avgTextUs": 94,
+      "minimumFreeHeapBytes": 16656,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "settingsLog": [
+        "RD settings model=1 p0=1638,32768,492,1229,19661 src=p",
+        "RD settings p5=0,32768,0,0,0",
+        "RD settings pal=0 low=001e12 high=d2ff55 font=0 avoid=1 clock=1",
+        "RD settings stops=2 mid1=466928 mid2=8cb43f date=1 face=1"
+      ],
+      "note": "The single-grid core with both models and both faces, RD_BUILD_LOG=1 and RD_BUILD_LOAD_LIMIT, 23,520 B load, relaunched from the watchface menu with the stored fhn-stripes settings, the analog face, and the date shown, which masks the hands and the date. RD init reported core_bytes=88175 and mask_ms=8. A sweep 1 s after launch moved no hand. Startup 1,575 steps, 580 slices, and 574 draws, with since_init_ms=30,027 and a longest slice of 67 ms. The minimum free heap, 16,656 B, equals that of the digital face with the date hidden, 272 B above the 16 KiB target with this logging build. In the session before the relaunch, where the settings arrived from the phone and restarted the field, the startup had one step of 90 ms and a slice of 106 ms, with the same minimum free heap."
     }
   ]
 }

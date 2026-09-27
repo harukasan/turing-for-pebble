@@ -310,14 +310,7 @@ static void draw(Layer *this_layer, GContext *ctx) {
                        last);
       (void)pixels;
 #else
-#if RD_MODE == 1 || RD_MODE == 2
-      /* Display rows 2k and 2k + 1 show the same grid row. */
-      if (!pixels || (y & 1) == 0) {
-        pixels = rd_row_rgb2(state, y, palette, RD_RENDER_FLAGS);
-      }
-#else
       pixels = rd_row_rgb2(state, y, palette, RD_RENDER_FLAGS);
-#endif
       if (pixels) {
         memcpy(row.data + first, pixels + first, (size_t)(last - first + 1));
       }
@@ -382,7 +375,7 @@ static void log_summary(void) {
    * clock difference as a cross-check. A log message is truncated beyond
    * about 90 characters, so the summary spans four short lines. */
   APP_LOG(APP_LOG_LEVEL_INFO,
-          "RD startup mode=%d steps=%lu wall_ms=%lu since_init_ms=%ld", RD_MODE,
+          "RD startup steps=%lu wall_ms=%lu since_init_ms=%ld",
           (unsigned long)steps_total, (unsigned long)wall,
           (long)since_ms(startup_start_ms));
   APP_LOG(APP_LOG_LEVEL_INFO,
@@ -409,8 +402,8 @@ static void log_progress(void) {
   }
   uint32_t wall = busy_ms + gap_ms;
   APP_LOG(APP_LOG_LEVEL_INFO,
-          "RD prof mode=%d step=%lu rate_x10=%lu busy_ms=%lu gap_ms=%lu",
-          RD_MODE, (unsigned long)rd_steps(state),
+          "RD prof step=%lu rate_x10=%lu busy_ms=%lu gap_ms=%lu",
+          (unsigned long)rd_steps(state),
           (unsigned long)(wall ? (uint64_t)steps_total * 10000 / wall : 0),
           (unsigned long)busy_ms, (unsigned long)gap_ms);
   APP_LOG(APP_LOG_LEVEL_INFO,
@@ -423,9 +416,9 @@ static void log_progress(void) {
           timing_unreliable);
 #else
   APP_LOG(APP_LOG_LEVEL_INFO,
-          "RD mode=%d step=%lu heap_min=%lu compute_max_ms=%lu "
+          "RD step=%lu heap_min=%lu compute_max_ms=%lu "
           "draw_max_ms=%lu clock_invalid=%d",
-          RD_MODE, (unsigned long)rd_steps(state), (unsigned long)min_heap,
+          (unsigned long)rd_steps(state), (unsigned long)min_heap,
           (unsigned long)max_compute, (unsigned long)max_draw,
           timing_unreliable);
 #endif
@@ -618,7 +611,6 @@ static void focus(bool on) {
   }
 }
 
-#if RD_AVOID
 /* Build the cell mask of the clock face of clock_time into clock_mask: the
  * digits, or the hands at the shown angles and the date. */
 static int build_clock_mask(void) {
@@ -635,13 +627,11 @@ static int build_clock_mask(void) {
                   clock_time.tm_year + 1900, clock_time.tm_mon + 1,
                   clock_time.tm_mday, RD_HALO, settings_date());
 }
-#endif
 
 /* Build the mask of the clock face of clock_time and install it: B is held
  * at 0 under the digits or hands at once, and the kill rate rises toward
  * them. Without avoidance the mask is removed. */
 static void rebuild_mask(void) {
-#if RD_AVOID
   if (!settings_avoiding()) {
     /* The bitmap stays allocated: the heap is measured with it, and
      * turning avoidance back on then cannot fail to allocate it. */
@@ -668,7 +658,6 @@ static void rebuild_mask(void) {
       sweep_mask_max_ms = mask_ms;
     }
   }
-#endif
 #endif
 #endif
 }
@@ -841,13 +830,13 @@ static void init_field(void) {
     params[i] = (int)setting(SETTING_P0 + i);
   }
   int model = (int)setting(SETTING_MODEL);
-  state = rd_init_model(allocation, rd_bytes(RD_MODE), RD_MODE, model, RD_SEED,
-                        params, rd_param_count(model));
+  state = rd_init_model(allocation, rd_bytes(), model, RD_SEED, params,
+                        rd_param_count(model));
   if (!state) {
     static const int defaults[] = {RD_DEFAULT_PARAMS};
-    state = rd_init_model(allocation, rd_bytes(RD_MODE), RD_MODE,
-                          RD_DEFAULT_MODEL, RD_SEED, defaults,
-                          (int)(sizeof defaults / sizeof defaults[0]));
+    state =
+        rd_init_model(allocation, rd_bytes(), RD_DEFAULT_MODEL, RD_SEED,
+                      defaults, (int)(sizeof defaults / sizeof defaults[0]));
   }
 }
 
@@ -928,21 +917,19 @@ static void apply_settings(unsigned changed) {
 
 #ifdef RD_BENCH
 void rd_bench_log(void *state, int count, uint32_t (*now)(void),
-                  uint32_t out[5]);
+                  uint32_t out[4]);
 
 /* Phase timing of 20 steps, logged as microseconds per step, once the log
  * stream has had time to attach. */
 static void bench(void *context) {
   (void)context;
-  uint32_t t[5];
+  uint32_t t[4];
   rd_bench_log(state, 20, now_ms, t);
-  APP_LOG(APP_LOG_LEVEL_INFO,
-          "RD bench decode=%lu lap=%lu react=%lu encode=%lu step=%lu",
+  APP_LOG(APP_LOG_LEVEL_INFO, "RD bench lap=%lu react=%lu encode=%lu step=%lu",
           (unsigned long)(t[0] * 50), (unsigned long)((t[1] - t[0]) * 50),
-          (unsigned long)((t[2] - t[1]) * 50),
-          (unsigned long)((t[3] - t[2]) * 50), (unsigned long)(t[3] * 50));
+          (unsigned long)((t[2] - t[1]) * 50), (unsigned long)(t[2] * 50));
   APP_LOG(APP_LOG_LEVEL_INFO, "RD bench render_us=%lu",
-          (unsigned long)(t[4] * 50));
+          (unsigned long)(t[3] * 50));
 }
 #endif
 
@@ -954,7 +941,7 @@ static void bench(void *context) {
 
 static void init(void) {
   settings_load();
-  allocation = malloc(rd_bytes(RD_MODE));
+  allocation = malloc(rd_bytes());
   if (!allocation) {
     APP_LOG(APP_LOG_LEVEL_ERROR, "Core allocation failed");
     return;
@@ -992,10 +979,10 @@ static void init(void) {
 #endif
 #if RD_LOG
   APP_LOG(APP_LOG_LEVEL_INFO,
-          "RD init mode=%d model=%d font=%d face=%d core_bytes=%lu "
-          "heap_min=%lu mask_ms=%lu",
-          RD_MODE, rd_model(state), settings_font(), settings_analog(),
-          (unsigned long)rd_bytes(RD_MODE), (unsigned long)min_heap,
+          "RD init model=%d font=%d face=%d core_bytes=%lu heap_min=%lu "
+          "mask_ms=%lu",
+          rd_model(state), settings_font(), settings_analog(),
+          (unsigned long)rd_bytes(), (unsigned long)min_heap,
           (unsigned long)mask_ms);
 #endif
   begin_startup();

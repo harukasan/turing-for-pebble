@@ -10,7 +10,7 @@
  *
  * usage: precision <config> <preset 0-4> <seed> <checkpoint>...
  * config: comma-separated key=value pairs
- *   g=200|120|100   grid 200x228, 120x136, or 100x114, seeded like rd_init
+ *   g=120           grid 120x136 (the default), seeded like rd_init
  *   a=CODEC b=CODEC storage of each species:
  *                   lin<bits>[@max]        linear codes over [0, max]
  *                   pow<bits>:<gamma>[@max] value = max * (s / N)^gamma
@@ -611,8 +611,7 @@ static void parse_config(Config *cfg, const char *text) {
     }
   }
   free(spec);
-  if ((cfg->grid != 200 && cfg->grid != 120 && cfg->grid != 100) ||
-      !cfg->a.levels || !cfg->b.levels) {
+  if (cfg->grid != 120 || !cfg->a.levels || !cfg->b.levels) {
     fail("incomplete config", text);
   }
   if (cfg->inter >= I_X32C1 &&
@@ -628,7 +627,7 @@ int main(int argc, char **argv) {
     fprintf(stderr, "usage: %s config preset seed checkpoint...\n", argv[0]);
     return 2;
   }
-  Config cfg = {.grid = 200, .rounding = R_STO, .inter = I_Q15};
+  Config cfg = {.grid = 120, .rounding = R_STO, .inter = I_Q15};
   parse_config(&cfg, argv[1]);
   int preset = atoi(argv[2]);
   uint32_t seed = (uint32_t)strtoul(argv[3], NULL, 10);

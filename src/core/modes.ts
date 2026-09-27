@@ -6,13 +6,12 @@ import {
 import type { ClockFont } from "../../lib/clock-fonts";
 import type { PaletteId } from "../../lib/palettes";
 
-export type Engine =
-  "u8-200" | "q15-100" | "q15-120" | "float-200" | "float-100" | "float-120";
+/** The Q15 C core in WebAssembly, the watch's computation, or the Float32
+ * reference on the same 120 × 136 grid. */
+export type Engine = "q15-120" | "float-120";
 
-export const engineWidth = (engine: Engine) => Number(engine.split("-")[1]);
-export const gridHeight = (width: number) => Math.floor((width * 228) / 200);
-export const engineMode = (engine: Engine) =>
-  engine.endsWith("200") ? 0 : engine.endsWith("120") ? 3 : 1;
+export const GRID_WIDTH = 120;
+export const GRID_HEIGHT = 136;
 export const isFloat = (engine: Engine) => engine.startsWith("float");
 export const HALO = 1;
 /** Duration of the sweep of the analog hands to a new minute (RD_SWEEP_MS
@@ -27,11 +26,6 @@ export const models: [Model, string][] = [
   ["gray-scott", "Gray–Scott"],
   ["fhn", "FitzHugh–Nagumo"],
 ];
-
-/** Whether an engine runs a model: the packed 200 x 228 mode runs only
- * Gray-Scott, the Q15 modes and Float32 run both. */
-export const engineSupportsModel = (engine: Engine, model: Model) =>
-  model === "gray-scott" || engine !== "u8-200";
 
 export { defaultParametersFor };
 

@@ -48,7 +48,7 @@ def build(ctx):
         # Per-target flags come after the SDK's -Os, so RD_BUILD_OPT (default
         # -O3) selects the optimization level. RD_BUILD_PROFILE=1 adds the
         # clock calibration and periodic profile log to the watchface.
-        cflags = ['-DRD_MODE=' + os.environ.get('RD_BUILD_MODE', '3'), '-fstack-usage', os.environ.get('RD_BUILD_OPT', '-O3')]
+        cflags = ['-fstack-usage', os.environ.get('RD_BUILD_OPT', '-O3')]
         # RD_BUILD_MODEL folds the core to one model (0 Gray-Scott, 1
         # FitzHugh-Nagumo). Without it the build includes both.
         if os.environ.get('RD_BUILD_MODEL'):

@@ -1,8 +1,8 @@
 // Compare the released Wasm core with the Float32 references at the same
 // grid resolution, initial field, and effective parameters: Gray-Scott
-// against lib/simulation.ts (Q15, with da and db folded in the Q15 modes)
-// and FitzHugh-Nagumo against lib/fhn-simulation.ts (du and dv folded, k
-// and rest in Q13) in the Q15 modes.
+// against lib/simulation.ts (Q15, with da and db folded with the 1/20 of
+// the Laplacian) and FitzHugh-Nagumo against lib/fhn-simulation.ts (du and
+// dv folded, k and rest in Q13).
 import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { Simulation } from "../lib/simulation.ts";
@@ -87,25 +87,25 @@ function metrics(fields, fixedValue, range, width, height) {
 }
 
 const rows = [];
-for (const mode of [0, 1, 2, 3]) {
-  const width = [200, 100, 100, 120][mode];
-  const height = Math.floor((width * 228) / 200);
-  const bytes = api.rd_bytes(mode);
+const width = 120;
+const height = Math.floor((width * 228) / 200);
+const bytes = api.rd_bytes();
+{
   const allocation = api.malloc(bytes);
   assert(allocation, "Wasm allocation failed");
   for (const preset of REFERENCE_PRESETS.map((id) => presetById(id)))
     for (const seed of seeds) {
-      const state = api.rd_init(allocation, bytes, mode, seed);
+      const state = api.rd_init(allocation, bytes, seed);
       assert(state, "Wasm initialization failed");
       const requested = {
         ...requestedBase,
         feed: preset.feed,
         kill: preset.kill,
       };
-      // The Q15 modes fold da and db with the 1/20 of the Laplacian into
-      // round(D / 20) / 20 (version 4), as the core computes with.
+      // The core folds da and db with the 1/20 of the Laplacian into
+      // round(D / 20) / 20 (version 4), and computes with those.
       const fold = (key, value) =>
-        (mode === 1 || mode === 3) && (key === "da" || key === "db")
+        key === "da" || key === "db"
           ? (Math.round(q15(value) / 20) * 20) / 32768
           : effective(value);
       const parameters = Object.fromEntries(
@@ -153,7 +153,6 @@ for (const mode of [0, 1, 2, 3]) {
         previous = step;
       }
       rows.push({
-        mode,
         model: "gray-scott",
         id: preset.id,
         preset: preset.name,
@@ -165,22 +164,19 @@ for (const mode of [0, 1, 2, 3]) {
         samples,
       });
       process.stdout.write(
-        `mode ${mode} ${preset.name} seed ${seed}: ` +
+        `${preset.name} seed ${seed}: ` +
           `B MAE ${samples.at(-1).b.mae.toFixed(6)}, ` +
           `r ${samples.at(-1).b.correlation?.toFixed(4) ?? "n/a"}\n`
       );
     }
   api.free(allocation);
 }
-// FitzHugh-Nagumo in the Q15 modes, compared on x = 4 s - 2 of the stored
+// FitzHugh-Nagumo, compared on x = 4 s - 2 of the stored
 // fraction s: v is species 0 and u species 1. The spiral keeps moving, so
 // its error grows with every displaced front.
 const vector = api.malloc(10 * 4);
 assert(vector, "Wasm allocation failed");
-for (const mode of [1, 3]) {
-  const width = [200, 100, 100, 120][mode];
-  const height = Math.floor((width * 228) / 200);
-  const bytes = api.rd_bytes(mode);
+{
   const allocation = api.malloc(bytes);
   assert(allocation, "Wasm allocation failed");
   for (const id of FHN_PRESETS)
@@ -193,14 +189,13 @@ for (const mode of [1, 3]) {
       const state = api.rd_init_model(
         allocation,
         bytes,
-        mode,
         1,
         seed,
         vector,
         parameterOrder.fhn.length
       );
       assert(state, "Wasm initialization failed");
-      const parameters = coreEffective(requested, mode);
+      const parameters = coreEffective(requested);
       const x = (gx, gy, kind) =>
         (4 * api.rd_get(state, gx, gy, kind)) / VALUE_ONE - 2;
       const reference = new FhnSimulation(width, height);
@@ -226,7 +221,6 @@ for (const mode of [1, 3]) {
         previous = step;
       }
       rows.push({
-        mode,
         model: "fhn",
         id,
         preset: preset.name,
@@ -238,7 +232,7 @@ for (const mode of [1, 3]) {
         samples,
       });
       process.stdout.write(
-        `mode ${mode} ${id} seed ${seed}: ` +
+        `${id} seed ${seed}: ` +
           `u MAE ${samples.at(-1).u.mae.toFixed(6)}, ` +
           `r ${samples.at(-1).u.correlation?.toFixed(4) ?? "n/a"}\n`
       );
@@ -252,7 +246,7 @@ const report = {
   coreVersion: 5,
   checkpoints,
   method:
-    "Float32 fields start from the rd_get Q24 values, use the same grid and the effective parameters (Q15, with da and db folded with the 1/20 of the Laplacian in the Q15 modes), and run the existing Float32 Euler step. Each concentration is compared cell by cell. Mode 2 isolates storage precision at 100x114. FitzHugh-Nagumo rows start the lib/fhn-simulation.ts fields from x = 4 s - 2 of the rd_get values in modes 1 and 3, use du and dv folded the same way and k and rest rounded to Q13, and compare v (species 0) and u (species 1) in x units, counting cells that differ by more than 0.04, 1% of the range of x.",
+    "Float32 fields start from the rd_get Q24 values, use the same 120x136 grid and the effective parameters (Q15, with da and db folded with the 1/20 of the Laplacian), and run the existing Float32 Euler step. Each concentration is compared cell by cell. FitzHugh-Nagumo rows start the lib/fhn-simulation.ts fields from x = 4 s - 2 of the rd_get values, use du and dv folded the same way and k and rest rounded to Q13, and compare v (species 0) and u (species 1) in x units, counting cells that differ by more than 0.04, 1% of the range of x.",
   rows,
 };
 writeFileSync(

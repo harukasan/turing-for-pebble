@@ -1,9 +1,8 @@
-/* Growth of the pattern on one grid for the resolution study: run a mode
- * and model with the LECO clock mask installed and print one JSON line per
- * checkpoint, and write the interpolated display as a PPM there. Driven
- * by scripts/fill.py.
+/* Growth of the pattern for the seeding study: run a model with the LECO
+ * clock mask installed and print one JSON line per checkpoint, and write
+ * the interpolated display as a PPM there. Driven by scripts/fill.py.
  *
- *   build/fill mode model p0 ... p9 seed disks min_radius radius_range
+ *   build/fill model p0 ... p9 seed disks min_radius radius_range
  *              out_prefix checkpoint...
  *
  * model and p0 to p9 are the model and the Q15 parameter vector of a preset
@@ -34,30 +33,30 @@
 
 int main(int argc, char **argv) {
   /* The arguments after the parameter vector. */
-  const int rest = 3 + RD_PARAM_MAX;
+  const int rest = 2 + RD_PARAM_MAX;
   if (argc < rest + 6) {
     return 1;
   }
-  int mode = atoi(argv[1]), model = atoi(argv[2]);
+  int model = atoi(argv[1]);
   int params[RD_PARAM_MAX];
   for (int i = 0; i < RD_PARAM_MAX; i++) {
-    params[i] = atoi(argv[3 + i]);
+    params[i] = atoi(argv[2 + i]);
   }
   uint32_t seed = (uint32_t)strtoul(argv[rest], NULL, 10);
   int disks = atoi(argv[rest + 1]), min_radius = atoi(argv[rest + 2]),
       radius_range = atoi(argv[rest + 3]);
   const char *prefix = argv[rest + 4];
-  if (!mode_supported(mode) || !model_supported(model) || disks < 0 ||
-      min_radius < 1 || radius_range < 1) {
+  if (!model_supported(model) || disks < 0 || min_radius < 1 ||
+      radius_range < 1) {
     return 1;
   }
-  void *memory = malloc(rd_bytes(mode));
-  State *state = rd_init_model(memory, rd_bytes(mode), mode, model, seed,
-                               params, PARAM_COUNT[model]);
+  void *memory = malloc(rd_bytes());
+  State *state = rd_init_model(memory, rd_bytes(), model, seed, params,
+                               PARAM_COUNT[model]);
   if (!state) {
     return 1;
   }
-  int width = state->width, height = state->height;
+  const int width = RD_GRID_WIDTH, height = RD_GRID_HEIGHT;
   if (model != RD_MODEL_FHN || state->params[FHN_INIT] == 0) {
     fill_rest(state);
     uint32_t lcg = seed;
@@ -148,11 +147,11 @@ int main(int argc, char **argv) {
       }
     }
     fclose(ppm);
-    printf("{\"mode\": %d, \"width\": %d, \"height\": %d, \"model\": %d, "
+    printf("{\"width\": %d, \"height\": %d, \"model\": %d, "
            "\"seed\": %u, \"disks\": %d, \"minRadius\": %d, "
            "\"radiusRange\": %d, \"step\": %d, \"hostMsPerStep\": %.3f, "
            "\"bMean\": %.5f, \"blocks\": %.4f, \"stripeWidthPx\": %.3f}\n",
-           mode, width, height, model, seed, disks, min_radius, radius_range,
+           width, height, model, seed, disks, min_radius, radius_range,
            checkpoint, total_ms / checkpoint, cells ? sum / cells : 0,
            open ? (double)lit / open : 0, runs ? (double)run_pixels / runs : 0);
     fflush(stdout);

@@ -6,7 +6,6 @@ from pathlib import Path
 
 out = Path('public/reports/comparison.json')
 r = json.loads(out.read_text())
-r['arm'] = []
 hardware = json.loads(Path('docs/hardware-measurements.json').read_text())[
     'measurements'
 ]
@@ -14,56 +13,52 @@ if hardware:
     latest = hardware[-1]
     r['physicalDevice'] = 'Pebble Time 2'
     r['adoption'] = (
-        f'Mode {latest["mode"]} startup and heap measured on a physical Pebble Time 2 '
+        'Startup and heap measured on a physical Pebble Time 2 '
         f'at commit {latest["commit"]} with a logging build. '
         'Production acceptance remains pending.'
     )
 
-# The watchfaces of build-pebble.sh: output name, mode, and clock faces,
-# both selected by the face setting or the analog face fixed.
+# The watchfaces of build-pebble.sh: output name and clock faces, both
+# selected by the face setting or the analog face fixed.
 variants = [
-    ('0', 0, 'both'),
-    ('1', 1, 'both'),
-    ('3', 3, 'both'),
-    ('3-analog', 3, 'analog'),
+    ('watchface', 'both'),
+    ('watchface-analog', 'analog'),
 ]
 
 
-def newest(name, mode, face):
+def newest(name, face):
     """The newest physical-watch measurement of a build with a face shown,
-    if any. Entries without a build were measured with build-pebble.sh's
-    build of their mode, and entries without a face with the digital
-    face."""
+    if any. Entries without a build were measured with the watchface build,
+    and entries without a face with the digital face."""
     return next(
         (
             m
             for m in reversed(hardware)
-            if m['mode'] == mode
-            and m.get('build', str(mode)) == name
-            and m.get('face', 'digital') == face
+            if m.get('build', 'watchface') == name and m.get('face', 'digital') == face
         ),
         None,
     )
 
 
-for name, mode, faces in variants:
-    core_bytes = next(c['coreBytes'] for c in r['comparisons'] if c['mode'] == mode)
+core_bytes = r['comparisons'][0]['coreBytes']
+r['arm'] = []
+for name, faces in variants:
     values = (
         subprocess.check_output(
-            ['arm-none-eabi-size', f'build/pebble/mode-{name}.elf'], text=True
+            ['arm-none-eabi-size', f'build/pebble/{name}.elf'], text=True
         )
         .splitlines()[1]
         .split()
     )
     text, data, bss = map(int, values[:3])
     by_face = {
-        face: newest(name, mode, face)
+        face: newest(name, face)
         for face in (('digital', 'analog') if faces == 'both' else (faces,))
     }
     # The physical* fields describe the face a build shows by default.
     physical = next(iter(by_face.values()))
     stack = {}
-    for f in Path(f'build/pebble/stack-{name}').glob('*.su'):
+    for f in Path(f'build/pebble/{name}-stack').glob('*.su'):
         for line in f.read_text().splitlines():
             place, size, kind = line.split('\t')
             stack[place.split(':')[-1]] = int(size)
@@ -71,7 +66,7 @@ for name, mode, faces in variants:
     # Sum is deliberately conservative and excludes the OS call stack.
     r['arm'].append(
         {
-            'mode': mode,
+            'build': name,
             'faces': faces,
             'textBytes': text,
             'dataBytes': data,
@@ -115,7 +110,7 @@ for name, mode, faces in variants:
     )
 r['fontVerification'] = [
     {
-        'screenshot': 'emery-mode-3-leco.png',
+        'screenshot': 'emery-leco.png',
         'font': 'leco',
         'time': '21:38',
         'date': '2026.09.26',
@@ -126,7 +121,7 @@ r['fontVerification'] = [
         'haloNotBlack': 0,
     },
     {
-        'screenshot': 'emery-mode-3-bitham.png',
+        'screenshot': 'emery-bitham.png',
         'font': 'bitham',
         'time': '21:39',
         'date': '2026.09.26',
@@ -137,11 +132,11 @@ r['fontVerification'] = [
         'haloNotBlack': 0,
     },
     {
-        # Mode 3 with the face setting analog: the hands at 452 and 1104
+        # The watchface with the face setting analog: the hands at 452 and 1104
         # (15:46) and the date, against cm_build_analog at halo 0. The
         # halo pixels that are not black show the palette's first step, 27
         # on the row under the date and one at the minute hand's tip.
-        'screenshot': 'emery-mode-3-analog.png',
+        'screenshot': 'emery-analog.png',
         'font': 'leco',
         'face': 'analog',
         'time': '15:46',

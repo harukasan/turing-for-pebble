@@ -63,8 +63,8 @@ static Stored current;
 static SettingsChanged on_change;
 
 static bool valid(const int32_t value[SETTING_COUNT]) {
-  /* rd_check_params also rejects a model the build does not run, a folded
-   * model's other one or FitzHugh-Nagumo in a packed mode. */
+  /* rd_check_params also rejects a model the build does not run, the other
+   * model of a build folded to one. */
   int model = (int)value[SETTING_MODEL];
   int count = rd_param_count(model);
   int params[RD_PARAM_MAX];
@@ -229,8 +229,7 @@ void settings_close(void) { app_message_deregister_callbacks(); }
 bool settings_date(void) { return current.value[SETTING_DATE] != 0; }
 
 bool settings_avoiding(void) {
-  return RD_AVOID && current.value[SETTING_AVOID] &&
-         current.value[SETTING_CLOCK];
+  return current.value[SETTING_AVOID] && current.value[SETTING_CLOCK];
 }
 
 int settings_font(void) {
