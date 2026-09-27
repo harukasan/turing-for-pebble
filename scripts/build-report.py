@@ -110,6 +110,22 @@ r['fontVerification'] = [
         'haloPixels': 1649,
         'haloNotBlack': 0,
     },
+    {
+        # Mode 3 with the face setting analog: the hands at 452 and 1104
+        # (15:46) and the date, against cm_build_analog at halo 0. The
+        # halo pixels that are not black show the palette's first step, 27
+        # on the row under the date and one at the minute hand's tip.
+        'screenshot': 'emery-mode-3-analog.png',
+        'font': 'leco',
+        'face': 'analog',
+        'time': '15:46',
+        'date': '2026.09.27',
+        'glyphPixels': 1556,
+        'missing': 0,
+        'extra': 0,
+        'haloPixels': 965,
+        'haloNotBlack': 28,
+    },
 ]
 r['browserUiVerification'] = 'unavailable: no connected browser'
 r['emulatorTiming'] = (

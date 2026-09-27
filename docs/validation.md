@@ -98,4 +98,6 @@ The emulator RTC implementation in the inspected official PebbleOS source (`src/
 ![Mode 3 with the LECO clock](../public/reports/emery-mode-3-leco.png)
 ![Mode 3 with the Bitham clock](../public/reports/emery-mode-3-bitham.png)
 
-The emulator screenshot of the analog face, `public/reports/emery-mode-3-analog.png`, has not been taken yet. `sh scripts/emulator.sh install 3-analog` and `sh scripts/emulator.sh screenshot public/reports/emery-mode-3-analog.png` produce it.
+![Mode 3 with the analog face](../public/reports/emery-mode-3-analog.png)
+
+The analog face was taken from the production `mode-3` build with the face setting analog, sent through `pebble emu-app-config`, at 15:46 2026.09.27 after the 30 s startup. Its white pixels equal the halo 0 bitmap of `cm_build_analog` for the hands at 452 and 1104 and the LECO date exactly (1,556 pixels, zero missing or extra). Of the 965 pixels of the 1-pixel halo, 937 are black and 28 show the palette's first color step, 27 on row 224 under the date and one at the minute hand's tip, where interpolation reaches an unmasked cell.
