@@ -1,6 +1,6 @@
 # Float32 precision comparison
 
-The fixed-point implementation does **not** retain the same cell-by-cell numerical precision as the original Float32 field implementation, but numerical definition version 4 comes very close to it on the 120 × 136 grid. Version 5 left every Gray–Scott result unchanged and added FitzHugh–Nagumo, measured in its own section below. Compiler optimization itself did not change the fixed-point result in the tested cases. The remaining differences come from the Q15 storage and the Q24 update of the 32-bit arithmetic.
+The fixed-point implementation does **not** retain the same cell-by-cell numerical precision as the original Float32 field implementation, but numerical definition version 5 comes very close to it on the 120 × 136 grid for both models, measured below. Compiler optimization itself did not change the fixed-point result in the tested cases. The remaining differences come from the Q15 storage and the Q24 update of the 32-bit arithmetic.
 
 ## Reproducible method
 
@@ -16,7 +16,7 @@ The reference stores its fields in `Float32Array` and uses JavaScript number ari
 
 ## Gray–Scott results, version 5
 
-The seven Gray–Scott presets with two seeds give 14 cases. The rows of `maze`, `coral`, and `mitosis` are those of version 4, unchanged apart from their `model` field.
+The seven Gray–Scott presets with two seeds give 14 cases.
 
 | Grid and storage       | B MAE after 1 step, mean of 14 cases | B MAE after 100 steps, mean | B MAE after 1,000 steps, mean | B MAE after 1,000 steps, worst case | Lowest B spatial correlation after 1,000 steps |
 | ---------------------- | -----------------------------------: | --------------------------: | ----------------------------: | ----------------------------------: | ---------------------------------------------: |
@@ -32,7 +32,7 @@ The seven Gray–Scott presets with two seeds give 14 cases. The rows of `maze`,
 | `worms`        |                           0.0000011 |                    0.000007 |                      0.000038 |                            0.000039 |                                        0.0021 |
 | `moving-spots` |                           0.0000012 |                    0.000009 |                      0.000034 |                            0.000037 |                                        0.0007 |
 
-No cell differs from the reference by more than 0.01 at 1,000 steps in any case. `worms` and `moving-spots`, whose patterns are still changing at 1,000 steps, have the largest errors. Version 4 was adopted after the precision harness measured the same error for it as for version 3 ([Storage precision study](precision-optimization.md)), so the 32-bit arithmetic costs no precision against the reference with the folded coefficients.
+No cell differs from the reference by more than 0.01 at 1,000 steps in any case. `worms` and `moving-spots`, whose patterns are still changing at 1,000 steps, have the largest errors.
 
 ## FitzHugh–Nagumo, version 5
 
@@ -50,4 +50,4 @@ The spiral starts from the broken wave, which does not depend on the seed, so it
 
 `scripts/check-optimization.sh` compiles the C core with `-O0` and `-O3`. Its field hashes match exactly for both models at 1, 100, and 1,000 steps with seed 42, with and without the clock mask, and with the analog face mask for Gray–Scott, and match the hashes recorded in `tests/golden-hashes.txt`. The existing native-versus-Wasm checks cover the optimized Wasm build. These are deterministic checks of the fixed-point implementation. They do not imply equality with Float32.
 
-Float32 storage has about 24 significant binary bits. The core computes its Gray–Scott rates as exact Q30 products and rounds them once to Q24, so its remaining error is the Q15 storage step of 0.00003 per write, mostly cancelled by error diffusion. Reaction-diffusion patterns amplify small state differences over time, so similar overall shapes can still shift position over long runs. [Storage precision study](precision-optimization.md) compares the arithmetic candidates.
+Float32 storage has about 24 significant binary bits. The core computes its Gray–Scott rates as exact Q30 products and rounds them once to Q24, so its remaining error is the Q15 storage step of 0.00003 per write, mostly cancelled by error diffusion. Reaction-diffusion patterns amplify small state differences over time, so similar overall shapes can still shift position over long runs.

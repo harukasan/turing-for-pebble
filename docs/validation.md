@@ -26,7 +26,7 @@ Version 5 adds FitzHugh–Nagumo to the core and, by default, to the watch build
 
 ## Pattern comparison
 
-For the cell-by-cell comparison with the original Float32 implementation, see [Float32 precision comparison](float-precision.md). The fixed-point implementation is not numerically identical to the Float32 reference. Numerical definition version 4 keeps the B mean absolute error at about 0.00003 at 1,000 steps against the reference at the effective parameters. The Web exposes a Float32 reference run on the same 120 × 136 grid alongside the Wasm engine, and the adapter test checks that its initial field matches the C core. `public/reports/` holds the images of every preset and seed after 10,000 steps, `comparison.png` shows seed 42 of the Gray–Scott presets, and `fhn.png` that of the FitzHugh–Nagumo presets.
+For the cell-by-cell comparison with the original Float32 implementation, see [Float32 precision comparison](float-precision.md). The fixed-point implementation is not numerically identical to the Float32 reference. Numerical definition version 5 keeps the Gray–Scott B mean absolute error at 0.000025 at 1,000 steps against the reference at the effective parameters, the mean of the seven presets and two seeds. The Web exposes a Float32 reference run on the same 120 × 136 grid alongside the Wasm engine, and the adapter test checks that its initial field matches the C core. `public/reports/` holds the images of every preset and seed after 10,000 steps, `comparison.png` shows seed 42 of the Gray–Scott presets, and `fhn.png` that of the FitzHugh–Nagumo presets.
 
 ## Memory
 
@@ -151,7 +151,7 @@ Record the results in this table and as a new entry with `"face": "analog"` and 
 ## Decisions taken from the measurements
 
 - **Grid.** 120 × 136 Q15 was chosen over 134 × 152 Q15, whose free heap on the watch fell below the 16 KiB target with the mask. On the host growth harness (`scripts/fill.py`) the maze preset completes at about 800 steps on this grid. More or smaller initial disks did not finish earlier, so the 24 disks of `rd_init` stay.
-- **Arithmetic.** Numerical definition version 4 (32-bit arithmetic on the Q15 codes) after the harness showed the same Float32 error as version 3 and the watch 21% less time per step.
+- **Arithmetic.** Numerical definition version 4 (32-bit arithmetic on the Q15 codes), which took 21% less time per step on the watch.
 - **Row loop.** The three-pass row update (13.1 ms per step) replaced a single loop over both species (14.25 ms) whose register spills cost about a fifth of its instructions. Holding the previous column's residual in a register was neutral and kept for the oracle's independence. Fusing the Laplacian sums into the cell loop (15.45 ms), unrolling the cell loop twice (15.25 ms), compiling for the Cortex-M33 (14.25 ms), and a branch-free form of the 64-bit rounding were slower or equal and were not adopted.
 - **Rendering.** The interpolated renderer with the loop specialized for 120 cells draws a frame in 6.05 ms in `RD_BENCH` (10.35 ms before its rewrites), and the clock text drawn from the core's glyph tables costs 0.9 ms against 2.8 ms with `graphics_draw_text`.
 - **Pacing.** 30 ms compute slices with a redraw about every 50 ms, three steps per frame, replaced 20 ms slices with 40 ms redraws (two steps per frame at 24.5 frames per second), because the pattern advances 55 instead of 49 steps per second. The startup runs for 30 s instead of a fixed step count, the backlight window uses the same pacing, and a minute change runs 300 steps.

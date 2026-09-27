@@ -19,7 +19,6 @@ pnpm run dev --host 127.0.0.1
 - [Web and watchface behavior](docs/behavior.md), including the [watch settings](docs/behavior.md#watch-settings)
 - [Validation results](docs/validation.md)
 - [Float32 precision comparison](docs/float-precision.md)
-- [Storage precision study](docs/precision-optimization.md)
 
 ## License
 

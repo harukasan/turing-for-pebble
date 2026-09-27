@@ -75,7 +75,7 @@ node --experimental-transform-types scripts/fhn-explore.mjs --preset fhn-spiral 
 | `lint-py` / `format-py` | ruff 0.16.8 (mise)                                   | `scripts/*.py`                        |
 | `lint-sh` / `format-sh` | shellcheck 0.11.0 and shfmt 3.14.1 (mise)            | `scripts/*.sh`                        |
 
-`lint-c` runs `scripts/lint-c.sh`: a clang-format check, then `cc -fsyntax-only -Wall -Wextra -Werror` over `tests/core.c`, `tests/precision.c`, `tests/bench.c`, `tests/fill.c`, `core/rd.c` and `core/clock_mask.c` with `tests/compare.c`, and `pebble/src/c/core.c` with both font sets, both faces, and both models as the default build compiles them, with nearest rendering (`RD_RENDER_FLAGS` 0), and with `RD_FONT` 0 and 1, `RD_FACE` 0 and 1, and `RD_MODEL` 0 and 1, under C99 to mirror the watch build. `main.c` and `settings.c` need the SDK include tree, so they are only checked by `mise run build-pebble`, which compiles with the SDK's `-Werror`. Every other C build (`test-core`, `build-wasm`, `scripts/compare.py`) also passes `-Wall -Wextra`.
+`lint-c` runs `scripts/lint-c.sh`: a clang-format check, then `cc -fsyntax-only -Wall -Wextra -Werror` over `tests/core.c`, `tests/bench.c`, `tests/fill.c`, `core/rd.c` and `core/clock_mask.c` with `tests/compare.c`, and `pebble/src/c/core.c` with both font sets, both faces, and both models as the default build compiles them, with nearest rendering (`RD_RENDER_FLAGS` 0), and with `RD_FONT` 0 and 1, `RD_FACE` 0 and 1, and `RD_MODEL` 0 and 1, under C99 to mirror the watch build. `main.c` and `settings.c` need the SDK include tree, so they are only checked by `mise run build-pebble`, which compiles with the SDK's `-Werror`. Every other C build (`test-core`, `build-wasm`, `scripts/compare.py`) also passes `-Wall -Wextra`.
 
 ruff, shellcheck, and shfmt are installed by `mise install`. clang-format is not managed by mise. Install it from the system package manager. The `.clang-format` configuration needs clang-format 15 or newer for `InsertBraces`, and the sources were formatted with 22.1.8. Other major versions may place braces or blank lines slightly differently.
 
@@ -157,15 +157,6 @@ mise exec -- python scripts/build-report.py
 `compare.py` runs 10,000 steps for every preset of `scripts/list-presets.mjs` with two seeds through `tests/compare.c` (`build/compare model p0 ... p9 seed steps out.ppm`). It creates `preset-<id>-seed-S.png` and `comparison.json` under `public/reports/`, with `comparison.png` (the seven Gray–Scott presets, seed 42) and `fhn.png` (the three FitzHugh–Nagumo presets, seed 42). `compare.py` rewrites `comparison.json` from scratch, so run `build-report.py` after it to add the ARM, stack, and physical sections back.
 
 The report builder reads ARM ELF section sizes and `.su` stack reports and `docs/hardware-measurements.json`, and rewrites `public/reports/comparison.json` in place, so run `mise run build-pebble` and `compare.py` first with `arm-none-eabi-size` from the SDK toolchain on `PATH`. Runtime measurements must retain their measured build and observation scope. Do not substitute theoretical remaining RAM for measured minimum free heap.
-
-## Storage precision experiment
-
-```sh
-sh scripts/precision-sweep.sh
-sh scripts/precision-sweep.sh 100 1000 3000
-```
-
-`tests/precision.c` is a self-contained candidate simulator that compares storage codes, rounding schemes, and arithmetic precision against the Float32 reference. `scripts/precision-configs.txt` lists the candidates and `scripts/precision-aggregate.mjs` prints the Markdown summary. The sweep uses every core and takes a few minutes. `PRECISION_CONFIGS` names another candidate list and `PRECISION_OUT` another result file. The harness runs the watch grid (`g=120`), and `i=q15x32c2` is the version 4 arithmetic of the core. [Storage precision study](precision-optimization.md) records its results.
 
 ## Font provenance
 
