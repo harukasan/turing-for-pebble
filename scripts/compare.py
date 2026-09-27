@@ -6,7 +6,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 # The presets of the contact sheets, seed 42 each, left to right.
-SHEET_PRESETS = ['maze', 'coral', 'mitosis', 'spots', 'thin-line']
+SHEET_PRESETS = ['maze', 'coral', 'mitosis', 'holes', 'cells', 'worms', 'moving-spots']
 FHN_SHEET_PRESETS = ['fhn-stripes', 'fhn-hex', 'fhn-spiral']
 
 presets = json.loads(

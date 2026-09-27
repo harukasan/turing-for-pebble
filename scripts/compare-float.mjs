@@ -12,6 +12,7 @@ import {
   parameterVector,
   presetById,
   presetParameters,
+  presets,
 } from "../lib/presets.ts";
 import { effective as coreEffective } from "../lib/wasm-simulation.ts";
 
@@ -24,9 +25,26 @@ const { instance } = await WebAssembly.instantiate(wasm, {
   },
 });
 const api = instance.exports;
-// The Gray-Scott cases stay the five presets the version 4 averages of
-// docs/float-precision.md were measured on.
-const REFERENCE_PRESETS = ["maze", "coral", "mitosis", "spots", "thin-line"];
+// The Gray-Scott cases the version 4 averages of docs/float-precision.md
+// were measured on, fixed here with their parameters because spots and
+// thin-line are no longer presets. thin-line, with its narrow bands, is
+// the most sensitive case. The other Gray-Scott presets of lib/presets.ts
+// follow them.
+const REFERENCE_CASES = [
+  { id: "maze", name: "迷路", feed: 0.029, kill: 0.057 },
+  { id: "coral", name: "珊瑚", feed: 0.0545, kill: 0.062 },
+  { id: "mitosis", name: "細胞分裂", feed: 0.0367, kill: 0.0649 },
+  { id: "spots", name: "斑点", feed: 0.035, kill: 0.065 },
+  { id: "thin-line", name: "細線", feed: 0.023, kill: 0.052 },
+];
+const GRAY_SCOTT_CASES = [
+  ...REFERENCE_CASES,
+  ...presets.filter(
+    (preset) =>
+      preset.model === "gray-scott" &&
+      !REFERENCE_CASES.some((reference) => reference.id === preset.id)
+  ),
+];
 const FHN_PRESETS = ["fhn-stripes", "fhn-hex", "fhn-spiral"];
 const seeds = [42, 1234];
 const checkpoints = [0, 1, 10, 100, 1000];
@@ -93,7 +111,7 @@ const bytes = api.rd_bytes();
 {
   const allocation = api.malloc(bytes);
   assert(allocation, "Wasm allocation failed");
-  for (const preset of REFERENCE_PRESETS.map((id) => presetById(id)))
+  for (const preset of GRAY_SCOTT_CASES)
     for (const seed of seeds) {
       const state = api.rd_init(allocation, bytes, seed);
       assert(state, "Wasm initialization failed");

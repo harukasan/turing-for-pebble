@@ -10,19 +10,32 @@ pnpm run test:optimization
 pnpm run compare:float
 ```
 
-`scripts/compare-float.mjs` loads the production Wasm compiled with `emcc -O3` and runs the existing `lib/simulation.ts` class. For the five Gray–Scott presets `maze`, `coral`, `mitosis`, `spots`, and `thin-line` of `lib/presets.ts` (fixed in the script, so presets added later do not change these averages), and seeds 42 and 1234, it starts Float32 fields from the exact Q24 concentrations returned by `rd_get`. It uses the same 120 × 136 grid and the same Q15-effective feed, kill, diffusion, and timestep parameters. The diffusion coefficients are the folded values the core computes with, `round(D × 32768 / 20) × 20 / 32768` (0.99976 of the request for Da = 1 and Db = 0.5). This removes seed placement, grid resolution, and parameter rounding as independent causes of the reported error. Both fields advance one step at a time through checkpoints 0, 1, 10, 100, and 1,000.
+`scripts/compare-float.mjs` loads the production Wasm compiled with `emcc -O3` and runs the existing `lib/simulation.ts` class. For five fixed Gray–Scott reference cases, `maze`, `coral`, `mitosis`, and the former presets `spots` and `thin-line`, whose parameters the script keeps so that later preset changes do not change these averages, then the other Gray–Scott presets of `lib/presets.ts`, and seeds 42 and 1234, it starts Float32 fields from the exact Q24 concentrations returned by `rd_get`. It uses the same 120 × 136 grid and the same Q15-effective feed, kill, diffusion, and timestep parameters. The diffusion coefficients are the folded values the core computes with, `round(D × 32768 / 20) × 20 / 32768` (0.99976 of the request for Da = 1 and Db = 0.5). This removes seed placement, grid resolution, and parameter rounding as independent causes of the reported error. Both fields advance one step at a time through checkpoints 0, 1, 10, 100, and 1,000.
 
 The reference stores its fields in `Float32Array` and uses JavaScript number arithmetic between writes, as in the original Web implementation. It is a comparison with that implementation, not with an independent all-operations-binary32 solver. Mean absolute error (MAE) is over every B cell on a concentration scale from 0 to 1. Spatial correlation compares the full B fields. All individual case results, including A errors, maxima, RMSE, fraction of cells differing by more than 0.01, effective parameters, and means are in [float-precision.json](float-precision.json).
 
 ## Version 4 and 5 Gray–Scott results
 
-Version 5 reproduces these numbers exactly: the Gray–Scott rows of `float-precision.json` are unchanged apart from their `model` field, and each mean is still over the same 10 cases of five presets and two seeds.
+Version 5 reproduces these numbers exactly: the Gray–Scott rows of `float-precision.json` are unchanged apart from their `model` field, and each mean is still over the same 10 cases of the five reference cases and two seeds.
 
 | Grid and storage       | B MAE after 1 step, mean of 10 cases | B MAE after 100 steps, mean | B MAE after 1,000 steps, mean | B MAE after 1,000 steps, worst case | Lowest B spatial correlation after 1,000 steps |
 | ---------------------- | -----------------------------------: | --------------------------: | ----------------------------: | ----------------------------------: | ---------------------------------------------: |
 | 120 × 136, Q15 storage |                            0.0000012 |                    0.000008 |                       0.00003 |                             0.00006 |                                       > 0.9999 |
 
-The thin-line preset is the most sensitive case. Its two-seed mean B MAE at 1,000 steps is 0.00005. No cell differs from the reference by more than 0.01 at 1,000 steps in any case, and the largest single-cell difference is 0.0033. Version 3 measured 0.00003 with the same script, so the 32-bit arithmetic of version 4 costs no precision against the reference with the folded coefficients. Against a reference with exact Da = 1 and Db = 0.5, the 0.024% fold shows as a fixed parameter offset of 0.00009 in the mean and 0.00033 in the worst case.
+The thin-line case, whose narrow bands are hardest for the coarse grid, is the most sensitive. Its two-seed mean B MAE at 1,000 steps is 0.00005. No cell differs from the reference by more than 0.01 at 1,000 steps in any case, and the largest single-cell difference is 0.0033. Version 3 measured 0.00003 with the same script, so the 32-bit arithmetic of version 4 costs no precision against the reference with the folded coefficients. Against a reference with exact Da = 1 and Db = 0.5, the 0.024% fold shows as a fixed parameter offset of 0.00009 in the mean and 0.00033 in the worst case.
+
+## Other Gray–Scott presets, version 5
+
+The Gray–Scott presets added after the reference cases ([Shared C core](core.md#gray-scott-presets)) stay within the range of the reference cases:
+
+| Preset         | B MAE after 1 step, mean of 2 seeds | B MAE after 100 steps, mean | B MAE after 1,000 steps, mean | B MAE after 1,000 steps, worst case | Largest single-cell difference at 1,000 steps | Lowest B spatial correlation after 1,000 steps |
+| -------------- | ----------------------------------: | --------------------------: | ----------------------------: | ----------------------------------: | --------------------------------------------: | ---------------------------------------------: |
+| `holes`        |                           0.0000013 |                    0.000009 |                      0.000018 |                            0.000019 |                                        0.0003 |                                       > 0.9999 |
+| `cells`        |                           0.0000010 |                    0.000006 |                      0.000015 |                            0.000015 |                                        0.0002 |                                       > 0.9999 |
+| `worms`        |                           0.0000011 |                    0.000007 |                      0.000038 |                            0.000039 |                                        0.0021 |                                       > 0.9999 |
+| `moving-spots` |                           0.0000012 |                    0.000009 |                      0.000034 |                            0.000037 |                                        0.0007 |                                       > 0.9999 |
+
+No cell differs by more than 0.01 at 1,000 steps. `worms` and `moving-spots`, whose patterns are still changing at 1,000 steps, come closest to the thin-line case.
 
 ## FitzHugh–Nagumo, version 5
 
