@@ -10,6 +10,15 @@ r['arm'] = []
 hardware = json.loads(Path('docs/hardware-measurements.json').read_text())[
     'measurements'
 ]
+if hardware:
+    latest = hardware[-1]
+    r['physicalDevice'] = 'Pebble Time 2'
+    r['adoption'] = (
+        f'Mode {latest["mode"]} startup and heap measured on a physical Pebble Time 2 '
+        f'at commit {latest["commit"]} with a logging build. '
+        'Production acceptance remains pending.'
+    )
+
 for mode in [0, 1, 3]:
     core_bytes = next(c['coreBytes'] for c in r['comparisons'] if c['mode'] == mode)
     values = (
