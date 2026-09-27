@@ -2,8 +2,8 @@
  * returns them through pebblejs://close, or through the return_to address
  * of `pebble emu-app-config`. */
 import "./style.css";
-import fontsUrl from "../../public/fonts/clock-fonts.json?url";
-import wasmUrl from "../../public/wasm/rd.wasm?url";
+import fontsPacked from "../../public/fonts/clock-fonts.json?gzip";
+import wasmPacked from "../../public/wasm/rd.wasm?gzip";
 import { CLOCK_FONTS } from "../../lib/clock-fonts.ts";
 import {
   MONO,
@@ -22,6 +22,7 @@ import {
   type Lang,
   type Strings,
 } from "./i18n.ts";
+import { gzipDataUrl } from "./gzip.ts";
 import { PREVIEW_SPEED, PreviewView } from "./preview.ts";
 import {
   customStops,
@@ -548,6 +549,9 @@ element("cancel").addEventListener("click", () => {
 
 update();
 view
-  ?.load(wasmUrl, fontsUrl)
+  ?.load(
+    gzipDataUrl(wasmPacked, "application/wasm"),
+    gzipDataUrl(fontsPacked, "application/json")
+  )
   .then(() => view?.run({ ...settings }))
   .catch(() => setProgress("loadFailed"));

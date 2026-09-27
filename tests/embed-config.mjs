@@ -22,7 +22,11 @@ const keys = JSON.parse(read("pebble/package.json")).pebble.messageKeys;
 const PREFIX = "data:text/html;charset=utf-8,";
 
 assert(!/\s(src|href)="\.\/assets\//.test(page), "the page loads no files");
-assert(page.includes("data:application/wasm;base64,"));
+// The Wasm core and the clock glyphs are embedded gzipped, and the page
+// carries the notice of the library that unpacks them.
+assert(!page.includes("data:application/wasm;base64,"));
+assert(page.includes("H4sI"), "gzipped assets");
+assert(page.includes("fflate") && page.includes("MIT License"));
 assert.equal(page.split("__SETTINGS__").length, 2);
 assert(/^[\x00-\x7f]*$/.test(script), "the phone script is ASCII");
 
