@@ -10,6 +10,15 @@ r['arm'] = []
 hardware = json.loads(Path('docs/hardware-measurements.json').read_text())[
     'measurements'
 ]
+if hardware:
+    latest = hardware[-1]
+    r['physicalDevice'] = 'Pebble Time 2'
+    r['adoption'] = (
+        f'Mode {latest["mode"]} startup and heap measured on a physical Pebble Time 2 '
+        f'at commit {latest["commit"]} with a logging build. '
+        'Production acceptance remains pending.'
+    )
+
 # The watchfaces of build-pebble.sh: output name, mode, and clock faces,
 # both selected by the face setting or the analog face fixed.
 variants = [
