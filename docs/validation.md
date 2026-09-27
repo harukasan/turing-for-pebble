@@ -76,6 +76,8 @@ The startup, step, frame, and heap rows are from the settings build at commit 7d
 
 ## Analog face on the watch
 
+A second run on 2026-09-27, after the size reduction, used the logging build of mode 3 at commit 59366ec (22,800 B load) with the face setting analog and the date hidden, and the settings Feed 0.035, Kill 0.065, Da 1.0, Db 0.5, palette 6, and LECO. It kept a minimum free heap of 16,968 B, 584 B above the 16,384 B target. The startup ran 1,659 steps in 31.0 s at 14,453 µs per step (53.5 steps per second, longest step 39 ms). A sweep during the startup made 16 mask rebuilds of at most 8 ms in 1,000 ms with 46 steps, and the longest slice was 54 ms. The run was not interrupted and the clock stayed valid. The log connection missed the `RD init` line. The table below is the first run, before the size reduction.
+
 The analog face was measured once on the physical Pebble Time 2 on 2026-09-27, from the logging build of mode 3 at commit ca8ac29 (25,632 B load) with the face setting analog saved from the iPhone's settings page. The other settings were palette 6, Da 0.8 and Db 0.4, LECO, and avoidance and the date on. The run of about 50 s started about 20 s before a minute boundary and was not interrupted (`interrupted=0 clock_invalid=0`). It is one run, so the step time and heap are not yet repeated. It predates the size reduction of commit 826050e, and its build and heap figures are those of commit ca8ac29.
 
 | Item                                    | Target or reference                                              | Measured                                             |

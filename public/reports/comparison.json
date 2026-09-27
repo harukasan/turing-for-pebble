@@ -5,7 +5,7 @@
   "nativeWasmHashes": "passed",
   "sanitizers": "passed",
   "physicalDevice": "Pebble Time 2",
-  "adoption": "Mode 3 startup and heap measured on a physical Pebble Time 2 at commit ca8ac29 with a logging build. Production acceptance remains pending.",
+  "adoption": "Mode 3 startup and heap measured on a physical Pebble Time 2 at commit 59366ec with a logging build. Production acceptance remains pending.",
   "comparisons": [
     {
       "mode": 0,
@@ -892,23 +892,28 @@
           "note": "Run 2 on the same physical Pebble Time 2 with the same RD_BUILD_LOG=1 PBW, 19,168 B load, using pnpm run device. Startup 1,684 steps, 565 slices, and 559 draws, with since_init_ms=30,024. The log connection missed the settings lines. No settings were changed between runs 1 and 2."
         },
         "analog": {
-          "commit": "ca8ac29",
+          "commit": "59366ec",
           "mode": 3,
           "build": "3",
           "face": "analog",
           "date": "2026-09-27",
           "firmware": "unknown",
-          "startupWallMs": 30161,
-          "stepsPerSecond": 50.4,
-          "avgStepUs": 14875,
-          "maxStepMs": 35,
-          "avgDrawUs": 7388,
-          "avgTextUs": 400,
-          "minimumFreeHeapBytes": 14136,
+          "startupWallMs": 30978,
+          "stepsPerSecond": 53.5,
+          "avgStepUs": 14453,
+          "maxStepMs": 39,
+          "avgDrawUs": 5755,
+          "avgTextUs": 1038,
+          "minimumFreeHeapBytes": 16968,
           "loopMs": 0,
           "clockInvalid": false,
           "interrupted": false,
-          "note": "Both faces with the face setting analog, RD_BUILD_LOG=1 and RD_BUILD_LOAD_LIMIT=28672, 25,632 B load. Settings: palette 6, Da 0.8, Db 0.4, LECO, avoidance and date on. RD init mask_ms=8. Startup 1,522 steps and 582 frames in 30.02 s. A sweep 13 s after launch: 16 mask rebuilds of at most 8 ms, 1,043 ms, 44 steps. compute_max_ms 55 by the end of the startup. A sweep logged 2 s after launch moved no hand (0 rebuilds, 55 steps)."
+          "settingsLog": [
+            "RD settings feed=1147 kill=2130 da=32768 db=16384 dt=32768 src=m",
+            "RD settings pal=6 low=001e12 high=d2ff55 font=0 avoid=1 clock=1",
+            "RD settings stops=2 mid1=466928 mid2=8cb43f date=0 face=1"
+          ],
+          "note": "After the size reduction of #4, both faces with the face setting analog and the date hidden, RD_BUILD_LOG=1 and RD_BUILD_LOAD_LIMIT, 22,800 B load. Startup 1,659 steps, 600 slices, and 598 draws, with since_init_ms=30,981. A sweep 29 s after launch: 16 mask rebuilds of at most 8 ms, 1,000 ms, 46 steps. compute_max_ms 54. A sweep logged 2 s after launch moved no hand (0 rebuilds, 55 steps). The log connection missed the RD init line."
         }
       }
     },
