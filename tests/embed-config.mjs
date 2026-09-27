@@ -3,27 +3,28 @@
 // with the stored settings, relays valid results under the message keys,
 // rejects what the page would reject, and resends its copy at launch.
 // Run after `pnpm run build:settings`.
-import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import vm from "node:vm";
 import {
   DEFAULT_SETTINGS,
   SETTING_KEYS,
   SETTING_MAX,
   settingMin,
   toJson,
-} from '../src/settings/settings.ts';
+} from "../src/settings/settings.ts";
 
-const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
-const page = read('build/config/index.html');
-const script = read('pebble/src/pkjs/generated/pebble-js-app.js');
-const keys = JSON.parse(read('pebble/package.json')).pebble.messageKeys;
-const PREFIX = 'data:text/html;charset=utf-8,';
+const read = (path) =>
+  readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const page = read("build/config/index.html");
+const script = read("pebble/src/pkjs/generated/pebble-js-app.js");
+const keys = JSON.parse(read("pebble/package.json")).pebble.messageKeys;
+const PREFIX = "data:text/html;charset=utf-8,";
 
-assert(!/\s(src|href)="\.\/assets\//.test(page), 'the page loads no files');
-assert(page.includes('data:application/wasm;base64,'));
-assert.equal(page.split('__SETTINGS__').length, 2);
-assert(/^[\x00-\x7f]*$/.test(script), 'the phone script is ASCII');
+assert(!/\s(src|href)="\.\/assets\//.test(page), "the page loads no files");
+assert(page.includes("data:application/wasm;base64,"));
+assert.equal(page.split("__SETTINGS__").length, 2);
+assert(/^[\x00-\x7f]*$/.test(script), "the phone script is ASCII");
 
 function phone(source = script) {
   const listeners = {};
@@ -58,44 +59,67 @@ assert.equal(p.sent.length, 0);
 p.listeners.showConfiguration();
 assert(p.opened[0].startsWith(PREFIX));
 assert.equal(decodeURIComponent(p.opened[0].slice(PREFIX.length)), page);
-assert(p.opened[0].length < 2 * 1024 * 1024, 'within the Android URL limit');
+assert(p.opened[0].length < 2 * 1024 * 1024, "within the Android URL limit");
 
 // A saved result, percent-encoded as the page sends it, is stored, sent,
 // and embedded in the page the next time.
-const saved = { ...DEFAULT_SETTINGS, feed: 1786, kill: 2032, palette: 9, low: 0x550000, high: 0xffaa00, font: 1, clock: 0 };
+const saved = {
+  ...DEFAULT_SETTINGS,
+  feed: 1786,
+  kill: 2032,
+  palette: 9,
+  low: 0x550000,
+  high: 0xffaa00,
+  font: 1,
+  clock: 0,
+};
 p.listeners.webviewclosed({ response: encodeURIComponent(toJson(saved)) });
 assert.deepEqual(p.sent, [message(saved)]);
 p.listeners.showConfiguration();
 const html = decodeURIComponent(p.opened[1].slice(PREFIX.length));
-assert.equal(html, page.replace('__SETTINGS__', toJson(saved)));
+assert.equal(html, page.replace("__SETTINGS__", toJson(saved)));
 
 // Unencoded JSON is accepted too. Cancel, garbage, and any value outside
 // the page's ranges are ignored.
 p.listeners.webviewclosed({ response: toJson(DEFAULT_SETTINGS) });
 assert.equal(p.sent.length, 2);
-for (const response of ['', '{', '%7B', 'null'])
+for (const response of ["", "{", "%7B", "null"])
   p.listeners.webviewclosed({ response });
 p.listeners.webviewclosed({});
 for (const key of SETTING_KEYS) {
   for (const value of [settingMin(key) - 1, SETTING_MAX[key] + 1, 0.5])
-    p.listeners.webviewclosed({ response: toJson({ ...DEFAULT_SETTINGS, [key]: value }) });
-  p.listeners.webviewclosed({ response: toJson({ ...DEFAULT_SETTINGS, [key]: SETTING_MAX[key] }) });
+    p.listeners.webviewclosed({
+      response: toJson({ ...DEFAULT_SETTINGS, [key]: value }),
+    });
+  p.listeners.webviewclosed({
+    response: toJson({ ...DEFAULT_SETTINGS, [key]: SETTING_MAX[key] }),
+  });
 }
 assert.equal(p.sent.length, 2 + SETTING_KEYS.length);
-assert.deepEqual(p.sent.at(-1), message({ ...DEFAULT_SETTINGS, clock: SETTING_MAX.clock }));
+assert.deepEqual(
+  p.sent.at(-1),
+  message({ ...DEFAULT_SETTINGS, clock: SETTING_MAX.clock })
+);
 
 // The number of stops starts at 2.
-p.listeners.webviewclosed({ response: toJson({ ...DEFAULT_SETTINGS, stops: 1 }) });
+p.listeners.webviewclosed({
+  response: toJson({ ...DEFAULT_SETTINGS, stops: 1 }),
+});
 assert.equal(p.sent.length, 2 + SETTING_KEYS.length);
 
 // Settings stored before the stop count get two stops at launch.
 const old = phone();
-const legacy = { ...DEFAULT_SETTINGS, palette: 9, low: 0x110000, high: 0xffee00 };
+const legacy = {
+  ...DEFAULT_SETTINGS,
+  palette: 9,
+  low: 0x110000,
+  high: 0xffee00,
+};
 delete legacy.stops;
 delete legacy.mid1;
 delete legacy.mid2;
 delete legacy.date;
-old.storage.set('settings', JSON.stringify(legacy));
+old.storage.set("settings", JSON.stringify(legacy));
 old.listeners.ready();
 assert.deepEqual(old.sent, [
   message({ ...legacy, stops: 2, mid1: 0x110000, mid2: 0xffee00, date: 1 }),
@@ -109,15 +133,54 @@ q.listeners.ready();
 assert.deepEqual(q.sent, [message({ ...DEFAULT_SETTINGS, clock: 1 })]);
 
 // With RD_BUILD_CONFIG_URL the hosted page gets the settings in its query.
-const hosted = phone(script.replace(/^var RD_CONFIG_URL = "";$/m, 'var RD_CONFIG_URL = "http://192.0.2.1:5174/";'));
+const hosted = phone(
+  script.replace(
+    /^var RD_CONFIG_URL = "";$/m,
+    'var RD_CONFIG_URL = "http://192.0.2.1:5174/";'
+  )
+);
 hosted.listeners.showConfiguration();
-assert.equal(hosted.opened[0], 'http://192.0.2.1:5174/');
+assert.equal(hosted.opened[0], "http://192.0.2.1:5174/");
 hosted.listeners.webviewclosed({ response: toJson(saved) });
 hosted.listeners.showConfiguration();
 assert.equal(
   hosted.opened[1],
-  `http://192.0.2.1:5174/?${SETTING_KEYS.map((k) => `${k}=${saved[k]}`).join('&')}`,
+  `http://192.0.2.1:5174/?${SETTING_KEYS.map((k) => `${k}=${saved[k]}`).join("&")}`
 );
+
+// The page's language stays on the phone and comes back with the page,
+// alone when nothing else is stored. An unknown language is not kept.
+const l = phone();
+l.listeners.webviewclosed({
+  response: JSON.stringify({ ...saved, lang: "ja" }),
+});
+assert.deepEqual(l.sent, [message(saved)], "the watch gets no language");
+assert.equal(l.storage.get("language"), "ja");
+l.listeners.webviewclosed({
+  response: JSON.stringify({ ...saved, lang: "fr" }),
+});
+assert.equal(l.storage.get("language"), "ja");
+l.listeners.showConfiguration();
+assert.equal(
+  decodeURIComponent(l.opened[0].slice(PREFIX.length)),
+  page.replace(
+    "__SETTINGS__",
+    JSON.stringify({ ...JSON.parse(toJson(saved)), lang: "ja" })
+  )
+);
+const only = phone();
+only.storage.set("language", "en");
+only.listeners.showConfiguration();
+assert.equal(
+  decodeURIComponent(only.opened[0].slice(PREFIX.length)),
+  page.replace("__SETTINGS__", '{"lang":"en"}')
+);
+hosted.listeners.webviewclosed({
+  response: JSON.stringify({ ...saved, lang: "en" }),
+});
+hosted.listeners.showConfiguration();
+assert(hosted.opened[2].endsWith("&lang=en"));
+
 console.log(
-  `Phone script: embedded page ${page.length} B, data URL ${p.opened[0].length} B, relay and validation match the page`,
+  `Phone script: embedded page ${page.length} B, data URL ${p.opened[0].length} B, relay and validation match the page`
 );

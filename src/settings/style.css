@@ -151,6 +151,18 @@ legend {
   outline-offset: 2px;
 }
 
+/* The language switch, small and at the top right, above the preview. */
+.language {
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 0.85em;
+}
+
+.language .chip span {
+  padding: 3px 10px;
+}
+
 .sliders {
   display: grid;
   gap: 10px;
@@ -265,6 +277,24 @@ legend {
 
 .stop-middle {
   padding: 6px;
+}
+
+/* Four stops with the English end names fit a 320px screen only when
+ * packed a little closer. */
+@media (max-width: 360px) {
+  .stop {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .stop-middle {
+    padding: 4px;
+  }
+
+  .stop-link {
+    min-width: 4px;
+    margin: 0 3px;
+  }
 }
 
 .stop[aria-expanded="true"] {

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -13,31 +13,30 @@
       content="#333333"
       media="(prefers-color-scheme: dark)"
     />
-    <title>Turing の設定</title>
+    <title>Turing settings</title>
   </head>
   <body>
     <main class="page">
-      <section class="preview" aria-label="文字盤のプレビュー">
+      <div id="language" class="chips language" role="group"></div>
+      <section class="preview" data-i18n-aria="previewLabel">
         <div class="bezel">
           <canvas id="preview" width="200" height="228"></canvas>
         </div>
-        <p id="progress" class="progress" aria-live="polite">
-          プレビューを読み込んでいます
-        </p>
+        <p id="progress" class="progress" aria-live="polite"></p>
       </section>
       <form id="form" class="form">
         <fieldset>
-          <legend>パターン</legend>
+          <legend data-i18n="pattern"></legend>
           <div id="presets" class="chips"></div>
           <div id="pattern-sliders" class="sliders"></div>
         </fieldset>
         <fieldset>
-          <legend>拡散と時間刻み</legend>
+          <legend data-i18n="diffusion"></legend>
           <div id="diffusion-presets" class="chips"></div>
           <div id="diffusion-sliders" class="sliders"></div>
         </fieldset>
         <fieldset>
-          <legend>配色</legend>
+          <legend data-i18n="colors"></legend>
           <div id="palettes" class="palettes"></div>
           <div id="custom-palette" class="custom-palette" hidden>
             <div id="custom-count" class="chips"></div>
@@ -46,27 +45,27 @@
           </div>
         </fieldset>
         <fieldset>
-          <legend>時計</legend>
+          <legend data-i18n="clock"></legend>
           <div id="fonts" class="chips"></div>
           <label class="switch">
-            時計を表示
+            <span data-i18n="showClock"></span>
             <input type="checkbox" id="clock" role="switch" />
           </label>
           <label class="switch">
-            日付を表示
+            <span data-i18n="showDate"></span>
             <input type="checkbox" id="date" role="switch" />
           </label>
           <label class="switch">
-            数字を避ける
+            <span data-i18n="avoid"></span>
             <input type="checkbox" id="avoid" role="switch" />
           </label>
         </fieldset>
         <details class="section">
-          <summary>設定の書き出し/読み込み</summary>
+          <summary data-i18n="fileSection"></summary>
           <div class="file-actions">
-            <button type="button" id="export">書き出す</button>
+            <button type="button" id="export" data-i18n="export"></button>
             <label class="file-button">
-              ファイル
+              <span data-i18n="file"></span>
               <input
                 type="file"
                 id="import"
@@ -80,18 +79,27 @@
             class="file-text"
             rows="4"
             spellcheck="false"
-            aria-label="設定の JSON"
-            placeholder="書き出した設定がここに出ます。設定の JSON を貼り付けて読み込むこともできます。"
+            data-i18n-aria="jsonLabel"
+            data-i18n-placeholder="jsonPlaceholder"
           ></textarea>
           <div class="file-actions">
-            <button type="button" id="import-text">テキストを読み込む</button>
+            <button
+              type="button"
+              id="import-text"
+              data-i18n="importText"
+            ></button>
           </div>
           <p id="file-status" class="hint" aria-live="polite"></p>
         </details>
       </form>
       <footer class="actions">
-        <button type="button" id="cancel">キャンセル</button>
-        <button type="button" id="save" class="primary">保存</button>
+        <button type="button" id="cancel" data-i18n="cancel"></button>
+        <button
+          type="button"
+          id="save"
+          class="primary"
+          data-i18n="save"
+        ></button>
       </footer>
     </main>
     <script type="application/json" id="settings">

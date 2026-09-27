@@ -1,7 +1,8 @@
 /*
  * PebbleKit JS of the watchface. It opens the settings page, sends the
  * settings the page returns to the watch, and keeps a copy that it sends
- * again when the face starts, for example after a reinstall.
+ * again when the face starts, for example after a reinstall. It also keeps
+ * the language chosen on the page, which stays on the phone.
  *
  * scripts/embed-config.mjs prepends RD_PAGE_HTML, the settings page with
  * its preview as one HTML file, and RD_CONFIG_URL, the address of a hosted
@@ -12,6 +13,8 @@
 /* global Pebble, RD_PAGE_HTML, RD_CONFIG_URL, localStorage, console */
 
 var STORAGE_KEY = "settings";
+var LANGUAGE_KEY = "language";
+var LANGUAGES = ["en", "ja"];
 /* The settings and their largest values, in the order of the message keys
  * of package.json. A message key is the setting name in capitals. Every
  * value is from 0, or 2 for the number of stops, to its largest. */
@@ -70,6 +73,16 @@ function load() {
   }
 }
 
+/* The page's language as stored, or null for the phone's own. */
+function language() {
+  try {
+    var lang = localStorage.getItem(LANGUAGE_KEY);
+    return LANGUAGES.indexOf(lang) < 0 ? null : lang;
+  } catch (e) {
+    return null;
+  }
+}
+
 function send(settings) {
   var message = {};
   for (var i = 0; i < SETTINGS.length; i++) {
@@ -94,29 +107,37 @@ function query(settings) {
   return parts.join("&");
 }
 
-/* The embedded page as a data URL with the settings in it, or the hosted
- * page with the settings in its query string. Without stored settings the
- * page shows the defaults. */
-function pageUrl(settings) {
+/* The embedded page as a data URL with the settings and the language in
+ * it, or the hosted page with them in its query string. Without stored
+ * settings the page shows the defaults, and without a stored language it
+ * follows the phone's. */
+function pageUrl(settings, lang) {
   if (RD_CONFIG_URL) {
-    if (!settings) return RD_CONFIG_URL;
+    var parts = [];
+    if (settings) parts.push(query(settings));
+    if (lang) parts.push("lang=" + lang);
+    if (!parts.length) return RD_CONFIG_URL;
     var separator = RD_CONFIG_URL.indexOf("?") < 0 ? "?" : "&";
-    return RD_CONFIG_URL + separator + query(settings);
+    return RD_CONFIG_URL + separator + parts.join("&");
   }
-  var html = settings
-    ? RD_PAGE_HTML.replace("__SETTINGS__", function () {
-        return JSON.stringify(settings);
-      })
-    : RD_PAGE_HTML;
+  var embedded = settings || {};
+  if (lang) embedded.lang = lang;
+  var html =
+    settings || lang
+      ? RD_PAGE_HTML.replace("__SETTINGS__", function () {
+          return JSON.stringify(embedded);
+        })
+      : RD_PAGE_HTML;
   return "data:text/html;charset=utf-8," + encodeURIComponent(html);
 }
 
-/* The page's result: JSON, percent-encoded or not. */
+/* The page's result: JSON, percent-encoded or not, or null. */
 function parse(response) {
   try {
     var text =
       response.charAt(0) === "{" ? response : decodeURIComponent(response);
-    return settingsOf(JSON.parse(text));
+    var value = JSON.parse(text);
+    return value && typeof value === "object" ? value : null;
   } catch (e) {
     return null;
   }
@@ -128,16 +149,19 @@ Pebble.addEventListener("ready", function () {
 });
 
 Pebble.addEventListener("showConfiguration", function () {
-  Pebble.openURL(pageUrl(load()));
+  Pebble.openURL(pageUrl(load(), language()));
 });
 
 Pebble.addEventListener("webviewclosed", function (e) {
   if (!e || !e.response) return;
-  var settings = parse(e.response);
+  var result = parse(e.response);
+  var settings = settingsOf(result);
   if (!settings) {
     console.log("The settings page returned invalid settings");
     return;
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  if (LANGUAGES.indexOf(result.lang) >= 0)
+    localStorage.setItem(LANGUAGE_KEY, result.lang);
   send(settings);
 });

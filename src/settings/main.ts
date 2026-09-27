@@ -14,6 +14,14 @@ import {
 } from "../../lib/palettes.ts";
 import { presets, type Parameters } from "../../lib/simulation.ts";
 import { parameterBounds } from "../core/modes.ts";
+import {
+  detectLang,
+  langOf,
+  LANGS,
+  STRINGS,
+  type Lang,
+  type Strings,
+} from "./i18n.ts";
 import { PREVIEW_SPEED, PreviewView } from "./preview.ts";
 import {
   customStops,
@@ -42,6 +50,30 @@ const settings: WatchSettings = initialSettings(
 );
 const returnTo = new URLSearchParams(location.search).get("return_to");
 
+/** The language the phone stored with an earlier save, embedded in the page
+ * or in the query of a hosted page, else the phone's own language. */
+function initialLang(): Lang {
+  let embedded: unknown = null;
+  try {
+    embedded = JSON.parse(element("settings").textContent ?? "");
+  } catch {
+    embedded = null;
+  }
+  return (
+    langOf((embedded as { lang?: unknown } | null)?.lang) ??
+    langOf(new URLSearchParams(location.search).get("lang")) ??
+    detectLang(navigator.language)
+  );
+}
+let lang = initialLang();
+const t = (): Strings => STRINGS[lang];
+/** Updaters of the text that depends on the language, run when it changes. */
+const texts: (() => void)[] = [];
+function text(update: () => void) {
+  texts.push(update);
+  update();
+}
+
 const css = (rgb: Rgb) => `rgb(${rgb.join(",")})`;
 
 function swatch(colors: readonly Rgb[]) {
@@ -55,25 +87,30 @@ function swatch(colors: readonly Rgb[]) {
   return bar;
 }
 
-/** A group of radio chips. */
+/** A group of radio chips whose labels follow the language. */
 function chips(
   container: HTMLElement,
   name: string,
-  labels: string[],
+  labels: () => string[],
   onChange: (index: number) => void
 ) {
-  const inputs = labels.map((label, index) => {
+  const spans: HTMLSpanElement[] = [];
+  const inputs = labels().map((_, index) => {
     const wrap = document.createElement("label");
     wrap.className = "chip";
     const input = document.createElement("input");
     input.type = "radio";
     input.name = name;
     input.addEventListener("change", () => onChange(index));
-    const text = document.createElement("span");
-    text.textContent = label;
-    wrap.append(input, text);
+    const span = document.createElement("span");
+    spans.push(span);
+    wrap.append(input, span);
     container.append(wrap);
     return input;
+  });
+  text(() => {
+    const names = labels();
+    spans.forEach((span, i) => (span.textContent = names[i]));
   });
   return (index: number) =>
     inputs.forEach((input, i) => (input.checked = i === index));
@@ -106,7 +143,7 @@ function slider(
   field.min = "0";
   field.max = "1";
   field.step = "any";
-  field.setAttribute("aria-label", `${label}の値`);
+  text(() => field.setAttribute("aria-label", t().value(label)));
   row.append(name, input, field);
   container.append(row);
   const show = () => {
@@ -135,20 +172,17 @@ function slider(
   return show;
 }
 
-const STOPS = [
-  { key: "low", label: "暗い色" },
-  { key: "mid1", label: "中間 1" },
-  { key: "mid2", label: "中間 2" },
-  { key: "high", label: "明るい色" },
-] as const;
-type StopKey = (typeof STOPS)[number]["key"];
+/** The custom stops, dark to light, in the order of Strings.stopLabels. */
+const STOPS = ["low", "mid1", "mid2", "high"] as const;
+type StopKey = (typeof STOPS)[number];
+const stopLabel = (key: StopKey) => t().stopLabels[STOPS.indexOf(key)];
 
 const hex = (value: number) => `#${value.toString(16).padStart(6, "0")}`;
 
 /** The stops of the custom palette in use, in one row from dark to light,
  * as buttons showing their colors and joined by lines that blend from one
- * color to the next. The ends carry 暗 and 明 on their outer sides, and the
- * middle stops show their color only. A button
+ * color to the next. The ends carry a short name (暗 and 明 in Japanese) on
+ * their outer sides, and the middle stops show their color only. A button
  * opens the watch's 64 colors for its stop, and picking a color closes
  * them. */
 function customPicker(
@@ -157,18 +191,22 @@ function customPicker(
   onPick: () => void
 ) {
   let picking: StopKey | null = null;
-  const buttons = STOPS.map(({ key, label }) => {
+  const buttons = STOPS.map((key) => {
     const button = document.createElement("button");
     button.type = "button";
     const middle = key === "mid1" || key === "mid2";
     button.className = middle ? "stop stop-middle" : "stop";
-    button.setAttribute("aria-label", label);
+    text(() => button.setAttribute("aria-label", stopLabel(key)));
     const chip = document.createElement("span");
     chip.className = "stop-color";
     button.append(chip);
-    // The ends are named by one character on their outer side.
-    if (key === "low") button.prepend("暗");
-    if (key === "high") button.append("明");
+    // The ends are named on their outer side.
+    if (key === "low" || key === "high") {
+      const name = document.createElement("span");
+      text(() => (name.textContent = key === "low" ? t().dark : t().light));
+      if (key === "low") button.prepend(name);
+      else button.append(name);
+    }
     button.addEventListener("click", () => {
       picking = picking === key ? null : key;
       show();
@@ -207,8 +245,7 @@ function customPicker(
     });
     stops.replaceChildren(...row);
     picker.hidden = picking === null;
-    const label = STOPS.find((stop) => stop.key === picking)?.label ?? "";
-    picker.setAttribute("aria-label", label);
+    picker.setAttribute("aria-label", picking ? stopLabel(picking) : "");
     PEBBLE_COLORS.forEach((color, i) =>
       colors[i].setAttribute(
         "aria-pressed",
@@ -216,18 +253,25 @@ function customPicker(
       )
     );
   }
+  text(show);
   return show;
 }
 
 const progress = element<HTMLParagraphElement>("progress");
+type Progress = "loading" | "caption" | "unavailable" | "loadFailed";
+let progressState: Progress = "loading";
+function setProgress(state: Progress) {
+  progressState = state;
+  progress.textContent =
+    state === "caption" ? t().caption(PREVIEW_SPEED) : t()[state];
+}
+text(() => setProgress(progressState));
 let view: PreviewView | null = null;
 try {
   // The caption replaces the loading message once the preview draws.
-  view = new PreviewView(element("preview"), () => {
-    progress.textContent = `プレビュー（${PREVIEW_SPEED}倍速）`;
-  });
+  view = new PreviewView(element("preview"), () => setProgress("caption"));
 } catch {
-  progress.textContent = "この環境ではプレビューを表示できません";
+  setProgress("unavailable");
 }
 
 let rerun = 0;
@@ -246,9 +290,9 @@ function changed(kind: "field" | "palette") {
 const setPreset = chips(
   element("presets"),
   "preset",
-  [...presets.map((p) => p.name), "カスタム"],
+  () => [...t().presets, t().custom],
   (index) => {
-    // カスタム changes nothing until a slider or field moves.
+    // Custom changes nothing until a slider or field moves.
     if (index === presets.length) return;
     settings.feed = q15(presets[index].feed);
     settings.kill = q15(presets[index].kill);
@@ -258,7 +302,7 @@ const setPreset = chips(
 const setDiffusion = chips(
   element("diffusion-presets"),
   "diffusion",
-  [...DIFFUSION_PRESETS.map((p) => p.name), "カスタム"],
+  () => [...t().widths, t().custom],
   (index) => {
     if (index === DIFFUSION_PRESETS.length) return;
     settings.da = q15(DIFFUSION_PRESETS[index].da);
@@ -292,7 +336,12 @@ const paletteList = element("palettes");
   const body = document.createElement("span");
   body.className = "palette-body";
   const name = document.createElement("span");
-  name.textContent = palette ? palette.name : "カスタム";
+  text(
+    () =>
+      (name.textContent = palette
+        ? (t().palettes[palette.id] ?? palette.name)
+        : t().custom)
+  );
   const bar = swatch(
     !palette
       ? paletteSwatch(customStops(settings))
@@ -313,7 +362,7 @@ const customPalette = element("custom-palette");
 const setStops = chips(
   element("custom-count"),
   "stops",
-  ["2 色", "3 色", "4 色"],
+  () => [2, 3, 4].map((count) => t().stops(count)),
   (index) => {
     Object.assign(settings, withStops(settings, index + 2));
     changed("palette");
@@ -328,7 +377,7 @@ const showCustom = customPicker(
 const setFont = chips(
   element("fonts"),
   "font",
-  CLOCK_FONTS.map((font) => (font === "leco" ? "LECO" : "Bitham")),
+  () => CLOCK_FONTS.map((font) => (font === "leco" ? "LECO" : "Bitham")),
   (index) => {
     settings.font = index;
     changed("field");
@@ -403,12 +452,12 @@ function showAndCopy() {
 function load(text: string, source: string) {
   const loaded = fromFileJson(text);
   if (!loaded) {
-    fileStatus.textContent = `${source}は設定として読み込めませんでした。`;
+    fileStatus.textContent = t().notSettings(source);
     return;
   }
   Object.assign(settings, loaded);
   changed("field");
-  fileStatus.textContent = "設定を読み込みました。";
+  fileStatus.textContent = t().imported;
 }
 
 /** The settings file through the share sheet where the web view offers one,
@@ -420,17 +469,17 @@ element("export").addEventListener("click", async () => {
   if (navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file] });
-      fileStatus.textContent = "書き出しました。";
+      fileStatus.textContent = t().exported;
     } catch (error) {
       if ((error as Error).name !== "AbortError")
-        fileStatus.textContent = "書き出せませんでした。";
+        fileStatus.textContent = t().exportFailed;
     }
     return;
   }
   if (inApp) {
     fileStatus.textContent = showAndCopy()
-      ? "Pebbleアプリではファイルを保存できないため、設定をコピーしました。ファイルやメモにペーストして保存してください。"
-      : "Pebbleアプリではファイルを保存できません。上の文字列をコピーして、ファイルやメモにペーストして保存してください。";
+      ? t().copiedInApp
+      : t().copyFailedInApp;
     return;
   }
   const url = URL.createObjectURL(file);
@@ -439,25 +488,60 @@ element("export").addEventListener("click", async () => {
   link.download = SETTINGS_FILE_NAME;
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  fileStatus.textContent = `${SETTINGS_FILE_NAME} を書き出しました。`;
+  fileStatus.textContent = t().exportedFile(SETTINGS_FILE_NAME);
 });
 
 const importInput = element<HTMLInputElement>("import");
 importInput.addEventListener("change", async () => {
   const file = importInput.files?.[0];
   importInput.value = "";
-  if (file) load(await file.text(), `${file.name} `);
+  if (file) load(await file.text(), file.name);
 });
 
 element("import-text").addEventListener("click", () => {
-  if (fileText.value.trim()) load(fileText.value, "貼り付けた文字列");
-  else fileStatus.textContent = "設定の JSON を貼り付けてください。";
+  if (fileText.value.trim()) load(fileText.value, t().pasted);
+  else fileStatus.textContent = t().pasteFirst;
 });
 
+/** The settings for the watch, and the page's language for the phone to
+ * keep. */
 element("save").addEventListener("click", () => {
+  const result = { ...JSON.parse(toJson(settings)), lang };
   location.href =
-    (returnTo ?? "pebblejs://close#") + encodeURIComponent(toJson(settings));
+    (returnTo ?? "pebblejs://close#") +
+    encodeURIComponent(JSON.stringify(result));
 });
+
+/** Put the page's fixed text, marked with data-i18n attributes, and every
+ * registered text in the current language. */
+function localize() {
+  const strings = t() as Record<string, unknown>;
+  document.documentElement.lang = lang;
+  document.title = t().title;
+  for (const el of document.querySelectorAll<HTMLElement>("[data-i18n]"))
+    el.textContent = String(strings[el.dataset.i18n ?? ""]);
+  for (const el of document.querySelectorAll<HTMLElement>("[data-i18n-aria]"))
+    el.setAttribute("aria-label", String(strings[el.dataset.i18nAria ?? ""]));
+  for (const el of document.querySelectorAll<HTMLTextAreaElement>(
+    "[data-i18n-placeholder]"
+  ))
+    el.placeholder = String(strings[el.dataset.i18nPlaceholder ?? ""]);
+  texts.forEach((update) => update());
+}
+
+const setLanguage = chips(
+  element("language"),
+  "language",
+  () => LANGS.map((code) => STRINGS[code].name),
+  (index) => {
+    lang = LANGS[index];
+    fileStatus.textContent = "";
+    localize();
+  }
+);
+text(() => element("language").setAttribute("aria-label", t().language));
+setLanguage(LANGS.indexOf(lang));
+localize();
 element("cancel").addEventListener("click", () => {
   location.href = returnTo ?? "pebblejs://close";
 });
@@ -466,6 +550,4 @@ update();
 view
   ?.load(wasmUrl, fontsUrl)
   .then(() => view?.run({ ...settings }))
-  .catch(() => {
-    progress.textContent = "プレビューを読み込めませんでした";
-  });
+  .catch(() => setProgress("loadFailed"));

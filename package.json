@@ -16,7 +16,7 @@
     "lint": "eslint src lib scripts/*.mjs pebble/src/pkjs/index.js",
     "format": "prettier --write src lib scripts/*.mjs pebble/src/pkjs/index.js index.html panda.config.ts vite.config.ts vite.settings.config.ts postcss.config.cjs eslint.config.mjs docs/web.md",
     "format:check": "prettier --check src lib scripts/*.mjs pebble/src/pkjs/index.js index.html panda.config.ts vite.config.ts vite.settings.config.ts postcss.config.cjs eslint.config.mjs docs/web.md",
-    "test": "node --experimental-transform-types --test lib/simulation.test.ts src/demo/serialization.test.ts src/settings/settings.test.ts src/settings/preview.test.ts",
+    "test": "node --experimental-transform-types --test lib/simulation.test.ts src/demo/serialization.test.ts src/settings/settings.test.ts src/settings/i18n.test.ts src/settings/preview.test.ts",
     "typecheck": "panda codegen && tsc --noEmit",
     "build:wasm": "sh scripts/build-wasm.sh",
     "compare:float": "node --experimental-transform-types scripts/compare-float.mjs",
