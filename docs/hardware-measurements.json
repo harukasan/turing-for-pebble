@@ -227,6 +227,30 @@
       "clockInvalid": false,
       "interrupted": false,
       "note": "The build with the analog face fixed, RD_BUILD_LOG=1, 21,760 B load, installed with the stored fhn-stripes settings and the date hidden. The log stream attached after the RD init and RD settings lines. A minute change during the startup swept the hands with 17 mask rebuilds of at most 8 ms in 1,043 ms with 48 steps, and the refill it owed extended the startup to 1,867 steps, 646 slices, and 640 draws, with since_init_ms=34,743 and a longest slice of 62 ms. The minimum free heap, 18,416 B, is 2,032 B above the 16 KiB target with this logging build, which loads 3,364 B more than the production build."
+    },
+    {
+      "commit": "b5b0f05",
+      "build": "watchface",
+      "face": "analog",
+      "date": "2026-09-27",
+      "firmware": "unknown",
+      "startupWallMs": 30019,
+      "stepsPerSecond": 52.4,
+      "avgStepUs": 14643,
+      "maxStepMs": 39,
+      "avgDrawUs": 7757,
+      "avgTextUs": 94,
+      "minimumFreeHeapBytes": 16656,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "settingsLog": [
+        "RD settings model=1 p0=1638,32768,492,1229,19661 src=p",
+        "RD settings p5=0,32768,0,0,0",
+        "RD settings pal=0 low=001e12 high=d2ff55 font=0 avoid=1 clock=1",
+        "RD settings stops=2 mid1=466928 mid2=8cb43f date=1 face=1"
+      ],
+      "note": "The single-grid core with both models and both faces, RD_BUILD_LOG=1 and RD_BUILD_LOAD_LIMIT, 23,520 B load, relaunched from the watchface menu with the stored fhn-stripes settings, the analog face, and the date shown, which masks the hands and the date. RD init reported core_bytes=88175 and mask_ms=8. A sweep 1 s after launch moved no hand. Startup 1,575 steps, 580 slices, and 574 draws, with since_init_ms=30,027 and a longest slice of 67 ms. The minimum free heap, 16,656 B, equals that of the digital face with the date hidden, 272 B above the 16 KiB target with this logging build. In the session before the relaunch, where the settings arrived from the phone and restarted the field, the startup had one step of 90 ms and a slice of 106 ms, with the same minimum free heap."
     }
   ]
 }
