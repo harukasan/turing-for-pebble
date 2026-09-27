@@ -47,7 +47,13 @@ const en = {
   fontLabel: "Font",
   showClock: "Show the clock",
   showDate: "Show the date",
-  avoid: "Keep the pattern off the clock",
+  /** The avoidance switch, named by what the face shows. */
+  avoid: (analog: boolean, date: boolean): string =>
+    !analog
+      ? "Keep the pattern off the digits"
+      : date
+        ? "Keep the pattern off the hands and date"
+        : "Keep the pattern off the hands",
   export: "Export",
   file: "File",
   jsonLabel: "Settings JSON",
@@ -99,7 +105,8 @@ const ja: Strings = {
   fontLabel: "フォント",
   showClock: "時計を表示",
   showDate: "日付を表示",
-  avoid: "針と数字を避ける",
+  avoid: (analog, date) =>
+    !analog ? "数字を避ける" : date ? "針と日付を避ける" : "針を避ける",
   export: "書き出す",
   file: "ファイル",
   jsonLabel: "設定の JSON",

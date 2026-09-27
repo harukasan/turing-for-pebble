@@ -15,6 +15,13 @@ test("every language has the same strings and list lengths", () => {
     assert.equal(STRINGS[lang].presets.length, presets.length);
     assert.equal(STRINGS[lang].widths.length, DIFFUSION_PRESETS.length);
     assert.equal(STRINGS[lang].faces.length, 2);
+    const names = [
+      STRINGS[lang].avoid(false, true),
+      STRINGS[lang].avoid(true, true),
+      STRINGS[lang].avoid(true, false),
+    ];
+    assert.equal(new Set(names).size, 3);
+    assert.equal(STRINGS[lang].avoid(false, false), names[0]);
   }
 });
 
