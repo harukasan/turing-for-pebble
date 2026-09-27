@@ -281,7 +281,7 @@ export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
             <SwitchControl
               name="avoid"
               label={
-                options.face === "analog" ? "針と数字を避ける" : "数字を避ける"
+                options.face === "analog" ? "針と日付を避ける" : "数字を避ける"
               }
               checked={options.avoid}
               disabled={!options.clock}
