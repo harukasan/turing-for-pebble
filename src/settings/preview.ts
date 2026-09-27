@@ -91,6 +91,9 @@ export class PreviewView {
   private settings: WatchSettings | null = null;
   private frame = 0;
   private started = 0;
+  /** The time the digit mask was built for, which the drawn clock shows
+   * too, so the digits and their empty cells match. */
+  private clockTime = new Date();
   private readonly ctx: CanvasRenderingContext2D;
   private readonly pixels: ImageData;
 
@@ -114,7 +117,8 @@ export class PreviewView {
     if (!this.field) return;
     cancelAnimationFrame(this.frame);
     this.settings = settings;
-    this.field.start(settings, new Date());
+    this.clockTime = new Date();
+    this.field.start(settings, this.clockTime);
     this.started = performance.now();
     this.frame = requestAnimationFrame(this.tick);
   }
@@ -152,7 +156,7 @@ export class PreviewView {
     if (this.settings.clock)
       drawClock(
         this.ctx,
-        new Date(),
+        this.clockTime,
         CLOCK_FONTS[this.settings.font],
         this.settings.date === 1
       );

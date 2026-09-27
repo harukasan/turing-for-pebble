@@ -248,10 +248,10 @@ const setPreset = chips(
   "preset",
   [...presets.map((p) => p.name), "カスタム"],
   (index) => {
-    if (index < presets.length) {
-      settings.feed = q15(presets[index].feed);
-      settings.kill = q15(presets[index].kill);
-    }
+    // カスタム changes nothing until a slider or field moves.
+    if (index === presets.length) return;
+    settings.feed = q15(presets[index].feed);
+    settings.kill = q15(presets[index].kill);
     changed("field");
   }
 );
@@ -260,10 +260,9 @@ const setDiffusion = chips(
   "diffusion",
   [...DIFFUSION_PRESETS.map((p) => p.name), "カスタム"],
   (index) => {
-    if (index < DIFFUSION_PRESETS.length) {
-      settings.da = q15(DIFFUSION_PRESETS[index].da);
-      settings.db = q15(DIFFUSION_PRESETS[index].db);
-    }
+    if (index === DIFFUSION_PRESETS.length) return;
+    settings.da = q15(DIFFUSION_PRESETS[index].da);
+    settings.db = q15(DIFFUSION_PRESETS[index].db);
     changed("field");
   }
 );

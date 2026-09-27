@@ -669,7 +669,11 @@ static void apply_settings(unsigned changed) {
   }
   if (changed & (SETTINGS_CHANGED_FONT | SETTINGS_CHANGED_MASK)) {
     rebuild_mask();
-    refill(RD_MINUTE_STEPS_AVOID, false);
+    /* Only a new or moved mask leaves strokes to refill. Without avoidance
+     * the field is untouched and only the clock is redrawn. */
+    if (settings_avoiding()) {
+      refill(RD_MINUTE_STEPS_AVOID, false);
+    }
   }
   layer_mark_dirty(layer);
 }

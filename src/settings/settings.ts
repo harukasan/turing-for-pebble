@@ -212,24 +212,33 @@ export const stopKeys = (settings: WatchSettings) =>
 export const customStops = (settings: WatchSettings): Rgb[] =>
   stopKeys(settings).map((key) => rgbOf(settings[key]));
 
-/** Middle stops for a new number of stops: points on the line from the
- * dark to the light stop, so the palette keeps its look until a middle stop
- * is changed. */
+/** Settings with a new number of custom stops. The middle stops already
+ * in use keep their colors, and a middle stop that comes into use starts
+ * halfway between its neighbors, or on the line from the dark to the light
+ * stop when both middles come into use at once. */
 export function withStops(
   settings: WatchSettings,
   stops: number
 ): WatchSettings {
-  const low = rgbOf(settings.low);
-  const high = rgbOf(settings.high);
-  const at = (t: number) =>
-    valueOf(
-      low.map((c, i) => Math.round(c + (high[i] - c) * t)) as unknown as Rgb
+  const between = (a: number, b: number, t: number) => {
+    const from = rgbOf(a);
+    const to = rgbOf(b);
+    return valueOf(
+      from.map((c, i) => Math.round(c + (to[i] - c) * t)) as unknown as Rgb
     );
-  return stops === 3
-    ? { ...settings, stops, mid1: at(1 / 2) }
-    : stops === 4
-      ? { ...settings, stops, mid1: at(1 / 3), mid2: at(2 / 3) }
-      : { ...settings, stops };
+  };
+  const { low, high, mid1 } = settings;
+  if (stops <= settings.stops) return { ...settings, stops };
+  if (stops === 4 && settings.stops === 2)
+    return {
+      ...settings,
+      stops,
+      mid1: between(low, high, 1 / 3),
+      mid2: between(low, high, 2 / 3),
+    };
+  if (stops === 4)
+    return { ...settings, stops, mid2: between(mid1, high, 0.5) };
+  return { ...settings, stops, mid1: between(low, high, 0.5) };
 }
 
 /** The 64 colors of the watch display, two bits per channel. */

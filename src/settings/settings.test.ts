@@ -143,6 +143,13 @@ test("the custom palette uses 2 to 4 stops, dark to light", () => {
   assert.equal(gray.mid2, 0xaaaaaa);
   assert.equal(withStops(s, 3).mid1, 0x808080);
   assert.equal(withStops({ ...s, stops: 4 }, 2).mid1, s.mid1);
+  // Middle colors already picked stay when stops are added or removed.
+  const red = { ...s, stops: 3, mid1: 0xff0000 };
+  const four = withStops(red, 4);
+  assert.equal(four.mid1, 0xff0000);
+  assert.equal(four.mid2, 0xff8080);
+  assert.equal(withStops(four, 3).mid1, 0xff0000);
+  assert.equal(withStops(withStops(four, 3), 4).mid2, 0xff8080);
 });
 
 test("settings files round-trip and take the page's bare JSON", () => {
