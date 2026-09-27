@@ -402,12 +402,19 @@ static uint8_t *mask_levels(State *state) {
   return (uint8_t *)(interpolation_row(state) + state->width);
 }
 
+/* Mask updates run at launch and on clock changes, outside the step loop. */
+#if defined(RD_MODE) && defined(__GNUC__) && !defined(__clang__)
+#define MASK_SIZE_OPT __attribute__((optimize("Os")))
+#else
+#define MASK_SIZE_OPT
+#endif
+
 /* Horizontal distance of every cell of grid row r to the nearest masked
  * cell of that row, capped at RD_MASK_RAMP; RD_MASK_RAMP outside the grid.
  * Distances do not wrap. The two bytes after the row receive the first and
  * last column below the cap (first > last when there is none). */
-static void distance_row(const uint8_t *bitmap, int width, int height, int r,
-                         uint8_t *out) {
+static MASK_SIZE_OPT void distance_row(const uint8_t *bitmap, int width,
+                                       int height, int r, uint8_t *out) {
   int stride = (width + 7) / 8, distance = RD_MASK_RAMP;
   int first = width, last = -1;
   for (int x = 0; x < width; x++) {
@@ -441,8 +448,9 @@ static inline int ring_slot(int r) {
 
 /* Bring the ring to row y: all rows y - RING_REACH to y + RING_REACH when
  * start is set, else only the new row y + RING_REACH. */
-static void advance_ring(const uint8_t *bitmap, uint8_t *ring, int width,
-                         int height, int y, int start) {
+static MASK_SIZE_OPT void advance_ring(const uint8_t *bitmap, uint8_t *ring,
+                                       int width, int height, int y,
+                                       int start) {
   for (int r = start ? y - RING_REACH : y + RING_REACH; r <= y + RING_REACH;
        r++) {
     distance_row(bitmap, width, height, r, ring + ring_slot(r) * (width + 2));
@@ -452,7 +460,8 @@ static void advance_ring(const uint8_t *bitmap, uint8_t *ring, int width,
 /* Levels of row y from the ring: the chessboard distance is the minimum
  * over the rows of max(row distance, horizontal distance), taken only over
  * the columns where a row is below the cap. */
-static void ring_levels(const uint8_t *ring, int width, int y, uint8_t *out) {
+static MASK_SIZE_OPT void ring_levels(const uint8_t *ring, int width, int y,
+                                      uint8_t *out) {
   memset(out, RD_MASK_RAMP, (size_t)width);
   for (int dy = -RING_REACH; dy <= RING_REACH; dy++) {
     const uint8_t *row = ring + ring_slot(y + dy) * (width + 2);
@@ -1261,7 +1270,7 @@ int rd_height(void *handle) {
 /* Install a cell mask (NULL clears it): find the band of rows within
  * RD_MASK_RAMP - 1 rows of a masked cell, derive the levels of the band,
  * and set B to 0 in the masked cells right away. */
-int rd_mask(void *handle, const uint8_t *mask) {
+MASK_SIZE_OPT int rd_mask(void *handle, const uint8_t *mask) {
   State *state = checked_state(handle);
   if (!state || !MASK_SUPPORTED) {
     return -1;
@@ -1303,6 +1312,8 @@ int rd_mask(void *handle, const uint8_t *mask) {
   state->mask_end = band_end;
   return 0;
 }
+
+#undef MASK_SIZE_OPT
 
 int rd_mask_level(void *handle, int x, int y) {
   State *state = checked_state(handle);
