@@ -14,6 +14,10 @@ export const langOf = (value: unknown): Lang | null =>
 export const detectLang = (language: string | undefined): Lang =>
   language?.toLowerCase().startsWith("ja") ? "ja" : "en";
 
+/** The label of the avoidance switch for the analog or digital face, with
+ * or without the date. */
+type AvoidLabel = (analog: boolean, date: boolean) => string;
+
 const en = {
   name: "English",
   title: "Turing Settings",
@@ -47,13 +51,9 @@ const en = {
   fontLabel: "Font",
   showClock: "Show the clock",
   showDate: "Show the date",
-  /** The avoidance switch, named by what the face shows. */
-  avoid: (analog: boolean, date: boolean): string =>
-    !analog
-      ? "Avoid the digits"
-      : date
-        ? "Avoid the hands and date"
-        : "Avoid the hands",
+  /** The avoidance switch. Japanese names what the face shows, the digits
+   * or the hands and date, and "the clock" covers both in English. */
+  avoid: (() => "Keep the pattern off the clock") as AvoidLabel,
   export: "Export",
   file: "File",
   jsonLabel: "Settings JSON",
