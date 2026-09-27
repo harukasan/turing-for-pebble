@@ -55,26 +55,31 @@ const run = (settings: WatchSettings) => {
   field.step(1000);
   return field;
 };
+/** The field hash of a run, whose allocation is freed at once, since the
+ * Wasm heap is fixed at 1 MiB and holds only a few mode 3 fields. */
+const hashOf = (settings: WatchSettings) => {
+  const field = run(settings);
+  const hash = field.hash();
+  field.dispose();
+  return hash;
+};
 
 test("the preview runs the watch's field", () => {
   assert.equal(PREVIEW_MODE, 3);
   assert.equal(PREVIEW_SEED, 42);
-  assert.equal(run(base).hash(), golden(0));
-  assert.equal(run({ ...base, font: 1 }).hash(), golden(1));
-  assert.equal(run({ ...base, clock: 0 }).hash(), golden());
-  assert.equal(run({ ...base, avoid: 0 }).hash(), golden());
+  assert.equal(hashOf(base), golden(0));
+  assert.equal(hashOf({ ...base, font: 1 }), golden(1));
+  assert.equal(hashOf({ ...base, clock: 0 }), golden());
+  assert.equal(hashOf({ ...base, avoid: 0 }), golden());
   // FitzHugh-Nagumo from the settings: the default fhn-stripes vector and
   // the spiral's cut wave, with and without the mask.
   const stripes = withPreset(base, presetById("fhn-stripes")!);
-  assert.equal(run(stripes).hash(), golden(0, 1));
-  assert.equal(run({ ...stripes, clock: 0 }).hash(), golden(undefined, 1));
+  assert.equal(hashOf(stripes), golden(0, 1));
+  assert.equal(hashOf({ ...stripes, clock: 0 }), golden(undefined, 1));
   const spiral = withPreset(base, presetById("fhn-spiral")!);
   const vector = "6554,0,8192,410,32768,-9830,32768,-21935,1";
-  assert.equal(run(spiral).hash(), golden(0, 1, vector));
-  assert.equal(
-    run({ ...spiral, avoid: 0 }).hash(),
-    golden(undefined, 1, vector)
-  );
+  assert.equal(hashOf(spiral), golden(0, 1, vector));
+  assert.equal(hashOf({ ...spiral, avoid: 0 }), golden(undefined, 1, vector));
 });
 
 test("the analog face masks the hands of the time and the date", () => {
@@ -99,13 +104,15 @@ test("the analog face masks the hands of the time and the date", () => {
     return hash;
   };
   const face = { ...base, face: 1 };
-  assert.equal(run(face).hash(), analog(true));
-  assert.equal(run({ ...face, date: 0 }).hash(), analog(false));
+  assert.equal(hashOf(face), analog(true));
+  assert.equal(hashOf({ ...face, date: 0 }), analog(false));
   assert.notEqual(analog(true), analog(false));
-  assert.notEqual(run(face).hash(), golden(0));
-  assert.equal(run({ ...face, avoid: 0 }).hash(), golden());
-  const pixels = new PreviewField(core).analog(face, date);
+  assert.notEqual(hashOf(face), golden(0));
+  assert.equal(hashOf({ ...face, avoid: 0 }), golden());
+  const field = new PreviewField(core);
+  const pixels = field.analog(face, date);
   assert.equal(pixels.length, 25 * 228);
+  field.dispose();
 });
 
 test("recoloring keeps the field and custom stops draw like the palette", () => {
@@ -129,4 +136,5 @@ test("recoloring keeps the field and custom stops draw like the palette", () => 
   field.recolor({ ...base, palette: 1 });
   assert.deepEqual(custom, draw(field));
   assert.notDeepEqual(custom, lime);
+  field.dispose();
 });

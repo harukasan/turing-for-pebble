@@ -79,7 +79,7 @@ for (const mode of [0, 1, 2, 3])
     const native = Number(
       execFileSync(
         'build/core-test',
-        [mode, 200, 'analog', ...args].map(String),
+        [0, mode, 200, 'analog', ...args].map(String),
         { encoding: 'utf8' },
       ).trim(),
     );

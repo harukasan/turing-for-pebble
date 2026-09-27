@@ -98,9 +98,12 @@ static bool tuple_int(const Tuple *t, int32_t *out) {
       t->length > 4) {
     return false;
   }
+  /* The SDK declares the value bytes as a zero-length array, so read them
+   * through a plain pointer, which GCC 14 does not bounds-check. */
+  const uint8_t *bytes = (const uint8_t *)t->value;
   uint32_t v = 0;
   for (int i = t->length - 1; i >= 0; i--) {
-    v = v << 8 | t->value->data[i];
+    v = v << 8 | bytes[i];
   }
   if (t->type == TUPLE_INT) {
     /* Sign-extend from the tuple's width. */
