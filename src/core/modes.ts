@@ -1,4 +1,8 @@
-import type { Parameters } from "../../lib/simulation";
+import {
+  defaultParametersFor,
+  type Model,
+  type Parameters,
+} from "../../lib/simulation.ts";
 import type { ClockFont } from "../../lib/clock-fonts";
 import type { PaletteId } from "../../lib/palettes";
 
@@ -18,26 +22,54 @@ export const SWEEP_MS = 1000;
 /** Clock face: the digital HH:MM and date, or hands and the date. */
 export type ClockFace = "digital" | "analog";
 
-/** Slider range and step of each coefficient, shared by the demo and the
- * watch settings page. */
-export const parameterBounds: Record<
-  keyof Parameters,
-  [number, number, number]
-> = {
-  feed: [0.01, 0.1, 0.0001],
-  kill: [0.03, 0.075, 0.0001],
-  da: [0.1, 1, 0.01],
-  db: [0.01, 0.5, 0.01],
-  dt: [0.1, 1, 0.1],
+/** The models and their display names. */
+export const models: [Model, string][] = [
+  ["gray-scott", "Gray–Scott"],
+  ["fhn", "FitzHugh–Nagumo"],
+];
+
+/** Whether an engine runs a model: the packed 200 x 228 mode runs only
+ * Gray-Scott, the Q15 modes and Float32 run both. */
+export const engineSupportsModel = (engine: Engine, model: Model) =>
+  model === "gray-scott" || engine !== "u8-200";
+
+export { defaultParametersFor };
+
+type KeysOf<P> = P extends Parameters ? Exclude<keyof P, "model"> : never;
+/** The numeric parameters of a model (of every model by default), without
+ * the model name. */
+export type ParameterKey<M extends Model = Model> = KeysOf<
+  Extract<Parameters, { model: M }>
+>;
+
+/** The parameters shown as sliders: every one but the initial condition. */
+export type SliderKey<M extends Model> = Exclude<ParameterKey<M>, "init">;
+
+/** Slider range and step of each coefficient of each model, shared by the
+ * demo and the watch settings page. */
+export const parameterBounds: {
+  [M in Model]: Record<SliderKey<M>, [number, number, number]>;
+} = {
+  "gray-scott": {
+    feed: [0.01, 0.1, 0.0001],
+    kill: [0.03, 0.075, 0.0001],
+    da: [0.1, 1, 0.01],
+    db: [0.01, 0.5, 0.01],
+    dt: [0.1, 1, 0.1],
+  },
+  fhn: {
+    du: [0.01, 1, 0.01],
+    dv: [0, 1, 0.01],
+    ru: [0.01, 0.25, 0.001],
+    rv: [0.001, 1, 0.001],
+    av: [0, 1, 0.01],
+    k: [-1, 1, 0.01],
+    dt: [0.1, 1, 0.1],
+    rest: [-1, 1, 0.0001],
+  },
 };
 
-export const defaultParameters: Parameters = {
-  feed: 0.029,
-  kill: 0.057,
-  da: 1,
-  db: 0.5,
-  dt: 1,
-};
+export const defaultParameters = defaultParametersFor("gray-scott");
 
 export type PlayerSettings = {
   params: Parameters;

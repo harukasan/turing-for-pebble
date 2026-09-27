@@ -1,17 +1,39 @@
-export type Parameters = {
+export type GrayScottParameters = {
+  model: "gray-scott";
   feed: number;
   kill: number;
   da: number;
   db: number;
   dt: number;
 };
-export const presets = [
-  { name: "迷路", feed: 0.029, kill: 0.057 },
-  { name: "珊瑚", feed: 0.0545, kill: 0.062 },
-  { name: "細胞分裂", feed: 0.0367, kill: 0.0649 },
-  { name: "斑点", feed: 0.035, kill: 0.065 },
-  { name: "細線", feed: 0.023, kill: 0.052 },
-];
+/** FitzHugh-Nagumo in the form of numerical definition version 5: u is the
+ * displayed species, rest its resting value, and init selects the initial
+ * condition (0 disks, 1 a broken wave). */
+export type FhnParameters = {
+  model: "fhn";
+  du: number;
+  dv: number;
+  ru: number;
+  rv: number;
+  av: number;
+  k: number;
+  dt: number;
+  rest: number;
+  init: number;
+};
+export type Parameters = GrayScottParameters | FhnParameters;
+export type Model = Parameters["model"];
+export {
+  defaultParametersFor,
+  modelIndex,
+  presets,
+  presetById,
+  presetParameters,
+  parameterOrder,
+  parameterValues,
+  parameterVector,
+  type Preset,
+} from "./presets.ts";
 export class Simulation {
   a: Float32Array;
   b: Float32Array;
@@ -50,8 +72,9 @@ export class Simulation {
         this.b[i] = 0.25;
       }
   }
-  /** Advance count steps. kills optionally gives a per-cell kill rate. */
-  step(p: Parameters, count = 1, kills?: Float32Array) {
+  /** Advance count steps. kills optionally gives a per-cell kill rate.
+   * The model field of the parameters is not read. */
+  step(p: Omit<GrayScottParameters, "model">, count = 1, kills?: Float32Array) {
     const w = this.width,
       h = this.height;
     for (let t = 0; t < count; t++) {

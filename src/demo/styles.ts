@@ -174,6 +174,7 @@ export const styles = {
     fontSize: "[14px]",
     lineHeight: "[22px]",
     cursor: "pointer",
+    "&[aria-disabled=true]": { opacity: "0.32", cursor: "default" },
     "@media (min-width: 480px)": {
       width: "[calc((100% - 16px) / 2)]",
     },
