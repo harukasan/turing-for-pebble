@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { PALETTE_COUNT } from "../../lib/palettes.ts";
+import { PALETTE_COUNT, PALETTE_IDS, PALETTES } from "../../lib/palettes.ts";
 import { presets } from "../../lib/simulation.ts";
 import {
   DEFAULT_SETTINGS,
@@ -44,6 +44,10 @@ test("the settings follow the watch's message keys and defaults", () => {
     assert.equal(Number(match[1]), DEFAULT_SETTINGS[key], key);
   }
   assert.equal(SETTING_MAX.palette, PALETTE_COUNT - 1);
+  assert.deepEqual(
+    PALETTES.map((p) => p.id),
+    PALETTE_IDS
+  );
   assert.equal(presetOf(DEFAULT_SETTINGS), 0);
   assert.equal(diffusionPresetOf(DEFAULT_SETTINGS), 2);
 });

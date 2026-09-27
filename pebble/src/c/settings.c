@@ -16,7 +16,6 @@
 #pragma GCC optimize("Os")
 #endif
 
-/* Version 2 added the number of custom stops and the two middle stops. */
 /* Version 2 added the number of custom stops and the two middle stops, and
  * version 3 the date line. */
 #define SETTINGS_VERSION 3

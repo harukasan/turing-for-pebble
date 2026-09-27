@@ -2,9 +2,9 @@
 #define SETTINGS_H
 /*
  * Settings sent by the phone: the pattern coefficients, the palette and the
- * stops of the custom palette, the clock font, digit avoidance, and the
- * clock. They persist on the watch, config.h holds the defaults, and
- * docs/behavior.md describes how each change is applied.
+ * stops of the custom palette, the clock font, digit avoidance, the clock,
+ * and the date line. They persist on the watch, config.h holds the defaults,
+ * and docs/behavior.md describes how each change is applied.
  */
 #include <stdbool.h>
 #include <stdint.h>

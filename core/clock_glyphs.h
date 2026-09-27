@@ -16,7 +16,8 @@
  *   resources/normal/base/pbf/BITHAM_30_BLACK.pbf
  *     sha256 08d17b31cdeda603e855d359226a031f376dc3697e363a0beedbd3a6715a15fe
  *
- * A watch build defines RD_FONT and compiles the glyphs of that set only.
+ * A build that defines RD_FONT (RD_BUILD_FONT on the watch) compiles the
+ * glyphs of that set only, and other builds compile both sets.
  */
 /* clang-format off */
 

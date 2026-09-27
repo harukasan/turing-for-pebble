@@ -1,6 +1,6 @@
 /** @jsxImportSource react */
 import { useId, type PointerEvent } from "react";
-import { PALETTES } from "../../../lib/palettes";
+import { PALETTE_IDS, PALETTES } from "../../../lib/palettes";
 import { presets, type Parameters } from "../../../lib/simulation";
 import { isFloat } from "../../core";
 import { makeSettings } from "../serialization";
@@ -204,7 +204,10 @@ export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
               label="配色"
               value={options.palette}
               choices={PALETTES.map((p) => [p.id, p.name])}
-              onChange={(value) => demo.update("palette", value)}
+              onChange={(value) => {
+                const id = PALETTE_IDS.find((p) => p === value);
+                if (id) demo.update("palette", id);
+              }}
             />
             <SwitchControl
               name="quantize"

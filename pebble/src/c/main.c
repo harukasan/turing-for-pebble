@@ -522,13 +522,13 @@ static void focus(bool on) {
 
 /* Build the mask of the digits of clock_time and install it: B is held at
  * 0 under the digits at once, and the kill rate rises toward them. Without
- * avoidance the mask is removed and its bitmap freed. */
+ * avoidance the mask is removed. */
 static void rebuild_mask(void) {
 #if RD_AVOID
   if (!settings_avoiding()) {
+    /* The bitmap stays allocated: the heap is measured with it, and
+     * turning avoidance back on then cannot fail to allocate it. */
     rd_mask(state, NULL);
-    free(clock_mask);
-    clock_mask = NULL;
     mask_installed = false;
     return;
   }
@@ -566,7 +566,8 @@ static void rebuild_mask(void) {
 static void refill(int steps, bool add) {
 #ifndef RD_FRAME_BENCH
   if (startup_active) {
-    /* The startup steps refill the digits; the deadline settles the rest. */
+    /* The startup steps refill the digits, and the deadline settles the
+     * rest. */
     tick_in_startup = true;
     steps_since_tick = 0;
   } else if (add) {

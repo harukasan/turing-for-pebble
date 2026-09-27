@@ -82,7 +82,8 @@ def time_alone_top(font_set):
 
 out += [
     ' *',
-    ' * A watch build defines RD_FONT and compiles the glyphs of that set only.',
+    ' * A build that defines RD_FONT (RD_BUILD_FONT on the watch) compiles the',
+    ' * glyphs of that set only, and other builds compile both sets.',
     ' */',
     '/* clang-format off */',
     '',

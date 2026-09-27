@@ -11,8 +11,22 @@
  * origins and licenses are in licenses/palettes.txt. */
 export type Rgb = readonly [number, number, number];
 
+/** Palette ids, in the order of RD_PALETTE_* in core/rd.h. */
+export const PALETTE_IDS = [
+  "green",
+  "blue",
+  "mono",
+  "viridis",
+  "magma",
+  "plasma",
+  "inferno",
+  "cividis",
+  "turbo",
+] as const;
+export type PaletteId = (typeof PALETTE_IDS)[number];
+
 export type Palette = {
-  id: string;
+  id: PaletteId;
   name: string;
   /** Stops from intensity 0 to 1.0, none for the threshold palette. */
   stops: readonly Rgb[];

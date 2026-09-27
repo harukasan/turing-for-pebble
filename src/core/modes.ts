@@ -1,5 +1,6 @@
 import type { Parameters } from "../../lib/simulation";
 import type { ClockFont } from "../../lib/clock-fonts";
+import type { PaletteId } from "../../lib/palettes";
 
 export type Engine =
   "u8-200" | "q15-100" | "q15-120" | "float-200" | "float-100" | "float-120";
@@ -35,7 +36,7 @@ export const defaultParameters: Parameters = {
 export type PlayerSettings = {
   params: Parameters;
   speed: number;
-  palette: string;
+  palette: PaletteId;
   quantize: boolean;
   interpolate: boolean;
   clock: boolean;
