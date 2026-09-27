@@ -1,9 +1,0 @@
-# Candidates for scripts/precision-sweep.sh; see tests/precision.c for the
-# config syntax. Lines starting with # are skipped.
-
-# Version 4 arithmetic: 32-bit products on Q15 codes (c2 is the core)
-g=120,a=q15,b=q15,r=fs,i=q15x32c1
-g=120,a=q15,b=q15,r=fs,i=q15x32c2
-g=120,a=q15,b=q15,r=fs,i=q15x32c3
-g=120,a=q15,b=q15,r=fs,i=q24
-g=120,a=q15,b=q15,r=near,i=q15
