@@ -69,7 +69,7 @@ rate_v = fold(Dv) × S_v + rv × (u13 − ((av × v13) >> 15))
 
 ### History
 
-Version 4 moved the step from 64-bit Q24 arithmetic to the 32-bit arithmetic above, which the precision harness measured at the same Float32 error and the watch at 21% less time per step (27% with the later three-pass loop). [Storage precision study](precision-optimization.md) records the comparison. Version 5 added FitzHugh–Nagumo and the parameter vector, and left every Gray–Scott result of version 4 unchanged.
+Version 4 moved the step from 64-bit Q24 arithmetic to the 32-bit arithmetic above. Version 5 added FitzHugh–Nagumo and the parameter vector, and left every Gray–Scott result of version 4 unchanged.
 
 The Q15 code of a Q24 value v decodes as `code × 512`. The nearest code is `(v + 256) >> 9`, halfway upward.
 

@@ -4,7 +4,6 @@
 set -eu
 clang-format --dry-run --Werror core/*.c core/*.h pebble/src/c/*.c pebble/src/c/*.h tests/*.c
 cc -std=c11 -Wall -Wextra -Werror -fsyntax-only tests/core.c
-cc -std=c11 -Wall -Wextra -Werror -fsyntax-only tests/precision.c
 cc -std=c11 -Wall -Wextra -Werror -fsyntax-only tests/bench.c tests/fill.c
 cc -std=c11 -Wall -Wextra -Werror -fsyntax-only core/rd.c core/clock_mask.c tests/compare.c
 # The watch core with both models (RD_MODEL undefined) and folded to each
