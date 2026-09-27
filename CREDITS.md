@@ -6,22 +6,34 @@ This project is MIT licensed, see [LICENSE](LICENSE). It includes the third-part
 
 The Pebble build (`pebble/build/pebble.pbw`) contains the watch program and the phone script with the settings page.
 
-| Work                                                                                                                                  | Used in                                                                                                                                             | License            | Text                                           |
-| ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ---------------------------------------------- |
-| LECO and Bitham glyphs from [coredevices/PebbleOS](https://github.com/coredevices/PebbleOS) at revision `119cb96e`                    | `core/clock_glyphs.h` and `public/fonts/clock-fonts.json`, extracted by `scripts/gen-clock-glyphs.py`, which records the source file hashes in both | Apache License 2.0 | [public/fonts/LICENSE](public/fonts/LICENSE)   |
-| viridis, magma, plasma, and inferno from [mpl-colormaps](https://github.com/BIDS/colormap) by Nathaniel Smith and Stefan van der Walt | `lib/palettes.ts` and the generated `core/palettes.h`, sampled from matplotlib's tables                                                             | CC0                | [licenses/palettes.txt](licenses/palettes.txt) |
-| turbo by Anton Mikhailov, Copyright 2019 Google LLC                                                                                   | Same as above                                                                                                                                       | Apache License 2.0 | [licenses/palettes.txt](licenses/palettes.txt) |
-| cividis by Jamie R. Nuñez, Christopher R. Anderton, and Ryan S. Renslow, Copyright 2017 Battelle Memorial Institute                   | Same as above                                                                                                                                       | BSD-style          | [licenses/palettes.txt](licenses/palettes.txt) |
-| [fflate](https://github.com/101arrowz/fflate) by Arjun Barrett                                                                        | The settings page, which unpacks its gzipped Wasm core and clock glyphs with it                                                                     | MIT                | [licenses/fflate.txt](licenses/fflate.txt)     |
+- **LECO and Bitham glyphs** from [coredevices/PebbleOS](https://github.com/coredevices/PebbleOS) at revision `119cb96e`.
+  - Used in `core/clock_glyphs.h` and `public/fonts/clock-fonts.json`, extracted by `scripts/gen-clock-glyphs.py`, which records the source file hashes in both.
+  - Apache License 2.0, see [public/fonts/LICENSE](public/fonts/LICENSE).
+- **viridis, magma, plasma, and inferno** from [mpl-colormaps](https://github.com/BIDS/colormap) by Nathaniel Smith and Stefan van der Walt.
+  - Used in `lib/palettes.ts` and the generated `core/palettes.h`, sampled from matplotlib's tables.
+  - CC0, see [licenses/palettes.txt](licenses/palettes.txt).
+- **turbo** by Anton Mikhailov, Copyright 2019 Google LLC.
+  - Used in the same files as the colormaps above.
+  - Apache License 2.0, see [licenses/palettes.txt](licenses/palettes.txt).
+- **cividis** by Jamie R. Nuñez, Christopher R. Anderton, and Ryan S. Renslow, Copyright 2017 Battelle Memorial Institute.
+  - Used in the same files as the colormaps above.
+  - BSD-style license, see [licenses/palettes.txt](licenses/palettes.txt).
+- **[fflate](https://github.com/101arrowz/fflate)** by Arjun Barrett.
+  - Used in the settings page to unpack its gzipped Wasm core and clock glyphs.
+  - MIT License, see [licenses/fflate.txt](licenses/fflate.txt).
 
 ## Web demo
 
-The Web demo build (`pnpm run build`) contains the glyphs and palettes above and these works.
+The Web demo build (`pnpm run build`) contains the glyphs and colormaps above and these works.
 
-| Work                                                                                                                                    | Used in                                        | License                   | Text                                       |
-| --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------- | ------------------------------------------ |
-| [React](https://github.com/facebook/react), React DOM, and scheduler, Copyright Meta Platforms, Inc. and affiliates                     | `src/demo/`                                    | MIT                       | [licenses/react.txt](licenses/react.txt)   |
-| [Roboto](https://github.com/googlefonts/roboto-classic) and [Roboto Mono](https://github.com/googlefonts/robotomono) through Fontsource | `src/demo/style.css`                           | SIL Open Font License 1.1 | [licenses/roboto.txt](licenses/roboto.txt) |
-| Style helpers generated by [Panda CSS](https://github.com/chakra-ui/panda), Copyright 2023 Segun Adebayo                                | `styled-system/`, generated by `panda codegen` | MIT                       | [licenses/panda.txt](licenses/panda.txt)   |
+- **[React](https://github.com/facebook/react), React DOM, and scheduler**, Copyright Meta Platforms, Inc. and affiliates.
+  - Used in `src/demo/`.
+  - MIT License, see [licenses/react.txt](licenses/react.txt).
+- **[Roboto](https://github.com/googlefonts/roboto-classic) and [Roboto Mono](https://github.com/googlefonts/robotomono)** through Fontsource.
+  - Used in `src/demo/style.css`.
+  - SIL Open Font License 1.1, see [licenses/roboto.txt](licenses/roboto.txt).
+- **Style helpers generated by [Panda CSS](https://github.com/chakra-ui/panda)**, Copyright 2023 Segun Adebayo.
+  - Used in `styled-system/`, generated by `panda codegen`.
+  - MIT License, see [licenses/panda.txt](licenses/panda.txt).
 
 Development tools that ship nothing, such as Vite, TypeScript, ESLint, and the Pebble SDK, are not listed.
