@@ -451,7 +451,7 @@ static unsigned interpolated_reference(State *state, int x, int y) {
  * same byte. */
 static void check_rgb2(State *state) {
   uint8_t copy[RD_DISPLAY_WIDTH];
-  for (int palette = 0; palette <= RD_PALETTE_MONO; palette++) {
+  for (int palette = 0; palette < RD_PALETTE_COUNT; palette++) {
     for (int sampling = 0; sampling <= RD_ROW_BILINEAR;
          sampling += RD_ROW_BILINEAR) {
       for (int y = 0; y < RD_DISPLAY_HEIGHT; y += y < 8 ? 1 : 7) {
@@ -468,7 +468,7 @@ static void check_rgb2(State *state) {
           assert((copy[x] & ARGB8_OPAQUE) == ARGB8_OPAQUE);
           if (sampling) {
             unsigned value = interpolated_reference(state, x, y);
-            assert(copy[x] == value_argb8(palette, decode_q15(value)));
+            assert(copy[x] == value_argb8(state, palette, decode_q15(value)));
           }
         }
       }
@@ -484,8 +484,8 @@ static void check_rgb2(State *state) {
     }
     ensure_value_table(state, palette);
     for (unsigned value = 0; value <= Q15_CODE_MAX; value++) {
-      assert(value_color(value_table(state), palette, value) ==
-             value_argb8(palette, decode_q15(value)));
+      assert(value_color(state, value_table(state), palette, value) ==
+             value_argb8(state, palette, decode_q15(value)));
     }
   }
   /* rd_row_rgb2_into writes the same bytes into a caller row, only in
@@ -509,8 +509,93 @@ static void check_rgb2(State *state) {
   assert(rd_row_rgb2_into(state, RD_DISPLAY_HEIGHT, 0, 0, into, 0, 4) == -1);
   /* Invalid arguments return NULL without building a table. */
   assert(!rd_row_rgb2(state, RD_DISPLAY_HEIGHT, 0, 0));
-  assert(!rd_row_rgb2(state, 0, RD_PALETTE_MONO + 1, 0));
+  assert(!rd_row_rgb2(state, 0, RD_PALETTE_COUNT, 0));
+  assert(!rd_row(state, 0, RD_PALETTE_COUNT, 0) && !rd_row(state, 0, -1, 0));
   assert(!rd_row_rgb2(state, 0, 0, 4) && !rd_row(state, 0, 0, 4));
+}
+
+/* Every channel of every palette with stops is the nearest integer to the
+ * exact interpolation between its stops, halves rounded up, over the Q15
+ * codes, whose intensity is three times the code. */
+static void check_stop_interpolation(State *state) {
+  assert(sizeof PALETTE_STOP_COUNT == RD_PALETTE_CUSTOM);
+  for (int palette = 0; palette < RD_PALETTE_CUSTOM; palette++) {
+    int count = PALETTE_STOP_COUNT[palette];
+    if (palette == RD_PALETTE_MONO) {
+      assert(count == 0);
+      continue;
+    }
+    assert(count >= 2 && count <= RD_PALETTE_MAX_STOPS);
+    for (unsigned code = 0; code * 3 <= RD_Q15_ONE + 2; code++) {
+      int intensity = code * 3 > RD_Q15_ONE ? RD_Q15_ONE : (int)code * 3;
+      long position = (long)intensity * (count - 1);
+      int segment =
+          intensity == RD_Q15_ONE ? count - 2 : (int)(position / RD_Q15_ONE);
+      long fraction = position - (long)segment * RD_Q15_ONE;
+      uint8_t rgb[3];
+      value_rgb(state, palette, 0, decode_q15(code), rgb);
+      for (int c = 0; c < 3; c++) {
+        long low = PALETTE_STOPS[palette][segment][c];
+        long high = PALETTE_STOPS[palette][segment + 1][c];
+        long exact = low * RD_Q15_ONE + (high - low) * fraction;
+        long color = (long)rgb[c] * RD_Q15_ONE;
+        assert(exact >= color - RD_Q15_ONE / 2 &&
+               exact < color + RD_Q15_ONE / 2);
+      }
+    }
+  }
+}
+
+static uint8_t palette_rgb2[2][RD_DISPLAY_HEIGHT][RD_DISPLAY_WIDTH];
+static uint8_t palette_rgba[2][RD_DISPLAY_HEIGHT][RD_ROW_BYTES];
+
+/* Two palettes draw the same rows, quantized, with both sampling flags.
+ * The first is drawn first, so a stale lookup table for it would show. */
+static void check_same_palette(State *state, int first, int second) {
+  for (int flags = 0; flags <= RD_ROW_BILINEAR; flags += RD_ROW_BILINEAR) {
+    int palettes[2] = {first, second};
+    for (int k = 0; k < 2; k++) {
+      for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+        memcpy(palette_rgb2[k][y], rd_row_rgb2(state, y, palettes[k], flags),
+               RD_DISPLAY_WIDTH);
+        memcpy(palette_rgba[k][y],
+               rd_row(state, y, palettes[k], flags | RD_ROW_QUANTIZE),
+               RD_ROW_BYTES);
+      }
+    }
+    assert(!memcmp(palette_rgb2[0], palette_rgb2[1], sizeof palette_rgb2[0]));
+    assert(!memcmp(palette_rgba[0], palette_rgba[1], sizeof palette_rgba[0]));
+  }
+}
+
+/* The custom palette starts as lime, takes the stops rd_palette sets, drops
+ * lookup tables built for the old stops, rejects invalid stops without
+ * change, and belongs to its handle. Checked in a packed and a Q15 mode,
+ * which keep separate lookup tables. */
+static void check_custom_palette(void) {
+  for (int mode = 0; mode < MODE_COUNT; mode += 3) {
+    void *memory = malloc(rd_bytes(mode));
+    void *other_memory = malloc(rd_bytes(mode));
+    State *state = rd_init(memory, rd_bytes(mode), mode, 42);
+    State *other = rd_init(other_memory, rd_bytes(mode), mode, 42);
+    check_stop_interpolation(state);
+    rd_step(state, 300);
+    rd_step(other, 300);
+    check_same_palette(state, RD_PALETTE_LIME, RD_PALETTE_CUSTOM);
+    const uint8_t *viridis = PALETTE_STOPS[RD_PALETTE_VIRIDIS][0];
+    assert(rd_palette(NULL, viridis, 8) == -1);
+    assert(rd_palette(state, NULL, 8) == -1);
+    assert(rd_palette(state, viridis, 1) == -1);
+    assert(rd_palette(state, viridis, RD_PALETTE_MAX_STOPS + 1) == -1);
+    check_same_palette(state, RD_PALETTE_CUSTOM, RD_PALETTE_LIME);
+    assert(rd_palette(state, viridis, 8) == 0);
+    check_same_palette(state, RD_PALETTE_CUSTOM, RD_PALETTE_VIRIDIS);
+    assert(rd_palette(state, PALETTE_STOPS[RD_PALETTE_CYAN][0], 2) == 0);
+    check_same_palette(state, RD_PALETTE_CUSTOM, RD_PALETTE_CYAN);
+    check_same_palette(other, RD_PALETTE_CUSTOM, RD_PALETTE_LIME);
+    free(memory);
+    free(other_memory);
+  }
 }
 
 /* The nearest output of every rendering call for modes 0-2, hashed, equals
@@ -523,7 +608,7 @@ static void check_nearest_unchanged(void) {
     void *state = rd_init(memory, rd_bytes(mode), mode, 42);
     uint8_t *mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
     cm_build(mask, rd_width(state), rd_height(state), CM_FONT_BITHAM, 13, 57,
-             2046, 8, 29, 1);
+             2046, 8, 29, 1, 1);
     rd_mask(state, mask);
     rd_step(state, 300);
     uint32_t hash = FNV_OFFSET_BASIS;
@@ -687,10 +772,10 @@ static void check_clock_mask(void) {
                          {100, 114, 0, 14, 50, 2026, 9, 24, CM_MAX_HALO + 1}};
   for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
     const int *b = bad[i];
-    assert(cm_build(mask, b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
-                    b[8]) == -1);
+    assert(cm_build(mask, b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8],
+                    1) == -1);
   }
-  assert(cm_build(NULL, 100, 114, 0, 14, 50, 2026, 9, 24, 0) == -1);
+  assert(cm_build(NULL, 100, 114, 0, 14, 50, 2026, 9, 24, 0, 1) == -1);
   for (size_t i = 0; i < sizeof mask; i++) {
     assert(mask[i] == 0xa5);
   }
@@ -699,31 +784,49 @@ static void check_clock_mask(void) {
     assert(cm_font_available(font) && cm_layout(font));
   }
   assert(!cm_font_available(CM_FONT_COUNT));
-  assert(cm_build(mask, 200, 228, CM_FONT_LECO, 14, 50, 2026, 9, 24, 0) == 0);
+  assert(cm_build(mask, 200, 228, CM_FONT_LECO, 14, 50, 2026, 9, 24, 0, 1) ==
+         0);
   int count = 0;
   for (size_t i = 0; i < 5700; i++) {
     count += __builtin_popcount(mask[i]);
   }
   assert(count == 2427);
   /* cm_draw sets exactly the glyph pixels: the cells of the 200-wide mask
-   * at halo 0, for both fonts. */
+   * at halo 0, for both fonts, with and without the date. Without it the
+   * time's ink is centered on the display, the digits 1, 4, 5, and 0
+   * spanning the full ink height of the time glyphs. */
+  assert(cm_time_top(-1, 1) == -1 && cm_time_top(CM_FONT_COUNT, 0) == -1);
   for (int font = 0; font < CM_FONT_COUNT; font++) {
-    static uint8_t screen[RD_DISPLAY_HEIGHT][RD_DISPLAY_WIDTH];
-    memset(screen, 0, sizeof screen);
-    assert(cm_draw(test_row, screen, 0xff, font, 14, 50, 2026, 9, 24) == 0);
-    assert(cm_build(mask, 200, 228, font, 14, 50, 2026, 9, 24, 0) == 0);
-    int drawn = 0;
-    for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
-      for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
-        int bit = mask[y * 25 + x / 8] >> (x % 8) & 1;
-        assert((screen[y][x] == 0xff) == bit);
-        drawn += bit;
+    assert(cm_time_top(font, 1) == cm_layout(font)->time_top);
+    for (int date = 0; date <= 1; date++) {
+      static uint8_t screen[RD_DISPLAY_HEIGHT][RD_DISPLAY_WIDTH];
+      memset(screen, 0, sizeof screen);
+      assert(cm_draw(test_row, screen, 0xff, font, 14, 50, 2026, 9, 24, date) ==
+             0);
+      assert(cm_build(mask, 200, 228, font, 14, 50, 2026, 9, 24, 0, date) == 0);
+      int drawn = 0, first = RD_DISPLAY_HEIGHT, last = -1;
+      for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+        for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+          int bit = mask[y * 25 + x / 8] >> (x % 8) & 1;
+          assert((screen[y][x] == 0xff) == bit);
+          drawn += bit;
+          if (bit) {
+            first = y < first ? y : first;
+            last = y;
+          }
+        }
+      }
+      assert(font != CM_FONT_LECO || !date || drawn == 2427);
+      if (!date) {
+        /* The ink rows first to last sit centered, to a pixel. */
+        int above = first, below = RD_DISPLAY_HEIGHT - 1 - last;
+        assert(above - below >= -1 && above - below <= 1);
+        assert(first > cm_layout(font)->time_top);
       }
     }
-    assert(font != CM_FONT_LECO || drawn == 2427);
   }
-  assert(cm_draw(NULL, NULL, 0xff, 0, 14, 50, 2026, 9, 24) == -1);
-  assert(cm_draw(test_row, NULL, 0xff, 0, 24, 50, 2026, 9, 24) == -1);
+  assert(cm_draw(NULL, NULL, 0xff, 0, 14, 50, 2026, 9, 24, 1) == -1);
+  assert(cm_draw(test_row, NULL, 0xff, 0, 24, 50, 2026, 9, 24, 1) == -1);
 }
 
 /* Pixel (x, y) of a 200 x 228 bitmap in the mask format. */
@@ -771,16 +874,17 @@ static void check_analog(void) {
   for (size_t i = 0; i < sizeof bad / sizeof bad[0]; i++) {
     const int *b = bad[i];
     assert(cm_build_analog(mask, b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7],
-                           b[8]) == -1);
+                           b[8], 1) == -1);
   }
-  assert(cm_build_analog(NULL, 100, 114, 0, 360, 600, 2046, 8, 29, 1) == -1);
+  assert(cm_build_analog(NULL, 100, 114, 0, 360, 600, 2046, 8, 29, 1, 1) == -1);
   for (size_t i = 0; i < sizeof mask; i++) {
     assert(mask[i] == 0xa5);
   }
-  assert(cm_draw_analog(NULL, NULL, 0xff, 0, 360, 600, 2046, 8, 29) == -1);
-  assert(cm_draw_analog(test_row, NULL, 0xff, 0, CM_TURN, 600, 2046, 8, 29) ==
+  assert(cm_draw_analog(NULL, NULL, 0xff, 0, 360, 600, 2046, 8, 29, 1) == -1);
+  assert(cm_draw_analog(test_row, NULL, 0xff, 0, CM_TURN, 600, 2046, 8, 29,
+                        1) == -1);
+  assert(cm_draw_analog(test_row, NULL, 0xff, 0, 360, 600, 2046, 13, 29, 1) ==
          -1);
-  assert(cm_draw_analog(test_row, NULL, 0xff, 0, 360, 600, 2046, 13, 29) == -1);
   assert(cm_analog_date_top(-1) == -1 &&
          cm_analog_date_top(CM_FONT_COUNT) == -1);
   /* cm_draw_analog sets exactly the pixels of the 200-wide mask at halo
@@ -788,9 +892,9 @@ static void check_analog(void) {
   for (int font = 0; font < CM_FONT_COUNT; font++) {
     static uint8_t screen[RD_DISPLAY_HEIGHT][RD_DISPLAY_WIDTH];
     memset(screen, 0, sizeof screen);
-    assert(cm_draw_analog(test_row, screen, 0xff, font, 360, 600, 2046, 8,
-                          29) == 0);
-    assert(cm_build_analog(mask, 200, 228, font, 360, 600, 2046, 8, 29, 0) ==
+    assert(cm_draw_analog(test_row, screen, 0xff, font, 360, 600, 2046, 8, 29,
+                          1) == 0);
+    assert(cm_build_analog(mask, 200, 228, font, 360, 600, 2046, 8, 29, 0, 1) ==
            0);
     int drawn = 0;
     for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
@@ -801,6 +905,22 @@ static void check_analog(void) {
       }
     }
     assert(font != CM_FONT_LECO || drawn == ANALOG_PIXELS);
+  }
+  /* Without the date the face is the hands and the disk alone. */
+  for (int font = 0; font < CM_FONT_COUNT; font++) {
+    static uint8_t screen[RD_DISPLAY_HEIGHT][RD_DISPLAY_WIDTH];
+    memset(screen, 0, sizeof screen);
+    assert(cm_draw_analog(test_row, screen, 0xff, font, 360, 600, 2046, 8, 29,
+                          0) == 0);
+    assert(cm_build_analog(mask, 200, 228, font, 360, 600, 2046, 8, 29, 0, 0) ==
+           0);
+    hands_bitmap(pixels, 360, 600);
+    assert(memcmp(mask, pixels, sizeof mask) == 0);
+    for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
+      for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
+        assert((screen[y][x] == 0xff) == bitmap_bit(mask, x, y));
+      }
+    }
   }
   /* Every row of a capsule is one run holding the seed: the scan visits
    * exactly the pixels within the radius of the segment, for every angle
@@ -830,7 +950,7 @@ static void check_analog(void) {
     for (int t = 0; t < 720; t++) {
       assert(cm_build_analog(mask, 200, 228, font,
                              cm_hour_angle(t / 60, t % 60),
-                             cm_minute_angle(t % 60), 2046, 8, 29, 0) == 0);
+                             cm_minute_angle(t % 60), 2046, 8, 29, 0, 1) == 0);
       int first = -1, last = -1;
       for (int y = 0; y < RD_DISPLAY_HEIGHT; y++) {
         for (int x = 0; x < RD_DISPLAY_WIDTH; x++) {
@@ -874,7 +994,7 @@ static void check_analog(void) {
   }
   /* The mask of a grid and halo is the splat of every face pixel. */
   assert(cm_build_analog(pixels, 200, 228, CM_FONT_BITHAM, 1438, 1416, 2046, 8,
-                         29, 0) == 0);
+                         29, 0, 1) == 0);
   const int widths[3] = {100, 120, 200};
   const int halos[3] = {0, 1, 3};
   for (int w = 0; w < 3; w++) {
@@ -889,7 +1009,7 @@ static void check_analog(void) {
         }
       }
       assert(cm_build_analog(mask, width, height, CM_FONT_BITHAM, 1438, 1416,
-                             2046, 8, 29, halos[h]) == 0);
+                             2046, 8, 29, halos[h], 1) == 0);
       assert(memcmp(mask, other, cm_bytes(width, height)) == 0);
     }
   }
@@ -963,9 +1083,9 @@ int main(int argc, char **argv) {
       uint8_t *mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
       int built =
           analog ? cm_build_analog(mask, rd_width(state), rd_height(state),
-                                   v[0], v[1], v[2], v[3], v[4], v[5], v[6])
+                                   v[0], v[1], v[2], v[3], v[4], v[5], v[6], 1)
                  : cm_build(mask, rd_width(state), rd_height(state), v[0], v[1],
-                            v[2], v[3], v[4], v[5], v[6]);
+                            v[2], v[3], v[4], v[5], v[6], 1);
       if (built || rd_mask(state, mask)) {
         fprintf(stderr, "invalid mask arguments\n");
         return 1;
@@ -985,6 +1105,7 @@ int main(int argc, char **argv) {
   check_clock_mask();
   check_analog();
   check_nearest_unchanged();
+  check_custom_palette();
   for (int mode = 0; mode < MODE_COUNT; mode++) {
     size_t size = rd_bytes(mode);
     uint8_t *memory = malloc(size + 16);

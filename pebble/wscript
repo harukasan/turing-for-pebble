@@ -52,7 +52,7 @@ def build(ctx):
         # RD_BUILD_FONT selects the clock font set (0 LECO, 1 Bitham).
         if os.environ.get('RD_BUILD_FONT'):
             cflags.append('-DRD_FONT=' + os.environ['RD_BUILD_FONT'])
-        # RD_BUILD_FACE selects the clock face (0 digital, 1 analog).
+        # RD_BUILD_FACE fixes the clock face (0 digital, 1 analog).
         if os.environ.get('RD_BUILD_FACE'):
             cflags.append('-DRD_FACE=' + os.environ['RD_BUILD_FACE'])
         # RD_BUILD_RENDER overrides the rd_row_rgb2 flags (2 interpolates).
@@ -79,8 +79,10 @@ def build(ctx):
     ctx.env = cached_env
 
     ctx.set_group('bundle')
-    ctx.pbl_bundle(binaries=binaries,
-                   js=ctx.path.ant_glob(['src/pkjs/**/*.js',
-                                         'src/pkjs/**/*.json',
-                                         'src/common/**/*.js']),
-                   js_entry_file='src/pkjs/index.js')
+    # The phone runs only pebble-js-app.js, which scripts/embed-config.mjs
+    # (pnpm run build:settings) writes from src/pkjs/index.js and the
+    # settings page.
+    pkjs = ctx.path.find_node('src/pkjs/generated/pebble-js-app.js')
+    if not pkjs:
+        ctx.fatal('src/pkjs/generated/pebble-js-app.js is missing: run pnpm run build:settings')
+    ctx.pbl_bundle(binaries=binaries, js=[pkjs])

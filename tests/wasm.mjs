@@ -35,7 +35,7 @@ for (const mode of [0, 1, 2, 3])
       p = e.malloc(n),
       s = e.rd_init(p, n, mode, 42);
     const m = e.malloc(e.cm_bytes(e.rd_width(s), e.rd_height(s)));
-    assert.equal(e.cm_build(m, e.rd_width(s), e.rd_height(s), ...args), 0);
+    assert.equal(e.cm_build(m, e.rd_width(s), e.rd_height(s), ...args, 1), 0);
     assert.equal(e.rd_mask(s, m), 0);
     e.free(m);
     e.rd_step(s, 200);
@@ -58,7 +58,7 @@ for (const mode of [0, 1, 2, 3])
       s = e.rd_init(p, n, mode, 42);
     const m = e.malloc(e.cm_bytes(e.rd_width(s), e.rd_height(s)));
     assert.equal(
-      e.cm_build_analog(m, e.rd_width(s), e.rd_height(s), ...args),
+      e.cm_build_analog(m, e.rd_width(s), e.rd_height(s), ...args, 1),
       0,
     );
     assert.equal(e.rd_mask(s, m), 0);
@@ -125,7 +125,7 @@ for (let i = 0; i < 300; i++) {
       h = e.rd_height(s),
       m = e.malloc(e.cm_bytes(w, h));
     assert(m);
-    assert.equal(e.cm_build_analog(m, w, h, 0, 360, 600, 2046, 8, 29, 1), 0);
+    assert.equal(e.cm_build_analog(m, w, h, 0, 360, 600, 2046, 8, 29, 1, 1), 0);
     assert.equal(e.rd_mask(s, m), 0);
     e.free(m);
   }

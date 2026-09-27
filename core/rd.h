@@ -33,8 +33,26 @@ enum {
   RD_COMPONENT_COUNT
 };
 
-/* Palettes for rd_row. */
-enum { RD_PALETTE_LIME, RD_PALETTE_CYAN, RD_PALETTE_MONO };
+/* Palettes for rd_row: the built-in palettes of lib/palettes.ts, then the
+ * custom palette whose stops rd_palette sets. A palette maps the display
+ * intensity, B times 3 clamped to 1.0, through equally spaced RGB stops,
+ * except the monochrome threshold. */
+enum {
+  RD_PALETTE_LIME,
+  RD_PALETTE_CYAN,
+  RD_PALETTE_MONO,
+  RD_PALETTE_VIRIDIS,
+  RD_PALETTE_MAGMA,
+  RD_PALETTE_PLASMA,
+  RD_PALETTE_INFERNO,
+  RD_PALETTE_CIVIDIS,
+  RD_PALETTE_TURBO,
+  RD_PALETTE_CUSTOM,
+  RD_PALETTE_COUNT
+};
+
+/* Most stops of a palette. */
+#define RD_PALETTE_MAX_STOPS 8
 
 /* mode 0: 200x228, one 16-bit word per cell (A 7-bit linear, B 9-bit
  * square-root companded); mode 1: 100x114, one Q15 word per species;
@@ -45,6 +63,10 @@ size_t rd_bytes(int mode);
 size_t rd_memory(int mode, int component);
 void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed);
 int rd_params(void *handle, int feed, int kill, int da, int db, int dt);
+/* Stops of RD_PALETTE_CUSTOM: count RGB triples, 2 to RD_PALETTE_MAX_STOPS,
+ * equally spaced from intensity 0 to 1.0. rd_init sets the stops of
+ * RD_PALETTE_LIME. Returns 0, or -1 without change for invalid arguments. */
+int rd_palette(void *handle, const uint8_t *rgb, int count);
 int rd_seed(void *handle, int x, int y, int radius);
 int rd_step(void *handle, int count);
 int rd_get(void *handle, int x, int y, int species);

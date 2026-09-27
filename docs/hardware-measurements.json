@@ -35,6 +35,23 @@
       "clockInvalid": false,
       "interrupted": false,
       "note": "Startup 1,661 steps and 551 frames in 30.03 s. A backlight window after the startup (RD light line) ran 282 steps and 93 frames in 5.05 s: 18.4 frames per second, three steps per frame."
+    },
+    {
+      "commit": "7db03a3",
+      "mode": 3,
+      "date": "2026-09-27",
+      "firmware": "unknown",
+      "startupWallMs": 29954,
+      "stepsPerSecond": 56.0,
+      "avgStepUs": 13701,
+      "maxStepMs": 39,
+      "avgDrawUs": 6527,
+      "avgTextUs": 929,
+      "minimumFreeHeapBytes": 18136,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "note": "Settings build with default settings, RD_BUILD_LOG=1 and RD_BUILD_LOAD_LIMIT=24576, 21,688 B load. Startup 1,680 steps and 557 frames in 30.01 s."
     }
   ]
 }

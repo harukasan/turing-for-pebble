@@ -19,5 +19,14 @@ export default tseslint.config([
       ...panda.configs.recommended.rules,
     },
   },
+  {
+    // PebbleKit JS runs in the phone apps' JavaScript engines, so it keeps
+    // to ES5: var and catch bindings.
+    files: ["pebble/src/pkjs/**/*.js"],
+    rules: {
+      "no-var": "off",
+      "@typescript-eslint/no-unused-vars": ["error", { caughtErrors: "none" }],
+    },
+  },
   prettier,
 ]);

@@ -1,3 +1,4 @@
+import { paletteIndex, type Rgb } from "./palettes.ts";
 import type { Parameters } from "./simulation";
 type API = {
   memory: WebAssembly.Memory;
@@ -14,9 +15,11 @@ type API = {
     b: number,
     t: number
   ): number;
+  rd_palette(p: number, rgb: number, count: number): number;
   rd_seed(p: number, x: number, y: number, r: number): number;
   rd_step(p: number, n: number): number;
   rd_steps(p: number): number;
+  rd_hash(p: number): number;
   rd_row(p: number, y: number, c: number, flags: number): number;
   rd_width(p: number): number;
   rd_height(p: number): number;
@@ -34,7 +37,8 @@ type API = {
     year: number,
     month: number,
     day: number,
-    halo: number
+    halo: number,
+    date: number
   ): number;
   cm_build_analog(
     m: number,
@@ -46,7 +50,8 @@ type API = {
     year: number,
     month: number,
     day: number,
-    halo: number
+    halo: number,
+    date: number
   ): number;
   cm_sweep_angle(
     from: number,
@@ -75,14 +80,16 @@ function withMaskBuffer(
   }
 }
 /** The clock mask of a grid (cm_build in core/clock_mask.c), one bit per
- * cell in rows of (width + 7) / 8 bytes. */
+ * cell in rows of (width + 7) / 8 bytes, the date line only with
+ * showDate. */
 export function buildMask(
   api: API,
   width: number,
   height: number,
   font: number,
   date: Date,
-  halo: number
+  halo: number,
+  showDate = true
 ) {
   return withMaskBuffer(api, api.cm_bytes(width, height), (pointer) =>
     api.cm_build(
@@ -95,13 +102,15 @@ export function buildMask(
       date.getFullYear(),
       date.getMonth() + 1,
       date.getDate(),
-      halo
+      halo,
+      showDate ? 1 : 0
     )
   );
 }
 /** The mask of the analog face of a grid (cm_build_analog in
  * core/clock_mask.c): the hands at their angles, the center disk, and the
- * date. At width 200 and halo 0 it is the pixel bitmap of the face. */
+ * date line only with showDate. At width 200 and halo 0 it is the pixel
+ * bitmap of the face. */
 export function buildAnalogMask(
   api: API,
   width: number,
@@ -110,7 +119,8 @@ export function buildAnalogMask(
   hourAngle: number,
   minuteAngle: number,
   date: Date,
-  halo: number
+  halo: number,
+  showDate = true
 ) {
   return withMaskBuffer(api, api.cm_bytes(width, height), (pointer) =>
     api.cm_build_analog(
@@ -123,7 +133,8 @@ export function buildAnalogMask(
       date.getFullYear(),
       date.getMonth() + 1,
       date.getDate(),
-      halo
+      halo,
+      showDate ? 1 : 0
     )
   );
 }
@@ -236,6 +247,10 @@ export class WasmSimulation {
   get steps() {
     return this.api.rd_steps(this.state);
   }
+  /** rd_hash of the stored field, as an unsigned integer. */
+  hash() {
+    return this.api.rd_hash(this.state) >>> 0;
+  }
   get linearBytes() {
     return this.api.memory.buffer.byteLength;
   }
@@ -275,6 +290,17 @@ export class WasmSimulation {
     this.api.rd_mask(this.state, pointer);
     this.api.free(pointer);
   }
+  /** Stops of the custom palette (PALETTE_CUSTOM), as rd_palette. */
+  setPalette(stops: readonly Rgb[]) {
+    const pointer = this.api.malloc(stops.length * 3);
+    if (!pointer) throw new Error("Wasm allocation failed");
+    new Uint8Array(this.api.memory.buffer, pointer, stops.length * 3).set(
+      stops.flat()
+    );
+    const result = this.api.rd_palette(this.state, pointer, stops.length);
+    this.api.free(pointer);
+    if (result) throw new Error("Invalid palette stops");
+  }
   maskLevel(x: number, y: number) {
     return this.api.rd_mask_level(this.state, x, y);
   }
@@ -285,18 +311,15 @@ export class WasmSimulation {
    * center (RD_ROW_BILINEAR) instead of showing the covering cell. */
   render(
     pixels: ImageData,
-    palette: string,
+    palette: string | number,
     quantize: boolean,
     interpolate = false
   ) {
     const flags = Number(quantize) | (interpolate ? 2 : 0);
+    const index = typeof palette === "number" ? palette : paletteIndex(palette);
     for (let y = 0; y < 228; y++) {
-      this.api.rd_row(
-        this.state,
-        y,
-        palette === "green" ? 0 : palette === "blue" ? 1 : 2,
-        flags
-      );
+      if (!this.api.rd_row(this.state, y, index, flags))
+        throw new Error("Invalid palette");
       pixels.data.set(this.row, y * 800);
     }
   }

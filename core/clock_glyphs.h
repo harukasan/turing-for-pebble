@@ -16,8 +16,10 @@
  *   resources/normal/base/pbf/BITHAM_30_BLACK.pbf
  *     sha256 08d17b31cdeda603e855d359226a031f376dc3697e363a0beedbd3a6715a15fe
  *
- * A watch build defines RD_FONT and compiles the glyphs of that set only,
- * and with RD_FACE 1 (the analog face) only its date line.
+ * A build that defines RD_FONT (RD_BUILD_FONT on the watch) compiles the
+ * glyphs of that set only, and other builds compile both sets. A build
+ * that defines RD_FACE 1 (RD_BUILD_FACE on the watch, the analog face
+ * only) leaves out the time line glyphs.
  */
 /* clang-format off */
 
@@ -29,10 +31,11 @@
 #define CM_TIME_FONT(glyphs, bits) {NULL, NULL}
 #endif
 
-/* System font keys and text boxes of each set, for the watch. */
+/* System font keys and text boxes of each set, for the watch, and the
+ * time line top that centers the time alone on the display. */
 static const CmLayout CM_LAYOUTS[CM_FONT_COUNT] = {
-    {"RESOURCE_ID_LECO_42_NUMBERS", "RESOURCE_ID_LECO_20_BOLD_NUMBERS", 78, 50, 128, 30}, /* leco */
-    {"RESOURCE_ID_BITHAM_42_BOLD", "RESOURCE_ID_BITHAM_30_BLACK", 79, 50, 122, 40}, /* bitham */
+    {"RESOURCE_ID_LECO_42_NUMBERS", "RESOURCE_ID_LECO_20_BOLD_NUMBERS", 78, 50, 128, 30, 86}, /* leco */
+    {"RESOURCE_ID_BITHAM_42_BOLD", "RESOURCE_ID_BITHAM_30_BLACK", 79, 50, 122, 40, 87}, /* bitham */
 };
 
 #if !defined(RD_FONT) || RD_FONT == 0

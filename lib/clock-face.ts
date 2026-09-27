@@ -24,14 +24,16 @@ export function sweepAngle(
   return angle;
 }
 /** The display pixels of the analog face as a 200 × 228 bitmap in rows of
- * 25 bytes, the halo 0 mask of the display grid. */
+ * 25 bytes, the halo 0 mask of the display grid, the date line only with
+ * showDate. */
 export const analogPixels = (
   api: CoreAPI,
   font: number,
   hour: number,
   minute: number,
-  date: Date
-) => buildAnalogMask(api, 200, 228, font, hour, minute, date, 0);
+  date: Date,
+  showDate = true
+) => buildAnalogMask(api, 200, 228, font, hour, minute, date, 0, showDate);
 /** Draw the set pixels of a face bitmap in white, one run per row span. */
 export function drawAnalog(ctx: CanvasRenderingContext2D, bitmap: Uint8Array) {
   ctx.fillStyle = "#fff";

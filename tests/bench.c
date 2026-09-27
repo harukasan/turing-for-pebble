@@ -25,10 +25,10 @@ int main(int argc, char **argv) {
   uint8_t *mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
   if (argc > 3 && strcmp(argv[3], "analog") == 0) {
     cm_build_analog(mask, rd_width(state), rd_height(state), CM_FONT_LECO, 360,
-                    600, 2046, 8, 29, 1);
+                    600, 2046, 8, 29, 1, 1);
   } else {
     cm_build(mask, rd_width(state), rd_height(state), CM_FONT_LECO, 13, 57,
-             2046, 8, 29, 1);
+             2046, 8, 29, 1, 1);
   }
   rd_mask(state, mask);
   rd_step(state, 300);

@@ -13,10 +13,11 @@ enum { CM_FONT_LECO, CM_FONT_BITHAM, CM_FONT_COUNT };
 #define CM_MAX_HALO 8
 
 /* Watch layout of a font set: the system font keys of the time and date
- * lines and the top and height of their text boxes, full display width. */
+ * lines and the top and height of their text boxes, full display width,
+ * and the time line top without the date (cm_time_top). */
 typedef struct {
   const char *time_key, *date_key;
-  uint8_t time_top, time_box, date_top, date_box;
+  uint8_t time_top, time_box, date_top, date_box, time_alone_top;
 } CmLayout;
 
 /* Bytes of a cell mask for a grid: one bit per cell, rows of
@@ -31,25 +32,33 @@ const CmLayout *cm_layout(int font);
  * RD_FONT has only that set. */
 int cm_font_available(int font);
 
+/* Top of the text box of the time line of a font set: the layout's with the
+ * date, and without it the top that centers the ink of the time glyphs
+ * (the digits and the separator) on the display. -1 for an unavailable
+ * font. */
+int cm_time_top(int font, int date);
+
 /* Build the mask of the clock digits for a grid of width cells from
- * CM_MIN_WIDTH to 200 and height width * 228 / 200: the time HH:MM and the
- * date YYYY.MM.DD drawn in the font set as the watch draws them, each glyph
+ * CM_MIN_WIDTH to 200 and height width * 228 / 200: the time HH:MM and,
+ * when date is nonzero, the date YYYY.MM.DD, drawn in the font set as the
+ * watch draws them with the time line at cm_time_top, each glyph
  * pixel widened by a square halo of `halo` display pixels and clipped to
  * the display, and every grid cell holding the center of such a pixel
  * marked. Returns 0, or -1 without touching the mask
  * when an argument is out of range. */
 int cm_build(uint8_t *mask, int width, int height, int font, int hour,
-             int minute, int year, int month, int day, int halo);
+             int minute, int year, int month, int day, int halo, int date);
 
 /* A writable display row y of 200 pixels, or NULL to skip the row. */
 typedef uint8_t *(*CmRow)(void *context, int y);
 
-/* Draw the time and date of a font set as the watch draws them, setting
+/* Draw the time and, when date is nonzero, the date of a font set as the
+ * watch draws them, the time line at cm_time_top, setting
  * each glyph pixel of the display to color through row. The pixels are
  * those of graphics_draw_text with the system fonts, verified against the
  * emulator. Returns 0, or -1 for invalid arguments without drawing. */
 int cm_draw(CmRow row, void *context, uint8_t color, int font, int hour,
-            int minute, int year, int month, int day);
+            int minute, int year, int month, int day, int date);
 
 /* Analog face. Angles are in units of 1/CM_TURN of a turn, clockwise from
  * 12 o'clock. The hands are round-tipped capsules from the dial center, in
@@ -79,18 +88,18 @@ int cm_sweep_angle(int from, int to, int elapsed_ms, int duration_ms);
 int cm_analog_date_top(int font);
 
 /* Build the mask of the analog face, as cm_build does for the digits: the
- * hour and minute hands at their angles, the center disk, and the date
- * YYYY.MM.DD centered at the bottom. At width 200 and halo 0 the mask is
- * the pixel bitmap of the face. Returns 0, or -1 without touching the mask
- * when an argument is out of range. */
+ * hour and minute hands at their angles, the center disk, and, when date
+ * is nonzero, the date YYYY.MM.DD centered at the bottom. At width 200 and halo
+ * 0 the mask is the pixel bitmap of the face. Returns 0, or -1 without touching
+ * the mask when an argument is out of range. */
 int cm_build_analog(uint8_t *mask, int width, int height, int font,
                     int hour_angle, int minute_angle, int year, int month,
-                    int day, int halo);
+                    int day, int halo, int date);
 
 /* Draw the analog face as cm_draw draws the digits: the pixels of the
  * 200-wide halo 0 mask of cm_build_analog. Returns 0, or -1 for invalid
  * arguments without drawing. */
 int cm_draw_analog(CmRow row, void *context, uint8_t color, int font,
                    int hour_angle, int minute_angle, int year, int month,
-                   int day);
+                   int day, int date);
 #endif

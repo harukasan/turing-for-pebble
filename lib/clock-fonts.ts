@@ -36,19 +36,34 @@ export const clockText = (date: Date) => [
   `${pad(date.getHours())}:${pad(date.getMinutes())}`,
   `${date.getFullYear()}.${pad(date.getMonth() + 1)}.${pad(date.getDate())}`,
 ];
-/** Visit every display pixel of the clock glyphs of a font set. */
+/** Top of the time line's text box, as cm_time_top: the set's with the
+ * date, and without it the top that centers the ink of the time glyphs on
+ * the display. */
+function timeTop(set: ClockFontData["sets"][number], showDate: boolean) {
+  if (showDate || !data) return set.time.top;
+  const glyphs = Object.values(data.fonts[set.time.font].glyphs);
+  const top = Math.min(...glyphs.map((g) => g.top_offset));
+  const bottom = Math.max(...glyphs.map((g) => g.top_offset + g.height));
+  return Math.floor((228 - (bottom - top)) / 2) - top;
+}
+
+/** Visit every display pixel of the clock glyphs of a font set, the date
+ * line only with showDate. */
 export function clockPixels(
   date: Date,
   font: ClockFont,
-  visit: (x: number, y: number) => void
+  visit: (x: number, y: number) => void,
+  showDate = true
 ) {
   if (!data) return false;
   const set = data.sets[fontIndex(font)];
   const [time, day] = clockText(date);
-  for (const [text, line] of [
-    [time, set.time],
-    [day, set.date],
-  ] as const) {
+  const lines = [[time, { ...set.time, top: timeTop(set, showDate) }]] as [
+    string,
+    Line,
+  ][];
+  if (showDate) lines.push([day, set.date]);
+  for (const [text, line] of lines) {
     const glyphs = data.fonts[line.font].glyphs;
     let width = 0;
     for (const c of text) width += glyphs[c].advance;
@@ -67,8 +82,9 @@ export function clockPixels(
 export function drawClock(
   ctx: CanvasRenderingContext2D,
   date: Date,
-  font: ClockFont
+  font: ClockFont,
+  showDate = true
 ) {
   ctx.fillStyle = "#fff";
-  clockPixels(date, font, (x, y) => ctx.fillRect(x, y, 1, 1));
+  clockPixels(date, font, (x, y) => ctx.fillRect(x, y, 1, 1), showDate);
 }

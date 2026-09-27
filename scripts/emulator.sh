@@ -8,6 +8,8 @@
 #        sh scripts/emulator.sh screenshot [png]       default build/emery.png
 #        sh scripts/emulator.sh logs                   stream app logs (Ctrl-C)
 #        sh scripts/emulator.sh kill                   stop the emulator
+#        sh scripts/emulator.sh config                 open the installed
+#                                                      face's settings page
 #        sh scripts/emulator.sh device-install [mode]  install on the watch and
 #                                                      stream its logs
 #        sh scripts/emulator.sh device-logs            stream watch logs
@@ -47,6 +49,9 @@ case "$command" in
   kill)
     pebble kill
     ;;
+  config)
+    pebble emu-app-config --emulator emery --vnc
+    ;;
   device-install)
     # --logs keeps streaming after the install, so the startup summary that
     # the watchface logs when its 30 s startup finishes is captured.
@@ -59,7 +64,7 @@ case "$command" in
     pebble screenshot --phone "$(phone)" --no-open "${2:-build/watch.png}"
     ;;
   *)
-    echo "usage: $0 install [mode] | screenshot [png] | logs | kill |" \
+    echo "usage: $0 install [mode] | screenshot [png] | logs | kill | config |" \
       "device-install [mode] | device-logs | device-screenshot [png]" >&2
     exit 2
     ;;
