@@ -136,6 +136,40 @@
         "RD settings stops=2 mid1=466928 mid2=8cb43f date=0 face=1"
       ],
       "note": "After the size reduction of #4, both faces with the face setting analog and the date hidden, RD_BUILD_LOG=1 and RD_BUILD_LOAD_LIMIT, 22,800 B load. Startup 1,659 steps, 600 slices, and 598 draws, with since_init_ms=30,981. A sweep 29 s after launch: 16 mask rebuilds of at most 8 ms, 1,000 ms, 46 steps. compute_max_ms 54. A sweep logged 2 s after launch moved no hand (0 rebuilds, 55 steps). The log connection missed the RD init line."
+    },
+    {
+      "commit": "2e29e84",
+      "mode": 3,
+      "date": "2026-09-27",
+      "firmware": "unknown",
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "startupWallMs": 29988,
+      "stepsPerSecond": 56.2,
+      "avgStepUs": 13930,
+      "maxStepMs": 39,
+      "avgDrawUs": 5885,
+      "avgTextUs": 604,
+      "minimumFreeHeapBytes": 15872,
+      "note": "Version 5 build with both models and the settings, RD_BUILD_LOG=1, 23,816 B load, after the phone sent the fhn-spiral settings (model 1, custom palette of four stops, Bitham, date hidden): the field restarted and its startup ran 1,686 steps and 566 frames in 29.99 s. The heap minimum is that of the session, the same as with the Gray-Scott defaults."
+    },
+    {
+      "commit": "2e29e84",
+      "mode": 3,
+      "date": "2026-09-27",
+      "firmware": "unknown",
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "startupWallMs": 29946,
+      "stepsPerSecond": 54.6,
+      "avgStepUs": 14227,
+      "maxStepMs": 106,
+      "avgDrawUs": 6375,
+      "avgTextUs": 673,
+      "minimumFreeHeapBytes": 15872,
+      "note": "Version 5 build with both models and the settings, RD_BUILD_LOG=1, 23,816 B load, with the default settings (Gray-Scott maze, thin stripes). Startup 1,637 steps and 549 frames in 29.95 s, one step of 106 ms. The heap minimum, 15,872 B, is 512 B below the 16 KiB target with this logging build, which loads 3,024 B more than the production build."
     }
   ]
 }
