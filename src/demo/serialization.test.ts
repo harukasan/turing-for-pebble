@@ -180,7 +180,11 @@ test("config.h carries the FitzHugh-Nagumo model and its nine parameters", () =>
     header,
     /#define RD_DEFAULT_PARAMS 6554, 0, 8192, 410, 32768, -9830, 32768, -21935, 1\n/
   );
-  // A build of another mode from this header stops at the mode guard.
+  // A build of another mode, or folded to the other model, stops at a guard.
+  assert.match(
+    header,
+    /#if defined\(RD_MODEL\) && RD_MODEL != RD_DEFAULT_MODEL\n#error/
+  );
   assert.match(
     header,
     /#if RD_DEFAULT_MODEL == 1 && RD_MODE != 1 && RD_MODE != 3\n#error/

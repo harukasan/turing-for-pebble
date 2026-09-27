@@ -14,6 +14,7 @@ import { presetById } from "../../lib/presets.ts";
 import {
   DEFAULT_SETTINGS,
   toParameters,
+  withModel,
   withPreset,
   type WatchSettings,
 } from "./settings.ts";
@@ -136,5 +137,17 @@ test("recoloring keeps the field and custom stops draw like the palette", () => 
   field.recolor({ ...base, palette: 1 });
   assert.deepEqual(custom, draw(field));
   assert.notDeepEqual(custom, lime);
+  field.dispose();
+});
+
+test("a recolor with another model keeps stepping the running field", () => {
+  const field = run(base);
+  const before = field.hash();
+  // The page recolors with the new model's settings before the rerun that
+  // starts the new field, which must not step the old field with them.
+  field.recolor({ ...withModel(base, "fhn"), palette: 1 });
+  field.step(1);
+  assert.notEqual(field.hash(), before);
+  assert.equal(field.steps, 1001);
   field.dispose();
 });

@@ -42,6 +42,13 @@ export type PlayerEvents = {
   onError: (error: unknown, phase: "canvas" | "load" | "render") => void;
 };
 
+/** Parameters from a caller written before version 5 carry no model and
+ * are Gray–Scott coefficients. */
+const withModel = (params: Parameters): Parameters =>
+  params.model
+    ? params
+    : ({ ...(params as object), model: "gray-scott" } as Parameters);
+
 export class TuringPlayer {
   private readonly ctx: CanvasRenderingContext2D | null;
   private readonly offscreen = document.createElement("canvas");
@@ -73,6 +80,7 @@ export class TuringPlayer {
     private settings: PlayerSettings,
     private readonly events: PlayerEvents
   ) {
+    this.settings = { ...settings, params: withModel(settings.params) };
     this.ctx = canvas.getContext("2d");
     this.offscreen.width = 200;
     this.offscreen.height = 228;
@@ -86,11 +94,11 @@ export class TuringPlayer {
   }
 
   setSettings(settings: PlayerSettings) {
-    this.settings = settings;
+    this.settings = { ...settings, params: withModel(settings.params) };
   }
 
   setParameters(params: Parameters) {
-    this.settings = { ...this.settings, params };
+    this.settings = { ...this.settings, params: withModel(params) };
   }
 
   play() {

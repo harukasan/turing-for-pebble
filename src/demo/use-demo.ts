@@ -76,6 +76,15 @@ export function useDemo(assetBaseUrl: string) {
     (value: number) => value + 1,
     0
   );
+  /** A pending reset for a parameter of the initial field, so a dragged
+   * slider restarts the field once it rests instead of on every input. */
+  const initialReset = useRef(0);
+  /** Reset now, dropping a pending reset that would reset the new field
+   * again. */
+  const resetField = () => {
+    clearTimeout(initialReset.current);
+    requestReset();
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -215,7 +224,7 @@ export function useDemo(assetBaseUrl: string) {
                 value.reset === true ||
                 !!preset ||
                 params.model !== current.model;
-              if (reset) requestReset();
+              if (reset) resetField();
               return {
                 preset: preset?.id,
                 model: params.model,
@@ -241,9 +250,6 @@ export function useDemo(assetBaseUrl: string) {
   /** Coefficients apply to the next step. The FitzHugh-Nagumo resting
    * value and initial condition shape the initial field, so changing them
    * resets it. */
-  /** A pending reset for a parameter of the initial field, so a dragged
-   * slider restarts the field once it rests instead of on every input. */
-  const initialReset = useRef(0);
   useEffect(() => () => clearTimeout(initialReset.current), []);
 
   function updateParam(key: ParameterKey, value: number) {
@@ -263,14 +269,14 @@ export function useDemo(assetBaseUrl: string) {
   function chooseModel(model: Model) {
     if (model === latest.current.params.model) return;
     setOptions((current) => withModel(current, defaultParametersFor(model)));
-    requestReset();
+    resetField();
   }
 
   function choosePreset(id: string) {
     const preset = presetById(id);
     if (!preset) return;
     setOptions((current) => withModel(current, presetParameters(preset)));
-    requestReset();
+    resetField();
   }
 
   const settingsInput: SettingsInput = {
@@ -332,7 +338,7 @@ export function useDemo(assetBaseUrl: string) {
     updateParam,
     chooseModel,
     choosePreset,
-    requestReset,
+    requestReset: resetField,
     download,
   };
 }

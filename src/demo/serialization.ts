@@ -184,6 +184,9 @@ export function makeHeader(input: SettingsInput) {
 #if RD_DEFAULT_MODEL == 1 && RD_MODE != 1 && RD_MODE != 3
 #error "FitzHugh-Nagumo (RD_DEFAULT_MODEL 1) runs only in modes 1 and 3"
 #endif
+#if defined(RD_MODEL) && RD_MODEL != RD_DEFAULT_MODEL
+#error "RD_DEFAULT_MODEL must be the model the build is folded to (RD_MODEL)"
+#endif
 #define RD_DEFAULT_PALETTE ${index}
 #define RD_DEFAULT_LOW ${hex(stops[0])}
 #define RD_DEFAULT_HIGH ${hex(stops[stops.length - 1])}

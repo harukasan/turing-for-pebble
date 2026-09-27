@@ -877,6 +877,11 @@ static void begin_startup(void) {
 static void restart(void) {
   stop();
   init_field();
+  if (!state) {
+    /* No field for these settings or the defaults: keep the face still
+     * rather than step a missing state. */
+    return;
+  }
   apply_palette();
   rebuild_mask();
   layer_mark_dirty(layer);

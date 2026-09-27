@@ -792,12 +792,12 @@
     {
       "mode": 0,
       "faces": "both",
-      "textBytes": 19972,
+      "textBytes": 19984,
       "dataBytes": 248,
       "bssBytes": 288,
-      "loadBytes": 20508,
+      "loadBytes": 20520,
       "coreDynamicBytes": 147747,
-      "remainingBeforeOsAllocationsBytes": -37183,
+      "remainingBeforeOsAllocationsBytes": -37195,
       "stackFramesBytes": {
         "laplacian_row": 56,
         "cm_mask_pixel": 28,
@@ -893,12 +893,12 @@
     {
       "mode": 1,
       "faces": "both",
-      "textBytes": 20184,
+      "textBytes": 20196,
       "dataBytes": 248,
       "bssBytes": 292,
-      "loadBytes": 20724,
+      "loadBytes": 20736,
       "coreDynamicBytes": 63231,
-      "remainingBeforeOsAllocationsBytes": 47117,
+      "remainingBeforeOsAllocationsBytes": 47105,
       "stackFramesBytes": {
         "cm_mask_pixel": 28,
         "cm_draw_pixel": 16,
@@ -996,12 +996,12 @@
     {
       "mode": 3,
       "faces": "both",
-      "textBytes": 20776,
+      "textBytes": 20788,
       "dataBytes": 248,
       "bssBytes": 292,
-      "loadBytes": 21316,
+      "loadBytes": 21328,
       "coreDynamicBytes": 88671,
-      "remainingBeforeOsAllocationsBytes": 21085,
+      "remainingBeforeOsAllocationsBytes": 21073,
       "stackFramesBytes": {
         "cm_mask_pixel": 28,
         "cm_draw_pixel": 16,
@@ -1171,12 +1171,12 @@
     {
       "mode": 3,
       "faces": "analog",
-      "textBytes": 19016,
+      "textBytes": 19028,
       "dataBytes": 248,
       "bssBytes": 292,
-      "loadBytes": 19556,
+      "loadBytes": 19568,
       "coreDynamicBytes": 88671,
-      "remainingBeforeOsAllocationsBytes": 22845,
+      "remainingBeforeOsAllocationsBytes": 22833,
       "stackFramesBytes": {
         "cm_mask_pixel": 28,
         "cm_draw_pixel": 16,
