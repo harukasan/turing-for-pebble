@@ -151,38 +151,60 @@ legend {
   outline-offset: 2px;
 }
 
-/* The language switch, a segmented control at the top right above the
- * preview: one pill split into the languages, the chosen one filled. */
+/* A segmented control: one pill split into its choices, the chosen one
+ * filled, for a switch between alternatives rather than a pick from a list.
+ * The language switch sits small at the top right above the preview, and
+ * the model switch spans the pattern section above its presets. */
+.segmented {
+  flex-wrap: nowrap;
+  gap: 0;
+}
+
+.segmented .chip span {
+  border-radius: 0;
+}
+
+.segmented .chip:first-child span {
+  border-radius: 999px 0 0 999px;
+}
+
+.segmented .chip:last-child span {
+  border-radius: 0 999px 999px 0;
+}
+
+.segmented .chip + .chip span {
+  margin-left: -1px;
+}
+
+.segmented .chip input:checked + span {
+  position: relative;
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: none;
+  color: var(--accent-text);
+}
+
 .language {
   justify-content: flex-end;
-  gap: 0;
   margin-bottom: 8px;
   font-size: 0.85em;
 }
 
 .language .chip span {
   padding: 4px 12px;
-  border-radius: 0;
 }
 
-.language .chip:first-child span {
-  border-radius: 999px 0 0 999px;
+.models {
+  margin-bottom: 12px;
 }
 
-.language .chip:last-child span {
-  border-radius: 0 999px 999px 0;
+.models .chip {
+  flex: 1;
 }
 
-.language .chip + .chip span {
-  margin-left: -1px;
-}
-
-.language .chip input:checked + span {
-  position: relative;
-  border-color: var(--accent);
-  background: var(--accent);
-  box-shadow: none;
-  color: var(--accent-text);
+.models .chip span {
+  display: block;
+  text-align: center;
 }
 
 .sliders {
@@ -368,6 +390,23 @@ legend {
 
 .choice .chips {
   justify-content: flex-end;
+}
+
+/* The FitzHugh-Nagumo initial condition: its label on the left of the
+ * choices, spaced like the slider rows above it. */
+.initial {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.initial[hidden] {
+  display: none;
+}
+
+.initial > span {
+  flex: none;
 }
 
 .switch {
