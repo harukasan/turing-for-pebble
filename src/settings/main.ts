@@ -342,26 +342,27 @@ const setDiffusion = chips(
     changed("field");
   }
 );
-const patternSliders = element("pattern-sliders");
-const fhnSliders = element("fhn-sliders");
-const diffusion = element("diffusion");
-const diffusionSliders = element("diffusion-sliders");
+const grayParams = element("params-gray-scott");
+const fhnParams = element("params-fhn");
+const grayReaction = element("gray-scott-reaction");
+const grayDiffusion = element("gray-scott-diffusion");
+const fhnReaction = element("fhn-reaction");
+const fhnDiffusion = element("fhn-diffusion");
 const field = () => changed("field");
 const sliders = [
-  slider(patternSliders, "gray-scott", "feed", "Feed", 4, field),
-  slider(patternSliders, "gray-scott", "kill", "Kill", 4, field),
-  slider(diffusionSliders, "gray-scott", "da", "Da", 2, field),
-  slider(diffusionSliders, "gray-scott", "db", "Db", 2, field),
-  slider(diffusionSliders, "gray-scott", "dt", "Dt", 2, field),
-  slider(fhnSliders, "fhn", "du", "Du", 3, field),
-  slider(fhnSliders, "fhn", "dv", "Dv", 3, field),
-  slider(fhnSliders, "fhn", "ru", "ru", 4, field),
-  slider(fhnSliders, "fhn", "rv", "rv", 4, field),
-  slider(fhnSliders, "fhn", "av", "av", 2, field),
-  slider(fhnSliders, "fhn", "k", "k", 3, field),
-  slider(fhnSliders, "fhn", "dt", "Dt", 2, field),
+  slider(grayReaction, "gray-scott", "feed", "Feed", 4, field),
+  slider(grayReaction, "gray-scott", "kill", "Kill", 4, field),
+  slider(grayDiffusion, "gray-scott", "da", "Da", 2, field),
+  slider(grayDiffusion, "gray-scott", "db", "Db", 2, field),
+  slider(grayDiffusion, "gray-scott", "dt", "Dt", 2, field),
+  slider(fhnReaction, "fhn", "ru", "ru", 4, field),
+  slider(fhnReaction, "fhn", "rv", "rv", 4, field),
+  slider(fhnReaction, "fhn", "av", "av", 2, field),
+  slider(fhnReaction, "fhn", "k", "k", 3, field),
+  slider(fhnDiffusion, "fhn", "du", "Du", 3, field),
+  slider(fhnDiffusion, "fhn", "dv", "Dv", 3, field),
+  slider(fhnDiffusion, "fhn", "dt", "Dt", 2, field),
 ];
-const initial = element("initial");
 const setInit = chips(
   element("init"),
   "init",
@@ -480,10 +481,8 @@ function update() {
     group.set(index < 0 ? group.list.length : index);
   }
   const gray = model === "gray-scott";
-  patternSliders.hidden = !gray;
-  diffusion.hidden = !gray;
-  fhnSliders.hidden = gray;
-  initial.hidden = gray;
+  grayParams.hidden = !gray;
+  fhnParams.hidden = gray;
   const width = diffusionPresetOf(settings);
   setDiffusion(width < 0 ? DIFFUSION_PRESETS.length : width);
   if (!gray) setInit(settings[paramKey("fhn", "init")]);

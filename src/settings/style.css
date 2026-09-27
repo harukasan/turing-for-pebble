@@ -394,19 +394,26 @@ legend {
 
 /* The FitzHugh-Nagumo initial condition: its label on the left of the
  * choices, spaced like the slider rows above it. */
-.initial {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.initial[hidden] {
+/* The parameters of a model, in groups under small headings. */
+.params[hidden] {
   display: none;
 }
 
-.initial > span {
-  flex: none;
+.group {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.group h3 {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.85em;
+  font-weight: 600;
+}
+
+.group h3 + .sliders {
+  margin-top: 0;
 }
 
 .switch {
