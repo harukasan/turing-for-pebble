@@ -24,7 +24,22 @@ For the cell-by-cell comparison with the original Float32 implementation, see [F
 
 ## Memory
 
-Core allocation is 147,723 B for mode 0, 63,207 B for mode 1, and 88,647 B for mode 3 ([Shared C core](core.md) has the breakdown). The watch also allocates the clock mask bitmap (2,040 B in mode 3) outside the core. Load sizes at `-O3` are 17.1 KB (mode 0), 18.4 KB (mode 1), and 19.1 KB (mode 3) with the watch settings, and `scripts/build-pebble.sh` fails above 20,480 B, because code, static data, the core allocation, and the OS's own allocations share the 128 KiB app region. `public/reports/comparison.json` records the ELF section sizes, the compiler stack reports (bounded static frames and no recursion, summed as an application-only bound that excludes the OS and library stack), and the physical measurement. The minimum free heap on the watch is 18,136 B with the watch settings, above the 16 KiB target. It was measured at commit 7db03a3 with a logging build of 21,688 B and the default settings. Before the palette stops and the settings, a logging build of 18,190 B left 21,904 B. The settings add an AppMessage inbox, 128 B when measured and 176 B since the custom palette takes up to four colors and the date can be hidden, a 16-byte outbox, and 28 B of core control, and a production build loads 2.9 KB less than the logging build, so its free heap is larger.
+Core allocation is 147,723 B for mode 0, 63,207 B for mode 1, and 88,647 B for mode 3 ([Shared C core](core.md) has the breakdown). The watch also allocates the clock mask bitmap (2,040 B in mode 3) outside the core. With calculated error diffusion shares, the production ELF load sizes at `-O3` are 17,180 B (mode 0), 16,424 B (mode 1), and 17,064 B (mode 3). The mode 3 build saves 2,004 B against the 19,068 B main build at commit 12f4149 and has 3,416 B left under the 20,480 B load limit. Code, static data, the core allocation, and the OS's own allocations share the 128 KiB app region. These are build measurements from the size-reduction worktree based on 12f4149, not physical-watch acceptance evidence. `public/reports/comparison.json` still records the earlier ELF sizes and physical observations. The minimum free heap measured on the watch with settings was 18,136 B, above the 16 KiB target, at commit 7db03a3 with a logging build of 21,688 B and the default settings. Before the palette stops and the settings, a logging build of 18,190 B left 21,904 B. The settings add an AppMessage inbox, 128 B when measured and 176 B since the custom palette takes up to four colors and the date can be hidden, a 16-byte outbox, and 28 B of core control.
+
+On the host, `tests/bench.c` at `-O3` measured 194.1 µs per step for both the 12f4149 baseline and the calculated-share build over 2,000 mode 3 steps. Host timing does not establish watch timing. The physical-watch figures below belong to their recorded earlier builds. The new comparison follows.
+
+## Size-reduction watch comparison
+
+On 2026-09-27, the same Pebble Time 2 was alternately installed with the mode 3 build of main commit 12f4149 and the size-reduction worktree based on that commit. Both were built with `RD_BUILD_LOG=1`, `-O3`, and Pebble SDK 4.33.1. The watch settings were not changed between installs, but the log stream attached after the settings lines, so their exact active values were not captured. Each entry is one complete 30 s startup from the phone developer connection. Every run reported `interrupted=0` and `clock_invalid=0`. The logging builds are larger than production builds.
+
+| Build | Run | Log build load | Steps | Average step | Average field draw | Minimum free heap | Maximum step |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| main 12f4149 | 1 | 22,000 B | 1,684 | 13,683 µs | 6,486 µs | 17,776 B | 39 ms |
+| calculated shares | 1 | 19,996 B | 1,659 | 13,954 µs | 6,578 µs | 19,776 B | 35 ms |
+| main 12f4149 | 2 | 22,000 B | 1,638 | 13,990 µs | 6,609 µs | 17,776 B | 105 ms |
+| calculated shares | 2 | 19,996 B | 1,663 | 13,931 µs | 6,451 µs | 19,776 B | 39 ms |
+
+The two-run mean step times are 13,837 µs for main and 13,943 µs for calculated shares, a 106 µs difference. Main's two runs differ by 307 µs, and its second run has a 105 ms maximum-step outlier. These runs do not resolve a small speed difference. They show no large regression in startup speed. The measured minimum free heap rose by 2,000 B with the smaller logging build. The size-reduction build retained at least 19,776 B free in these runs, above the 16 KiB target. These observations apply to the logging builds and this watch, not to unmeasured settings or a production build without logs.
 
 ## Physical Pebble Time 2 measurements
 
