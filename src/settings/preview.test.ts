@@ -9,7 +9,7 @@ import {
 } from "../../lib/wasm-simulation.ts";
 import { hourAngle, minuteAngle } from "../../lib/clock-face.ts";
 import { HALO } from "../core/modes.ts";
-import { PreviewField, PREVIEW_MODE, PREVIEW_SEED } from "./preview.ts";
+import { PreviewField, PREVIEW_SEED } from "./preview.ts";
 import { presetById } from "../../lib/presets.ts";
 import {
   DEFAULT_SETTINGS,
@@ -27,7 +27,7 @@ globalThis.fetch = (async () =>
   )) as typeof fetch;
 const core = await loadCore("rd.wasm");
 
-/** The mode 3 field hash after 1,000 steps in tests/golden-hashes.txt,
+/** The field hash after 1,000 steps in tests/golden-hashes.txt,
  * without a mask or with the mask of a font at 13:57 2046.08.29. */
 function golden(font?: number, model = 0, vector?: string) {
   const lines = readFileSync(new URL("tests/golden-hashes.txt", root), "utf8")
@@ -39,12 +39,11 @@ function golden(font?: number, model = 0, vector?: string) {
   const line = lines.find(
     (l) =>
       l[0] === String(model) &&
-      l[1] === "3" &&
-      l[2] === "1000" &&
-      l.slice(4).join() === rest.join()
+      l[1] === "1000" &&
+      l.slice(3).join() === rest.join()
   );
   assert(line, `golden ${font} ${model} ${vector}`);
-  return Number(line[3]);
+  return Number(line[2]);
 }
 
 const date = new Date(2046, 7, 29, 13, 57);
@@ -57,7 +56,7 @@ const run = (settings: WatchSettings) => {
   return field;
 };
 /** The field hash of a run, whose allocation is freed at once, since the
- * Wasm heap is fixed at 1 MiB and holds only a few mode 3 fields. */
+ * Wasm heap is fixed at 1 MiB and holds only a few fields. */
 const hashOf = (settings: WatchSettings) => {
   const field = run(settings);
   const hash = field.hash();
@@ -66,7 +65,6 @@ const hashOf = (settings: WatchSettings) => {
 };
 
 test("the preview runs the watch's field", () => {
-  assert.equal(PREVIEW_MODE, 3);
   assert.equal(PREVIEW_SEED, 42);
   assert.equal(hashOf(base), golden(0));
   assert.equal(hashOf({ ...base, font: 1 }), golden(1));
@@ -85,7 +83,7 @@ test("the preview runs the watch's field", () => {
 
 test("the analog face masks the hands of the time and the date", () => {
   const analog = (showDate: boolean) => {
-    const sim = new WasmSimulation(core, PREVIEW_MODE, PREVIEW_SEED);
+    const sim = new WasmSimulation(core, PREVIEW_SEED);
     sim.setMask(
       buildAnalogMask(
         core,

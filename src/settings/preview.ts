@@ -1,5 +1,5 @@
 /** A preview of the watchface for a set of watch settings: the shared C
- * core as WebAssembly in the watch's mode, seed, and rendering, run for the
+ * core as WebAssembly with the watch's seed and rendering, run for the
  * steps of the watch's startup animation, with the digital clock drawn from
  * the same glyphs as the watch or the analog face from the core's bitmap. */
 import {
@@ -20,7 +20,6 @@ import type { Parameters } from "../../lib/simulation.ts";
 import { HALO } from "../core/modes.ts";
 import { customStops, toParameters, type WatchSettings } from "./settings.ts";
 
-export const PREVIEW_MODE = 3;
 export const PREVIEW_SEED = 42;
 /** About the steps of the 30 s startup on the watch (docs/behavior.md). */
 export const PREVIEW_STEPS = 1650;
@@ -47,7 +46,6 @@ export class PreviewField {
     this.sim?.dispose();
     const sim = new WasmSimulation(
       this.api,
-      PREVIEW_MODE,
       PREVIEW_SEED,
       toParameters(settings)
     );

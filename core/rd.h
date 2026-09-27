@@ -16,8 +16,7 @@
  *                     rest are in [-RD_Q15_ONE, RD_Q15_ONE], ru in
  *                     [0, RD_FHN_RU_MAX], init is 0 (disks) or 1 (a broken
  *                     wave), and the others in [0, RD_Q15_ONE].
- * FitzHugh-Nagumo runs only in the Q15 modes 1 and 3. A build that defines
- * RD_MODEL compiles only that model. */
+ * A build that defines RD_MODEL compiles only that model. */
 #define RD_MODEL_GRAY_SCOTT 0
 #define RD_MODEL_FHN 1
 #define RD_MODEL_COUNT 2
@@ -32,9 +31,13 @@
 #define RD_VALUE_BITS 24
 #define RD_VALUE_ONE (1 << RD_VALUE_BITS)
 
-/* Display coordinate system shared by every mode. */
+/* Display coordinate system. */
 #define RD_DISPLAY_WIDTH 200
 #define RD_DISPLAY_HEIGHT 228
+/* Simulation grid: one Q15 word per species and cell, meant to be shown
+ * with RD_ROW_BILINEAR. */
+#define RD_GRID_WIDTH 120
+#define RD_GRID_HEIGHT (RD_GRID_WIDTH * RD_DISPLAY_HEIGHT / RD_DISPLAY_WIDTH)
 /* Size of the RGBA row returned by rd_row. */
 #define RD_ROW_BYTES (RD_DISPLAY_WIDTH * 4)
 
@@ -75,20 +78,16 @@ enum {
 /* Most stops of a palette. */
 #define RD_PALETTE_MAX_STOPS 8
 
-/* mode 0: 200x228, one 16-bit word per cell (A 7-bit linear, B 9-bit
- * square-root companded); mode 1: 100x114, one Q15 word per species;
- * mode 2: diagnostic 100x114 with the packed 16-bit cells of mode 0;
- * mode 3: 120x136, one Q15 word per species, meant to be shown with
- * RD_ROW_BILINEAR. */
-size_t rd_bytes(int mode);
-size_t rd_memory(int mode, int component);
+/* Bytes of the caller allocation, in total and by component. */
+size_t rd_bytes(void);
+size_t rd_memory(int component);
 /* Initialize a field of a model with `count` parameters of its vector (NULL
  * for the model's defaults) and seed it. Returns the aligned state, or NULL
  * for invalid arguments without writing. */
-void *rd_init_model(void *memory, size_t bytes, int mode, int model,
-                    uint32_t seed, const int *params, int count);
+void *rd_init_model(void *memory, size_t bytes, int model, uint32_t seed,
+                    const int *params, int count);
 /* rd_init_model with Gray-Scott and its default parameters. */
-void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed);
+void *rd_init(void *memory, size_t bytes, uint32_t seed);
 /* Replace the parameters of the handle's model (count must be its vector
  * length) without touching the field. 0, or -1 without writing. */
 int rd_set_params(void *handle, const int *values, int count);
@@ -127,7 +126,8 @@ uint8_t *rd_row_rgb2(void *handle, int y, int palette, int flags);
  * Returns 0, or -1 for invalid arguments without writing. */
 int rd_row_rgb2_into(void *handle, int y, int palette, int flags, uint8_t *dst,
                      int first, int last);
-/* Grid size of the handle's mode. */
+/* Grid size, RD_GRID_WIDTH and RD_GRID_HEIGHT, or -1 for an invalid
+ * handle. */
 int rd_width(void *handle);
 int rd_height(void *handle);
 /* Cell mask: one bit per grid cell, rows of (width + 7) / 8 bytes, cell x

@@ -3,14 +3,11 @@
  * settings the face shows until the phone sends its own (settings.h).
  * Everything else is fixed at build time.
  */
-#ifndef RD_MODE
-#define RD_MODE 3
-#endif
 #define RD_SEED 42u
-/* rd_row_rgb2 flags: 2 (RD_ROW_BILINEAR) interpolates B between cells,
- * the default for grids that are not the display or half of it. */
+/* rd_row_rgb2 flags: 2 (RD_ROW_BILINEAR) interpolates B between cells, and
+ * 0 shows the cell that covers each pixel. */
 #ifndef RD_RENDER_FLAGS
-#define RD_RENDER_FLAGS (RD_MODE >= 3 ? 2 : 0)
+#define RD_RENDER_FLAGS 2
 #endif
 /* Diagnostic logs (startup summary, progress): off in production, on with
  * RD_BUILD_LOG=1, RD_BUILD_PROFILE=1, or an RD_BENCH build. */
@@ -38,12 +35,7 @@
 #define RD_SWEEP_MS 1000
 /* Digit avoidance holds B at 0 in the cells under the clock digits, widened
  * by RD_HALO pixels, and raises the kill rate toward them so the pattern
- * fades out around the digits. RD_AVOID 0 leaves the mask area out of the
- * core and ignores the avoidance setting, as in mode 0, where a minute
- * burst would take about 24 s. */
-#ifndef RD_AVOID
-#define RD_AVOID (RD_MODE != 0)
-#endif
+ * fades out around the digits. */
 #define RD_HALO 1
 /* Pending steps after a minute change: with avoidance, enough to refill the
  * strokes freed by the previous digits. A settings change that moves the
@@ -54,12 +46,11 @@
 
 /* Settings defaults: the model (RD_MODEL_* of core/rd.h) and its Q15
  * parameter vector, 0 Gray-Scott (feed, kill, da, db, dt) or 1
- * FitzHugh-Nagumo (du, dv, ru, rv, av, k, dt, rest, init), which runs only
- * in modes 1 and 3, then the palette (RD_PALETTE_*), the dark and light
- * stops of the custom palette as 0xRRGGBB, its number of stops and the
- * middle stops at a third and two thirds of the way from dark to light, the
- * clock font set, digit avoidance, the clock, the date line, and the clock
- * face. The build
+ * FitzHugh-Nagumo (du, dv, ru, rv, av, k, dt, rest, init), then the
+ * palette (RD_PALETTE_*), the dark and light stops of the custom palette as
+ * 0xRRGGBB, its number of stops and the middle stops at a third and two
+ * thirds of the way from dark to light, the clock font set, digit
+ * avoidance, the clock, the date line, and the clock face. The build
  * includes both models unless RD_MODEL (RD_BUILD_MODEL) folds the core to
  * one, and the settings accept only the models of the build. */
 /* A build folded to FitzHugh-Nagumo starts with the fhn-stripes preset of
@@ -77,9 +68,6 @@
 #else
 #define RD_DEFAULT_PARAMS 950, 1868, 22938, 11469, 32768
 #endif
-#endif
-#if RD_DEFAULT_MODEL == 1 && RD_MODE != 1 && RD_MODE != 3
-#error "FitzHugh-Nagumo (RD_DEFAULT_MODEL 1) runs only in modes 1 and 3"
 #endif
 #if defined(RD_MODEL) && RD_MODEL != RD_DEFAULT_MODEL
 #error "RD_DEFAULT_MODEL must be the model the build is folded to (RD_MODEL)"

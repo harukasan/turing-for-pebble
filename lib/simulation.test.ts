@@ -51,7 +51,7 @@ void test("baseline presets stay finite and produce spatial variation after 2000
 });
 void test("thin-line preset develops variation with display-coordinate seeds", () => {
   const thin = presetParameters(presetById("thin-line")!);
-  const s = new FloatSimulation(100, 42, thin);
+  const s = new FloatSimulation(120, 42, thin);
   assert.ok(s.field instanceof Simulation && thin.model === "gray-scott");
   s.step(thin);
   s.field.step(thin, 1999);

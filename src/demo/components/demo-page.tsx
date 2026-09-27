@@ -3,7 +3,6 @@ import { useId, type PointerEvent } from "react";
 import { PALETTE_IDS, PALETTES } from "../../../lib/palettes";
 import { presets } from "../../../lib/simulation";
 import {
-  engineSupportsModel,
   isFloat,
   models,
   type ClockFace,
@@ -211,13 +210,7 @@ export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
             <fieldset className={s.radioGroup}>
               <legend className={s.radioLegend}>計算方式</legend>
               {engines.map(([key, label]) => (
-                <label
-                  key={key}
-                  className={s.radioOption}
-                  aria-disabled={
-                    !engineSupportsModel(key, options.params.model)
-                  }
-                >
+                <label key={key} className={s.radioOption}>
                   <input
                     className={s.radioInput}
                     type="radio"
@@ -225,7 +218,6 @@ export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
                     data-option="engine"
                     value={key}
                     checked={options.engine === key}
-                    disabled={!engineSupportsModel(key, options.params.model)}
                     onChange={() => demo.update("engine", key)}
                   />
                   <span>{label}</span>

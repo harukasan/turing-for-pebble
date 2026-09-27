@@ -26,12 +26,8 @@ export const labels: { [M in Model]: Record<SliderKey<M>, string> } = {
 };
 
 export const engines: [Engine, string][] = [
-  ["u8-200", "Wasm A7+B9 / 200 × 228"],
-  ["float-200", "Float32 / 200 × 228"],
   ["q15-120", "Wasm Q15 / 120 × 136"],
   ["float-120", "Float32 / 120 × 136"],
-  ["q15-100", "Wasm Q15 / 100 × 114"],
-  ["float-100", "Float32 / 100 × 114"],
 ];
 
 export function NumberSlider({

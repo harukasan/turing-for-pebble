@@ -85,7 +85,6 @@ test("config.h carries the demo's settings as the watch defaults", () => {
   const header = defines(
     makeHeader({
       ...input,
-      engine: "q15-100",
       params: {
         model: "gray-scott",
         feed: 0.035,
@@ -102,7 +101,6 @@ test("config.h carries the demo's settings as the watch defaults", () => {
       face: "analog",
     })
   );
-  assert.equal(header.get("RD_MODE"), "1");
   assert.equal(header.get("RD_RENDER_FLAGS"), "0");
   assert.equal(header.get("RD_DEFAULT_MODEL"), "0");
   assert.equal(
@@ -128,11 +126,11 @@ test("the analog face is part of the build identity", () => {
 test("Float32 settings use requested coefficients without Q15 rounding", () => {
   const settings = makeSettings({
     ...input,
-    engine: "float-100",
+    engine: "float-120",
     clock: false,
   });
-  assert.equal(settings.width, 100);
-  assert.equal(settings.height, 114);
+  assert.equal(settings.width, 120);
+  assert.equal(settings.height, 136);
   assert.equal(settings.rounding, "float32-storage");
   const { model, ...values } = input.params;
   assert.equal(model, "gray-scott");
@@ -174,22 +172,16 @@ test("FitzHugh-Nagumo settings record the model and the folded values", () => {
 
 test("config.h carries the FitzHugh-Nagumo model and its nine parameters", () => {
   const header = makeHeader(fhn("fhn-spiral"));
-  assert.match(header, /#define RD_MODE 3\n/);
   assert.match(header, /#define RD_DEFAULT_MODEL 1\n/);
   assert.match(
     header,
     /#define RD_DEFAULT_PARAMS 6554, 0, 8192, 410, 32768, -9830, 32768, -21936, 1\n/
   );
-  // A build of another mode, or folded to the other model, stops at a guard.
+  // A build folded to the other model stops at a guard.
   assert.match(
     header,
     /#if defined\(RD_MODEL\) && RD_MODEL != RD_DEFAULT_MODEL\n#error/
   );
-  assert.match(
-    header,
-    /#if RD_DEFAULT_MODEL == 1 && RD_MODE != 1 && RD_MODE != 3\n#error/
-  );
-  assert.throws(() => makeHeader({ ...fhn("fhn-spiral"), engine: "u8-200" }));
   assert.throws(() =>
     makeHeader({ ...fhn("fhn-spiral"), engine: "float-120" })
   );

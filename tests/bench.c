@@ -1,7 +1,6 @@
-/* Host run of the phase timing in core/rd_bench.c: build/bench mode
- * count [analog], with the mask of the digits or, with `analog`, of the
- * analog face. Host times only rank the phases, and the watch numbers
- * decide. */
+/* Host run of the phase timing in core/rd_bench.c: build/bench [count]
+ * [analog], with the mask of the digits or, with `analog`, of the analog
+ * face. Host times only rank the phases, and the watch numbers decide. */
 #define _POSIX_C_SOURCE 199309L
 #include "../core/rd.c"
 #include "../core/clock_mask.c"
@@ -18,12 +17,11 @@ static uint32_t now_us(void) {
 }
 
 int main(int argc, char **argv) {
-  int mode = argc > 1 ? atoi(argv[1]) : 3,
-      count = argc > 2 ? atoi(argv[2]) : 200;
-  void *memory = malloc(rd_bytes(mode));
-  void *state = rd_init(memory, rd_bytes(mode), mode, 42);
+  int count = argc > 1 ? atoi(argv[1]) : 200;
+  void *memory = malloc(rd_bytes());
+  void *state = rd_init(memory, rd_bytes(), 42);
   uint8_t *mask = malloc(cm_bytes(rd_width(state), rd_height(state)));
-  if (argc > 3 && strcmp(argv[3], "analog") == 0) {
+  if (argc > 2 && strcmp(argv[2], "analog") == 0) {
     cm_build_analog(mask, rd_width(state), rd_height(state), CM_FONT_LECO, 360,
                     600, 2046, 8, 29, 1, 1);
   } else {
@@ -34,11 +32,9 @@ int main(int argc, char **argv) {
   rd_step(state, 300);
   RdBench b;
   rd_bench(state, count, now_us, &b);
-  printf("mode %d per step: decode %.1f us, laplacian %.1f us, react %.1f us, "
+  printf("per step: laplacian %.1f us, react %.1f us, "
          "encode+store %.1f us, step %.1f us, render %.1f us per frame\n",
-         mode, (double)b.decode / count,
-         (double)(b.laplacian - b.decode) / count,
-         (double)(b.react - b.laplacian) / count,
+         (double)b.laplacian / count, (double)(b.react - b.laplacian) / count,
          (double)(b.step - b.react) / count, (double)b.step / count,
          (double)b.render / count);
   free(mask);

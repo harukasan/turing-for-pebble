@@ -17,8 +17,7 @@ import {
   type CoreAPI,
 } from "../../lib/wasm-simulation";
 import {
-  engineMode,
-  engineWidth,
+  GRID_WIDTH,
   HALO,
   isFloat,
   SWEEP_MS,
@@ -142,8 +141,8 @@ export class TuringPlayer {
       if (this.disposed || requested !== this.generation) return;
       this.core = api;
       this.sim = isFloat(engine)
-        ? new FloatSimulation(engineWidth(engine), seed, params)
-        : new WasmSimulation(api, engineMode(engine), seed, params);
+        ? new FloatSimulation(GRID_WIDTH, seed, params)
+        : new WasmSimulation(api, seed, params);
       this.events.onLoading(false);
       this.publishStats();
     } catch (error) {

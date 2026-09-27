@@ -1,16 +1,15 @@
-"""Compare the growth of the pattern on the candidate grids.
+"""Compare the growth of the pattern with different initial seedings.
 
-Usage: python scripts/fill.py [grids|seeds] [--presets id,id,...]
+Usage: python scripts/fill.py [--presets id,id,...]
 
 Runs tests/fill.c for every configuration, preset, and seed with the LECO
-clock mask installed, writes build/fill/<study>.jsonl, one contact sheet per
+clock mask installed, writes build/fill/seeds.jsonl, one contact sheet per
 preset and seed under build/fill/ (rows are configurations, columns
 checkpoints, all rendered with interpolation), and prints the first
-checkpoint at which each run is complete. `grids` compares the grids with
-the seeding of rd_init. `seeds` compares disk counts and radius rules on
-the 120 x 136 grid against mode 1. The seeds study reseeds mode 3 in the
-harness, so the core keeps the seeding of rd_init. --presets takes preset
-ids of lib/presets.ts (default maze and thin-line).
+checkpoint at which each run is complete. The configurations compare disk
+counts and radius rules on the 120 x 136 grid. The harness reseeds the
+field, so the core keeps the seeding of rd_init (24 disks, r4-9).
+--presets takes preset ids of lib/presets.ts (default maze and thin-line).
 """
 
 import argparse
@@ -22,30 +21,20 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-# Configurations: label -> (mode, disks, min radius, radius range).
-STUDIES = {
-    'grids': {
-        '200x228 packed': (0, 24, 4, 6),
-        '100x114 Q15': (1, 24, 4, 6),
-        '120x136 Q15': (3, 24, 4, 6),
-    },
-    'seeds': {
-        '100x114 24 r4-9': (1, 24, 4, 6),
-        '120 24 r4-9': (3, 24, 4, 6),
-        '120 48 r3-6': (3, 48, 3, 4),
-        '120 48 r4-9': (3, 48, 4, 6),
-        '120 96 r2-4': (3, 96, 2, 3),
-        '120 96 r4-9': (3, 96, 4, 6),
-        '120 192 r2-4': (3, 192, 2, 3),
-        '120 192 r4-9': (3, 192, 4, 6),
-    },
+# Configurations: label -> (disks, min radius, radius range).
+CONFIGS = {
+    '24 r4-9': (24, 4, 6),
+    '48 r3-6': (48, 3, 4),
+    '48 r4-9': (48, 4, 6),
+    '96 r2-4': (96, 2, 3),
+    '96 r4-9': (96, 4, 6),
+    '192 r2-4': (192, 2, 3),
+    '192 r4-9': (192, 4, 6),
 }
 parser = argparse.ArgumentParser()
-parser.add_argument('study', nargs='?', default='grids', choices=list(STUDIES))
 parser.add_argument('--presets', default='maze,thin-line')
 args = parser.parse_args()
-STUDY = args.study
-CONFIGS = STUDIES[STUDY]
+STUDY = 'seeds'
 # Preset id -> model number and Q15 parameter vector (scripts/list-presets.mjs).
 ALL_PRESETS = {
     p['id']: p
@@ -92,10 +81,10 @@ def prefix(label, preset, seed):
 
 def run(case):
     label, preset, seed = case
-    mode, disks, min_radius, radius_range = CONFIGS[label]
+    disks, min_radius, radius_range = CONFIGS[label]
     model, vector = ALL_PRESETS[preset]['model'], ALL_PRESETS[preset]['q15']
     lines = subprocess.check_output(
-        ['build/fill-run', str(mode), str(model)]
+        ['build/fill-run', str(model)]
         + [str(v) for v in vector]
         + [str(v) for v in (seed, disks, min_radius, radius_range)]
         + [str(prefix(label, preset, seed))]
@@ -123,14 +112,7 @@ def complete_at(rows):
     return None
 
 
-# FitzHugh-Nagumo (model 1) runs only in the Q15 modes 1 and 3.
-cases = [
-    (c, p, s)
-    for c in CONFIGS
-    for p in PRESETS
-    if ALL_PRESETS[p]['model'] == 0 or CONFIGS[c][0] in (1, 3)
-    for s in SEEDS
-]
+cases = [(c, p, s) for c in CONFIGS for p in PRESETS for s in SEEDS]
 with concurrent.futures.ThreadPoolExecutor() as pool:
     results = dict(zip(cases, pool.map(run, cases)))
 with open(out / f'{STUDY}.jsonl', 'w') as f:
