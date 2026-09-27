@@ -9,7 +9,7 @@ checkpoints, all rendered with interpolation), and prints the first
 checkpoint at which each run is complete. The configurations compare disk
 counts and radius rules on the 120 x 136 grid. The harness reseeds the
 field, so the core keeps the seeding of rd_init (24 disks, r4-9).
---presets takes preset ids of lib/presets.ts (default maze and thin-line).
+--presets takes preset ids of lib/presets.ts (default maze and worms).
 """
 
 import argparse
@@ -32,7 +32,7 @@ CONFIGS = {
     '192 r4-9': (192, 4, 6),
 }
 parser = argparse.ArgumentParser()
-parser.add_argument('--presets', default='maze,thin-line')
+parser.add_argument('--presets', default='maze,worms')
 args = parser.parse_args()
 STUDY = 'seeds'
 # Preset id -> model number and Q15 parameter vector (scripts/list-presets.mjs).

@@ -12,6 +12,7 @@ import {
   parameterVector,
   presetById,
   presetParameters,
+  presets,
 } from "../lib/presets.ts";
 import { effective as coreEffective } from "../lib/wasm-simulation.ts";
 
@@ -24,9 +25,9 @@ const { instance } = await WebAssembly.instantiate(wasm, {
   },
 });
 const api = instance.exports;
-// The Gray-Scott cases stay the five presets the version 4 averages of
-// docs/float-precision.md were measured on.
-const REFERENCE_PRESETS = ["maze", "coral", "mitosis", "spots", "thin-line"];
+const GRAY_SCOTT_PRESETS = presets.filter(
+  (preset) => preset.model === "gray-scott"
+);
 const FHN_PRESETS = ["fhn-stripes", "fhn-hex", "fhn-spiral"];
 const seeds = [42, 1234];
 const checkpoints = [0, 1, 10, 100, 1000];
@@ -93,7 +94,7 @@ const bytes = api.rd_bytes();
 {
   const allocation = api.malloc(bytes);
   assert(allocation, "Wasm allocation failed");
-  for (const preset of REFERENCE_PRESETS.map((id) => presetById(id)))
+  for (const preset of GRAY_SCOTT_PRESETS)
     for (const seed of seeds) {
       const state = api.rd_init(allocation, bytes, seed);
       assert(state, "Wasm initialization failed");

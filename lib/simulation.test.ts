@@ -36,11 +36,11 @@ void test("same seed and parameters reproduce identical fields", () => {
   assert.equal(a.steps, 120);
 });
 void test("baseline presets stay finite and produce spatial variation after 2000 steps", () => {
-  // The thin-line preset needs the display-coordinate seeds (next test).
+  // The moving spots die out on this small grid (next test).
   const baseline = presets.filter(
-    (p) => p.model === "gray-scott" && p.id !== "thin-line"
+    (p) => p.model === "gray-scott" && p.id !== "moving-spots"
   );
-  assert.equal(baseline.length, 4);
+  assert.equal(baseline.length, 6);
   for (const p of baseline) {
     const s = new Simulation(50, 57);
     s.step({ ...base, ...p }, 2000);
@@ -49,12 +49,12 @@ void test("baseline presets stay finite and produce spatial variation after 2000
     assert.ok(Math.max(...s.b) - Math.min(...s.b) > 0.05, p.name);
   }
 });
-void test("thin-line preset develops variation with display-coordinate seeds", () => {
-  const thin = presetParameters(presetById("thin-line")!);
-  const s = new FloatSimulation(120, 42, thin);
-  assert.ok(s.field instanceof Simulation && thin.model === "gray-scott");
-  s.step(thin);
-  s.field.step(thin, 1999);
+void test("moving-spots preset keeps its spots with display-coordinate seeds", () => {
+  const moving = presetParameters(presetById("moving-spots")!);
+  const s = new FloatSimulation(120, 42, moving);
+  assert.ok(s.field instanceof Simulation && moving.model === "gray-scott");
+  s.step(moving);
+  s.field.step(moving, 1999);
   assert.ok(Math.max(...s.field.b) - Math.min(...s.field.b) > 0.05);
 });
 void test("seed crosses periodic boundary", () => {

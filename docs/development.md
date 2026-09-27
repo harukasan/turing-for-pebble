@@ -55,7 +55,7 @@ build/core-test render MODEL STEPS                                  # hash of th
 build/core-test defaults MODEL                                           # the default parameter vector
 ```
 
-The presets live in `lib/presets.ts`, each with a stable id (`maze`, `coral`, `mitosis`, `spots`, `thin-line`, `fhn-stripes`, `fhn-hex`, `fhn-spiral`), a model, and its parameters. `node --experimental-transform-types scripts/list-presets.mjs` prints them as JSON with the model number and the Q15 parameter vector of `RD_PARAM_MAX` entries, which the Python scripts pass to the C harnesses.
+The presets live in `lib/presets.ts`, each with a stable id (`maze`, `coral`, `mitosis`, `holes`, `cells`, `worms`, `moving-spots`, `fhn-stripes`, `fhn-hex`, `fhn-spiral`), a model, and its parameters. `node --experimental-transform-types scripts/list-presets.mjs` prints them as JSON with the model number and the Q15 parameter vector of `RD_PARAM_MAX` entries, which the Python scripts pass to the C harnesses.
 
 `scripts/fhn-explore.mjs` runs one FitzHugh–Nagumo parameter set on the Float32 prototype, under the LECO clock mask unless `--no-mask` is given, and prints fill, amplitude, feature size, motion, chessboard, halo, and connected-region measures per checkpoint while writing `build/fhn/<label>-<step>.ppm`. Parameters start from `--preset` and are replaced one by one, negative values with `=`:
 
@@ -145,7 +145,7 @@ mise exec -- pebble install --emulator emery --vnc build/pebble.pbw
 
 The vector is `fhn-spiral`. `scripts/list-presets.mjs` prints the others, `fhn-stripes` is `1638,32768,492,1229,19661,0,32768,0,0` and `fhn-hex` `1311,32768,860,2150,19661,-7209,32768,-9584,0`. The `RD init` log line reports the model.
 
-`mise exec -- python scripts/fill.py` reruns the growth comparison of initial seedings on the 120 × 136 grid and writes contact sheets and `build/fill/seeds.jsonl` under `build/fill/`. `--presets` takes preset ids (default `maze,thin-line`). It drives `tests/fill.c` as `build/fill-run model p0 ... p9 seed disks min_radius radius_range out_prefix checkpoint...`, with the model and the vector of `scripts/list-presets.mjs`.
+`mise exec -- python scripts/fill.py` reruns the growth comparison of initial seedings on the 120 × 136 grid and writes contact sheets and `build/fill/seeds.jsonl` under `build/fill/`. `--presets` takes preset ids (default `maze,worms`). It drives `tests/fill.c` as `build/fill-run model p0 ... p9 seed disks min_radius radius_range out_prefix checkpoint...`, with the model and the vector of `scripts/list-presets.mjs`.
 
 ## Regenerating comparison artifacts
 
@@ -154,7 +154,7 @@ mise exec -- python scripts/compare.py
 mise exec -- python scripts/build-report.py
 ```
 
-`compare.py` runs 10,000 steps for every preset of `scripts/list-presets.mjs` with two seeds through `tests/compare.c` (`build/compare model p0 ... p9 seed steps out.ppm`). It creates `preset-<id>-seed-S.png` and `comparison.json` under `public/reports/`, with `comparison.png` (maze, coral, mitosis, spots, and thin-line, seed 42) and `fhn.png` (the three FitzHugh–Nagumo presets, seed 42). `compare.py` rewrites `comparison.json` from scratch, so run `build-report.py` after it to add the ARM, stack, and physical sections back.
+`compare.py` runs 10,000 steps for every preset of `scripts/list-presets.mjs` with two seeds through `tests/compare.c` (`build/compare model p0 ... p9 seed steps out.ppm`). It creates `preset-<id>-seed-S.png` and `comparison.json` under `public/reports/`, with `comparison.png` (the seven Gray–Scott presets, seed 42) and `fhn.png` (the three FitzHugh–Nagumo presets, seed 42). `compare.py` rewrites `comparison.json` from scratch, so run `build-report.py` after it to add the ARM, stack, and physical sections back.
 
 The report builder reads ARM ELF section sizes and `.su` stack reports and `docs/hardware-measurements.json`, and rewrites `public/reports/comparison.json` in place, so run `mise run build-pebble` and `compare.py` first with `arm-none-eabi-size` from the SDK toolchain on `PATH`. Runtime measurements must retain their measured build and observation scope. Do not substitute theoretical remaining RAM for measured minimum free heap.
 

@@ -157,6 +157,42 @@ These choices change no result. `tests/golden-hashes.txt` records the field hash
 
 The existing Float32 implementation remains in `lib/simulation.ts` as a reference with its original tests. The Web can explicitly select it through `lib/float-simulation.ts` for same-resolution visual comparisons. Pebble builds use only the C implementation.
 
+## Gray–Scott presets
+
+The Gray–Scott presets cover the kinds of pattern the f–k plane offers on the watch grid, one or two of each, rather than every named pattern. Candidates were run with `tests/fill.c` (the harness of `scripts/fill.py`) on the 120 × 136 grid under the LECO clock mask at 13:57 2046-08-29 with the 24 seed disks of `rd_init`, at Da 1 and 0.7 (the thickest and thinnest stripe widths of the watch settings) with Db = Da / 2 and dt 1, seeds 42 and 1234, to 10,000 steps. The fill is the block fill of `tests/fill.c`. 1,650 steps is about the watch's 30 s startup animation at the pace of about 200 steps in 3.6 s ([Parameter search](#parameter-search)), an estimate, not a measurement.
+
+| Preset         | feed   | kill   | Source                                             | Look at 10,000 steps                      | Lowest fill at 1,650 steps |
+| -------------- | ------ | ------ | -------------------------------------------------- | ----------------------------------------- | -------------------------: |
+| `maze`         | 0.029  | 0.057  | Mazes of [pmneila's demo][pmneila]                 | labyrinth                                 |                       0.99 |
+| `coral`        | 0.0545 | 0.062  | Coral growth of [Karl Sims's tutorial][sims]       | wide labyrinth                            |                       0.94 |
+| `mitosis`      | 0.0367 | 0.0649 | Mitosis of [Karl Sims's tutorial][sims]            | spot array                                |                       0.80 |
+| `holes`        | 0.039  | 0.058  | Holes of [pmneila's demo][pmneila]                 | dark holes in a bright field              |                       0.99 |
+| `cells`        | 0.062  | 0.0609 | [U-Skate world][uskate] of Munafo's xmorphia       | uneven dark cells in a bright field       |                       0.96 |
+| `worms`        | 0.046  | 0.065  | type μ of [Pearson][pearson] ([xmorphia][classes]) | worms growing from their ends among spots |                       0.72 |
+| `moving-spots` | 0.022  | 0.059  | type ε of [Pearson][pearson] ([xmorphia][classes]) | spots that keep moving and splitting      |                       0.97 |
+
+The sources are:
+
+- John E. Pearson, "Complex patterns in a simple system", Science 261(5118), 189–192 (1993), [doi:10.1126/science.261.5118.189][pearson]. It names the pattern types α to μ of the f–k plane.
+- Robert Munafo, [Xmorphia][xmorphia], which maps the f–k plane. [Its catalog of the Pearson classes][classes] lists example values of each type, (0.046, 0.065) and (0.058, 0.065) for μ and (0.018, 0.055) and (0.022, 0.059) for ε. [The U-Skate World][uskate] describes 0.062 and 0.0609.
+- Karl Sims, [Reaction-Diffusion Tutorial][sims], with the mitosis (0.0367, 0.0649) and coral growth (0.0545, 0.062) simulations.
+- Pablo Márquez Neila, the presets of [`grayscott/grayscott.js`][pmneila] in his WebGL demos (2012), among them Mazes, Holes, and The U-Skate World (0.062, 0.06093).
+
+[pearson]: https://doi.org/10.1126/science.261.5118.189
+[xmorphia]: https://mrob.com/pub/comp/xmorphia/index.html
+[classes]: https://mrob.com/pub/comp/xmorphia/pearson-classes.html
+[uskate]: https://mrob.com/pub/comp/xmorphia/uskate-world.html
+[sims]: https://www.karlsims.com/rd.html
+[pmneila]: https://github.com/pmneila/jsexp/blob/master/grayscott/grayscott.js
+
+The patterns scale with the diffusion rates, so some values of the literature behave differently on this grid:
+
+- **Worms.** `worms` is the first example of Pearson's type μ, stripes that grow from each end among inert spots. It grows slowly, so it has the lowest fill at 1,650 steps. The second μ example (0.058, 0.065) grows longer worms but fills only about 0.3 of the blocks at 1,650 steps. pmneila's Worms (0.078, 0.061) and every candidate from feed 0.07 at kill 0.057 to 0.062 lost every seed disk within 300 steps.
+- **Moving spots.** `moving-spots` is the second example of Pearson's type ε, spots that crowd each other out, die, and split. It fills the face and still changes 7% to 14% of the display pixels every 20 steps at 10,000 steps. pmneila's Moving spots (0.014, 0.054) keeps moving but fills only 0.67 to 0.80 of the blocks at 10,000 steps.
+- **Chaos.** Chaos (0.026, 0.051), Chaos and holes (0.034, 0.056), Spots and loops (0.018, 0.051), and Waves (0.014, 0.045) either spread into flat saturated areas or keep large empty areas, and were not kept.
+- **Duplicates.** Solitons (0.03, 0.062) and Pulsating solitons (0.025, 0.06) give spot arrays like `mitosis`, and so does Pearson's type η (0.034, 0.063), a mixture of spots and worms whose worms break up into spots on this grid. The Default of pmneila (0.037, 0.06) gives a labyrinth like `maze`, and 0.058 and 0.062 looks like `coral`.
+- **Narrow diffusion.** At Da 0.16 and Db 0.08, the rates of some Web demos with finer grids, `mitosis`, `coral`, and `cells` freeze into grid-aligned squares on this grid.
+
 ## Second model
 
 ### Choice of FitzHugh–Nagumo
