@@ -170,6 +170,31 @@
       "avgTextUs": 673,
       "minimumFreeHeapBytes": 15872,
       "note": "Version 5 build with both models and the settings, RD_BUILD_LOG=1, 23,816 B load, with the default settings (Gray-Scott maze, thin stripes). Startup 1,637 steps and 549 frames in 29.95 s, one step of 106 ms. The heap minimum, 15,872 B, is 512 B below the 16 KiB target with this logging build, which loads 3,024 B more than the production build."
+    },
+    {
+      "commit": "2c86e7c",
+      "mode": 3,
+      "build": "3",
+      "face": "digital",
+      "date": "2026-09-27",
+      "firmware": "unknown",
+      "startupWallMs": 35211,
+      "stepsPerSecond": 54.2,
+      "avgStepUs": 14228,
+      "maxStepMs": 39,
+      "avgDrawUs": 5929,
+      "avgTextUs": 1001,
+      "minimumFreeHeapBytes": 14960,
+      "loopMs": 0,
+      "clockInvalid": false,
+      "interrupted": false,
+      "settingsLog": [
+        "RD settings model=1 p0=1638,32768,328,819,19661 src=m",
+        "RD settings p5=0,32768,0,0,0",
+        "RD settings pal=6 low=001e12 high=d2ff55 font=0 avoid=1 clock=1",
+        "RD settings stops=2 mid1=466928 mid2=8cb43f date=0 face=0"
+      ],
+      "note": "Both models and both faces after the rebase onto the analog face, RD_BUILD_LOG=1 and RD_BUILD_LOAD_LIMIT, 24,720 B load. The phone's stored settings (fhn-stripes at its former rates, the digital face, the date hidden) arrived at launch and restarted the field. Startup 1,911 steps, 671 slices, and 670 draws, with since_init_ms=35,281. The minimum free heap, 14,960 B, is 1,424 B below the 16 KiB target with this logging build, which loads 3,404 B more than the production build."
     }
   ]
 }
