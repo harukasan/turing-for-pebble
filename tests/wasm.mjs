@@ -159,7 +159,7 @@ const values = (list) => {
   return vector;
 };
 // fhn-hex of lib/presets.ts.
-const hex = [1311, 32768, 573, 1434, 19661, -7209, 32768, -9585, 0];
+const hex = [1311, 32768, 860, 2150, 19661, -7209, 32768, -9585, 0];
 const linear = e.memory.buffer.byteLength;
 for (let i = 0; i < 300; i++) {
   const mode = i % 4,

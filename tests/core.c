@@ -1240,7 +1240,7 @@ static void check_fhn_init(int mode) {
   size_t size = rd_bytes(mode);
   uint8_t *memory = malloc(size), *reference_memory = malloc(size);
   /* fhn-hex and fhn-spiral of lib/presets.ts. */
-  const int hex[RD_FHN_PARAMS] = {1311,  32768, 573,   1434, 19661,
+  const int hex[RD_FHN_PARAMS] = {1311,  32768, 860,   2150, 19661,
                                   -7209, 32768, -9585, 0};
   const int spiral[RD_FHN_PARAMS] = {6554,  0,     8192,   410, 32768,
                                      -9830, 32768, -21935, 1};

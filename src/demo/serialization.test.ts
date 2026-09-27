@@ -158,8 +158,8 @@ test("FitzHugh-Nagumo settings record the model and the folded values", () => {
   assert.deepEqual(settings.effective, {
     du: (Math.round(1311 / 20) * 20) / 32768,
     dv: (Math.round(32768 / 20) * 20) / 32768,
-    ru: 573 / 32768,
-    rv: 1434 / 32768,
+    ru: 860 / 32768,
+    rv: 2150 / 32768,
     av: 19661 / 32768,
     k: (Math.floor((-7209 + 2) / 4) * 4) / 32768,
     dt: 1,

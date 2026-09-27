@@ -146,7 +146,7 @@ RD_BUILD_MODE=3 RD_BUILD_LOG=1 \
 mise exec -- pebble install --emulator emery --vnc build/pebble.pbw
 ```
 
-The vector is `fhn-spiral`. `scripts/list-presets.mjs` prints the others, `fhn-stripes` is `1638,32768,328,819,19661,0,32768,0,0` and `fhn-hex` `1311,32768,573,1434,19661,-7209,32768,-9585,0`. The `RD init` log line reports the model.
+The vector is `fhn-spiral`. `scripts/list-presets.mjs` prints the others, `fhn-stripes` is `1638,32768,492,1229,19661,0,32768,0,0` and `fhn-hex` `1311,32768,860,2150,19661,-7209,32768,-9585,0`. The `RD init` log line reports the model.
 
 `RD_BUILD_DEFINES=RD_BENCH` builds a watchface that logs `RD bench` with the time of each phase of a step 3 s after launch. `RD_BUILD_DEFINES="RD_FRAME_BENCH RD_STARTUP_MS=0"` builds one that logs `RD frames`, the frames the OS renders in 5 s with the normal draw and then with an empty draw. `mkdir -p build && cc -O3 -std=c11 -DRD_MODE=3 tests/bench.c -o build/bench && build/bench 3 500` runs the same timing on the host (`build/bench MODE [COUNT]`, and a binary built without `RD_MODE` accepts every mode). The host ranks the phases differently from the watch, so only the watch numbers decide.
 

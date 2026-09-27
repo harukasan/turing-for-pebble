@@ -80,7 +80,7 @@ static const uint8_t PARAM_COUNT[RD_MODEL_COUNT] = {RD_GRAY_SCOTT_PARAMS,
  * presets of lib/presets.ts, which tests/adapter.mjs compares. */
 static const int DEFAULT_PARAMS[RD_MODEL_COUNT][RD_PARAM_MAX] = {
     {950, 1868, RD_Q15_ONE, RD_Q15_ONE / 2, RD_Q15_ONE},
-    {1638, RD_Q15_ONE, 328, 819, 19661, 0, RD_Q15_ONE, 0, 0}};
+    {1638, RD_Q15_ONE, 492, 1229, 19661, 0, RD_Q15_ONE, 0, 0}};
 
 /* Initial seeding: disks placed by a 32-bit LCG in display coordinates. */
 #define INITIAL_DISKS 24
