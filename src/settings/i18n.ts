@@ -50,10 +50,10 @@ const en = {
   /** The avoidance switch, named by what the face shows. */
   avoid: (analog: boolean, date: boolean): string =>
     !analog
-      ? "Keep the pattern off the digits"
+      ? "Avoid the digits"
       : date
-        ? "Keep the pattern off the hands and date"
-        : "Keep the pattern off the hands",
+        ? "Avoid the hands and date"
+        : "Avoid the hands",
   export: "Export",
   file: "File",
   jsonLabel: "Settings JSON",
