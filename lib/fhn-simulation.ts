@@ -48,18 +48,6 @@ export class FhnSimulation {
     this.v.fill(restV(p));
   }
 
-  /** Excite a grid disk: u = rest + 0.5, v unchanged. */
-  seedAt(x: number, y: number, radius: number, rest: number) {
-    for (let dy = -radius; dy <= radius; dy++)
-      for (let dx = -radius; dx <= radius; dx++) {
-        if (dx * dx + dy * dy > radius * radius) continue;
-        const i =
-          ((y + dy + this.height) % this.height) * this.width +
-          ((x + dx + this.width) % this.width);
-        this.u[i] = Math.min(FHN_LIMIT, rest + 0.5);
-      }
-  }
-
   /** Write the broken wave of init 1 over the field, each grid cell
    * sampling the display pixel it covers. */
   seedWave() {

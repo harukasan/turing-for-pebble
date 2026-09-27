@@ -11,7 +11,7 @@
 
 /* Models, and the length of each model's parameter vector (rd_init_model,
  * rd_set_params):
- *   Gray-Scott:       feed, kill, da, db, dt, each in [0, RD_Q15_ONE];
+ *   Gray-Scott:       feed, kill, da, db, dt, each in [0, RD_Q15_ONE].
  *   FitzHugh-Nagumo:  du, dv, ru, rv, av, k, dt, rest, init, where k and
  *                     rest are in [-RD_Q15_ONE, RD_Q15_ONE], ru in
  *                     [0, RD_FHN_RU_MAX], init is 0 (disks) or 1 (a broken

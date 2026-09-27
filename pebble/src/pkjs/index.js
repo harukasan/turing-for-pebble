@@ -7,11 +7,13 @@
  * scripts/embed-config.mjs prepends RD_PAGE_HTML, the settings page with
  * its preview as one HTML file, and RD_CONFIG_URL, the address of a hosted
  * copy of the page from RD_BUILD_CONFIG_URL or an empty string, and
- * RD_PARAM_RANGES, the parameter ranges of each model, and writes
+ * RD_PARAM_RANGES, the parameter ranges of each model, and
+ * RD_GRAY_SCOTT_NAMES, the Gray-Scott coefficient names of settings stored
+ * before the model, both from lib/presets.ts, and writes
  * the result to src/pkjs/generated/pebble-js-app.js. The script keeps to
  * ES5 for the phone's JavaScript engines.
  */
-/* global Pebble, RD_PAGE_HTML, RD_CONFIG_URL, RD_PARAM_RANGES, localStorage, console */
+/* global Pebble, RD_PAGE_HTML, RD_CONFIG_URL, RD_PARAM_RANGES, RD_GRAY_SCOTT_NAMES, localStorage, console */
 
 var STORAGE_KEY = "settings";
 var LANGUAGE_KEY = "language";
@@ -91,7 +93,7 @@ function load() {
     }
     if (value && typeof value === "object" && !("model" in value)) {
       value.model = 0;
-      var names = ["feed", "kill", "da", "db", "dt"];
+      var names = RD_GRAY_SCOTT_NAMES;
       for (var i = 0; i < PARAMS; i++)
         value["p" + i] = i < names.length ? value[names[i]] : 0;
     }

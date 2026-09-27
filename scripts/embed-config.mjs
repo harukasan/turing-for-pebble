@@ -4,13 +4,14 @@
 //
 //   build/config/index.html                     the self-contained page
 //   pebble/src/pkjs/generated/pebble-js-app.js  RD_PAGE_HTML, RD_CONFIG_URL,
-//                                               RD_PARAM_RANGES, and
+//                                               RD_PARAM_RANGES,
+//                                               RD_GRAY_SCOTT_NAMES, and
 //                                               pebble/src/pkjs/index.js
 //
 // RD_BUILD_CONFIG_URL, when set, is the address of a hosted copy of the
 // page that the phone opens instead of the embedded one.
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { modelIndex, parameterRanges } from "../lib/presets.ts";
+import { modelIndex, parameterOrder, parameterRanges } from "../lib/presets.ts";
 
 const root = new URL("../", import.meta.url);
 const dir = new URL("build/config/", root);
@@ -52,6 +53,7 @@ const script =
   `var RD_PAGE_HTML = ${literal(html)};\n` +
   `var RD_CONFIG_URL = ${literal(process.env.RD_BUILD_CONFIG_URL ?? "")};\n` +
   `var RD_PARAM_RANGES = ${JSON.stringify(ranges)};\n` +
+  `var RD_GRAY_SCOTT_NAMES = ${JSON.stringify(parameterOrder["gray-scott"])};\n` +
   readFileSync(new URL("index.js", pkjs), "utf8");
 mkdirSync(new URL("generated/", pkjs), { recursive: true });
 writeFileSync(new URL("generated/pebble-js-app.js", pkjs), script);

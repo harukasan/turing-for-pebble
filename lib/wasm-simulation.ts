@@ -243,6 +243,8 @@ export const effective = (p: Parameters, mode = 0): Parameters =>
 export class WasmSimulation {
   private allocation: number;
   private vector: number;
+  /** The parameters last written to the core. */
+  private written: Parameters | null = null;
   private state: number;
   private row: Uint8Array;
   readonly width: number;
@@ -317,14 +319,20 @@ export class WasmSimulation {
   step(p: Parameters, count = 1) {
     if (p.model !== this.model)
       throw new Error(`${p.model} parameters for a ${this.model} field`);
-    if (
-      this.api.rd_set_params(
-        this.state,
-        this.writeVector(p),
-        parameterOrder[p.model].length
+    // The player and the preview step with one parameters object until the
+    // parameters change, so the vector is written only for a new object.
+    // Callers replace the object rather than change it in place.
+    if (p !== this.written) {
+      if (
+        this.api.rd_set_params(
+          this.state,
+          this.writeVector(p),
+          parameterOrder[p.model].length
+        )
       )
-    )
-      throw new Error("Invalid parameters");
+        throw new Error("Invalid parameters");
+      this.written = p;
+    }
     if (this.api.rd_step(this.state, count))
       throw new Error("Invalid step count");
   }

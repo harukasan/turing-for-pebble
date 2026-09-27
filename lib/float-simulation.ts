@@ -73,11 +73,12 @@ export class FloatSimulation {
   step(params: Parameters) {
     if (params.model !== this.model)
       throw new Error(`${params.model} parameters for a ${this.model} field`);
-    if (this.field instanceof FhnSimulation && params.model === "fhn") {
+    // The field was built for this model, so the casts only name its type.
+    if (params.model === "fhn") {
       this.rest = params.rest;
-      this.field.step(params, 1, this.pulls());
-    } else if (this.field instanceof Simulation && params.model !== "fhn") {
-      this.field.step(params, 1, this.kills(params.kill));
+      (this.field as FhnSimulation).step(params, 1, this.pulls());
+    } else {
+      (this.field as Simulation).step(params, 1, this.kills(params.kill));
     }
     this.applyMask();
   }

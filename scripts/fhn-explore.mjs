@@ -6,8 +6,8 @@
 //              that hold a cell with |u - rest| > 0.25
 //   minU, maxU extremes of u over the open cells
 //   meanU      mean u of the open cells
-//   feature    mean length in cells of the lit runs along the rows, lit
-//              meaning u above rest + (maxU - rest) / 2
+//   feature    mean length in cells of the lit runs along the periodic
+//              rows, lit meaning u above rest + (maxU - rest) / 2
 //   change     mean |u' - u| of one step at the checkpoint (a pattern that
 //              keeps moving, such as a spiral, stays above zero)
 //   checker    mean |u - mean of the four axial neighbors| (about 2 for a
@@ -132,10 +132,23 @@ function metrics(before) {
   const lit = params.rest + (maxU - params.rest) / 2;
   let runs = 0,
     runCells = 0;
+  // Rows are periodic like the field: start after an unlit cell so a run
+  // that crosses the right edge is counted once, whole, and a row lit from
+  // end to end counts as one run of the full width.
   for (let y = 0; y < height; y++) {
+    const litAt = (x) =>
+      sim.maskLevel(x, y) === 5 && u[y * width + (x % width)] > lit;
+    let start = 0;
+    while (start < width && litAt(start)) start++;
+    if (start === width) {
+      runs++;
+      runCells += width;
+      continue;
+    }
     let run = 0;
-    for (let x = 0; x < width; x++) {
-      if (sim.maskLevel(x, y) === 5 && u[y * width + x] > lit) {
+    for (let i = 1; i <= width; i++) {
+      const x = (start + i) % width;
+      if (litAt(x)) {
         run++;
         continue;
       }

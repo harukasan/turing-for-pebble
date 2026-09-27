@@ -129,25 +129,22 @@ export function withVector(
   return next;
 }
 
+/** The names of the Gray–Scott coefficients before the model, in the order
+ * of its parameter vector, which stored settings, settings files, and a
+ * hosted page's query string may still carry. */
+const LEGACY_KEYS: readonly string[] = parameterOrder["gray-scott"];
+
 /** Settings stored or exported before version 4 carried the five
  * Gray-Scott coefficients under their own names. */
 function upgrade(value: Record<string, unknown>): Record<string, unknown> {
   if ("model" in value || !("feed" in value)) return value;
-  const { feed, kill, da, db, dt, ...rest } = value;
-  return {
-    ...rest,
-    model: 0,
-    p0: feed,
-    p1: kill,
-    p2: da,
-    p3: db,
-    p4: dt,
-    p5: 0,
-    p6: 0,
-    p7: 0,
-    p8: 0,
-    p9: 0,
-  };
+  const next: Record<string, unknown> = { ...value, model: 0 };
+  PARAM_KEYS.forEach((key, i) => {
+    const name = LEGACY_KEYS[i];
+    next[key] = name === undefined ? 0 : value[name];
+    if (name !== undefined) delete next[name];
+  });
+  return next;
 }
 
 export function validate(value: unknown): WatchSettings | null {
@@ -177,10 +174,6 @@ export function withRest(settings: WatchSettings): WatchSettings {
     Math.round(restingPoint(at("k") / Q15, at("av") / Q15) * Q15) + 0;
   return { ...settings, [paramKey("fhn", "rest")]: rest };
 }
-
-/** The names of the Gray-Scott coefficients before the model, which a
- * hosted page's query string may still carry. */
-const LEGACY_KEYS = ["feed", "kill", "da", "db", "dt"];
 
 export function fromQuery(query: URLSearchParams) {
   const value: Record<string, number> = {};
