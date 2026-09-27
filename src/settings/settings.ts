@@ -160,14 +160,15 @@ export function fromFileJson(text: string) {
 
 export const q15 = (value: number) => Math.round(value * Q15);
 
-/** Stripe widths: Da and Db in the ratio 2:1. Smaller rates draw thinner
- * stripes and spread more slowly. At 細い the presets cover about as much
- * of the face within the watch's 30 s startup as at 太い, and below about
- * 0.6 the coral preset leaves empty areas. */
+/** Stripe widths, thick, medium, and thin, named by Strings.widths: Da and
+ * Db in the ratio 2:1. Smaller rates draw thinner stripes and spread more
+ * slowly. At thin the presets cover about as much of the face within the
+ * watch's 30 s startup as at thick, and below about 0.6 the coral preset
+ * leaves empty areas. */
 export const DIFFUSION_PRESETS = [
-  { name: "太い", da: 1, db: 0.5 },
-  { name: "やや細い", da: 0.8, db: 0.4 },
-  { name: "細い", da: 0.7, db: 0.35 },
+  { da: 1, db: 0.5 },
+  { da: 0.8, db: 0.4 },
+  { da: 0.7, db: 0.35 },
 ];
 
 /** The index of the stripe width with the settings' Da and Db, or -1. */
