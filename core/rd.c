@@ -402,8 +402,11 @@ static uint8_t *mask_levels(State *state) {
   return (uint8_t *)(interpolation_row(state) + state->width);
 }
 
-/* Mask updates run at launch and on clock changes, outside the step loop. */
-#if defined(RD_MODE) && defined(__GNUC__) && !defined(__clang__)
+/* Mask updates run at launch and on clock changes, outside the step loop,
+ * so optimizing GCC builds, the watch builds among them, compile them for
+ * size. -O0 builds keep them unoptimized as the reference of
+ * scripts/check-optimization.sh, and clang ignores the GCC attribute. */
+#if defined(__OPTIMIZE__) && defined(__GNUC__) && !defined(__clang__)
 #define MASK_SIZE_OPT __attribute__((optimize("Os")))
 #else
 #define MASK_SIZE_OPT
