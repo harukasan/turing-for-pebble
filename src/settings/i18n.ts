@@ -16,7 +16,7 @@ export const detectLang = (language: string | undefined): Lang =>
 
 const en = {
   name: "English",
-  title: "Turing settings",
+  title: "Turing Settings",
   language: "Language",
   previewLabel: "Watchface preview",
   loading: "Loading the preview",
@@ -24,10 +24,10 @@ const en = {
   loadFailed: "Could not load the preview",
   caption: (speed: number) => `Preview (${speed}× speed)`,
   pattern: "Pattern",
-  diffusion: "Diffusion and time step",
+  diffusion: "Diffusion and Time Step",
   colors: "Colors",
   clock: "Clock",
-  fileSection: "Export and import settings",
+  fileSection: "Export and Import Settings",
   /** The presets of lib/simulation.ts, in order. */
   presets: ["Maze", "Coral", "Mitosis", "Spots", "Thin lines"],
   /** The stripe widths of DIFFUSION_PRESETS, in order. */

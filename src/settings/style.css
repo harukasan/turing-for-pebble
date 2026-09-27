@@ -151,16 +151,38 @@ legend {
   outline-offset: 2px;
 }
 
-/* The language switch, small and at the top right, above the preview. */
+/* The language switch, a segmented control at the top right above the
+ * preview: one pill split into the languages, the chosen one filled. */
 .language {
   justify-content: flex-end;
-  gap: 6px;
+  gap: 0;
   margin-bottom: 8px;
   font-size: 0.85em;
 }
 
 .language .chip span {
-  padding: 3px 10px;
+  padding: 4px 12px;
+  border-radius: 0;
+}
+
+.language .chip:first-child span {
+  border-radius: 999px 0 0 999px;
+}
+
+.language .chip:last-child span {
+  border-radius: 0 999px 999px 0;
+}
+
+.language .chip + .chip span {
+  margin-left: -1px;
+}
+
+.language .chip input:checked + span {
+  position: relative;
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: none;
+  color: var(--accent-text);
 }
 
 .sliders {
