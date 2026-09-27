@@ -23,4 +23,4 @@ pnpm run dev --host 127.0.0.1
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The third-party works in the builds and their licenses are listed in [CREDITS.md](CREDITS.md).
+This project is under the MIT License, see [LICENSE](LICENSE). The third-party works in the builds and their licenses are listed in [CREDITS.md](CREDITS.md).
