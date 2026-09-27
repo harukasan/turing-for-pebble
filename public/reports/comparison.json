@@ -895,12 +895,12 @@
     {
       "mode": 1,
       "faces": "both",
-      "textBytes": 19460,
+      "textBytes": 19464,
       "dataBytes": 248,
       "bssBytes": 292,
-      "loadBytes": 20000,
+      "loadBytes": 20004,
       "coreDynamicBytes": 63231,
-      "remainingBeforeOsAllocationsBytes": 47841,
+      "remainingBeforeOsAllocationsBytes": 47837,
       "stackFramesBytes": {
         "store_codes": 0,
         "params_valid": 20,
@@ -1001,12 +1001,12 @@
     {
       "mode": 3,
       "faces": "both",
-      "textBytes": 20052,
+      "textBytes": 20056,
       "dataBytes": 248,
       "bssBytes": 292,
-      "loadBytes": 20592,
+      "loadBytes": 20596,
       "coreDynamicBytes": 88671,
-      "remainingBeforeOsAllocationsBytes": 21809,
+      "remainingBeforeOsAllocationsBytes": 21805,
       "stackFramesBytes": {
         "store_codes": 0,
         "params_valid": 20,
@@ -1179,12 +1179,12 @@
     {
       "mode": 3,
       "faces": "analog",
-      "textBytes": 18292,
+      "textBytes": 18296,
       "dataBytes": 248,
       "bssBytes": 292,
-      "loadBytes": 18832,
+      "loadBytes": 18836,
       "coreDynamicBytes": 88671,
-      "remainingBeforeOsAllocationsBytes": 23569,
+      "remainingBeforeOsAllocationsBytes": 23565,
       "stackFramesBytes": {
         "store_codes": 0,
         "params_valid": 20,

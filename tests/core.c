@@ -1186,7 +1186,8 @@ static void fill_codes(State *state, unsigned a, unsigned b) {
  * docs/core.md states it. */
 static unsigned fhn_rest_v_reference(const int *params) {
   int64_t rest13 = floor_div64(params[FHN_REST] + 2, 4);
-  int64_t v13 = params[FHN_AV] ? rest13 * 32768 / params[FHN_AV] : 0;
+  int64_t v13 = params[FHN_AV] ? rest13 * 32768 / params[FHN_AV]
+                               : floor_div64(params[FHN_K] + 2, 4);
   v13 = v13 < -16384 ? -16384 : v13 > 16384 ? 16384 : v13;
   return (unsigned)(16384 + v13);
 }
@@ -1263,6 +1264,16 @@ static void check_fhn_init(int mode) {
   const int high_v[RD_FHN_PARAMS] = {0, 0, 0, 0, 1, 0, 0, RD_Q15_ONE, 0};
   assert(fhn_rest_v_reference(low_v) == 0);
   assert(fhn_rest_v_reference(high_v) == Q15_CODE_MAX);
+  /* With av = 0 the resting v is k, at u = rest = 0. */
+  const int no_av[RD_FHN_PARAMS] = {0, 0, 0, 0, 0, 8192, 0, 0, 0};
+  assert(fhn_rest_v_reference(no_av) == 16384 + 2048);
+  {
+    State *flat = rd_init_model(memory, size, mode, RD_MODEL_FHN, 42, no_av,
+                                RD_FHN_PARAMS);
+    unsigned v, u;
+    load_codes(flat, 0, &v, &u);
+    assert(v == 16384 + 2048);
+  }
   for (int side = 0; side < 2; side++) {
     State *clamped = rd_init_model(memory, size, mode, RD_MODEL_FHN, 42,
                                    side ? high_v : low_v, RD_FHN_PARAMS);

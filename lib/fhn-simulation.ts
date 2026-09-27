@@ -42,8 +42,8 @@ export class FhnSimulation {
     this.nextV = new Float32Array(n);
   }
 
-  /** The uniform resting field: u = rest and v = rest / av (0 if av = 0). */
-  fill(p: Pick<FhnParameters, "rest" | "av">) {
+  /** The uniform resting field: u = rest and v = rest / av (k if av = 0). */
+  fill(p: Pick<FhnParameters, "rest" | "av" | "k">) {
     this.u.fill(p.rest);
     this.v.fill(restV(p));
   }
@@ -117,9 +117,11 @@ export class FhnSimulation {
   }
 }
 
-/** The resting v of a parameter set: rest / av, or 0 if av is 0. */
-export const restV = (p: Pick<FhnParameters, "rest" | "av">) =>
-  p.av ? clamp(p.rest / p.av) : 0;
+/** The resting v of a parameter set: rest / av, which balances the v
+ * equation, or k if av is 0, where the v equation forces u = 0 and the u
+ * equation then gives v = k. */
+export const restV = (p: Pick<FhnParameters, "rest" | "av" | "k">) =>
+  clamp(p.av ? p.rest / p.av : p.k);
 
 const clamp = (value: number) =>
   Math.max(-FHN_LIMIT, Math.min(FHN_LIMIT, value));

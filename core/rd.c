@@ -909,7 +909,11 @@ static SIZE_OPT void fill_rest(State *state) {
   unsigned code_a = is_packed(state) ? PACKED_FULL_A : Q15_FULL_A, code_b = 0;
   if (state_model(state) == RD_MODEL_FHN) {
     int32_t av = state->params[FHN_AV];
-    int32_t v13 = av ? fhn_q13(state->params[FHN_REST]) * RD_Q15_ONE / av : 0;
+    /* v = rest / av, which balances the v equation, or k with av = 0,
+     * where the v equation forces u = 0 and the u equation then gives
+     * v = k. */
+    int32_t v13 = av ? fhn_q13(state->params[FHN_REST]) * RD_Q15_ONE / av
+                     : fhn_q13(state->params[FHN_K]);
     v13 = v13 < -FHN_ZERO ? -FHN_ZERO : v13 > FHN_ZERO ? FHN_ZERO : v13;
     code_a = (unsigned)(FHN_ZERO + v13);
     code_b = rest_code(state);
