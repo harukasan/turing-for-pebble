@@ -2,15 +2,20 @@
 # Build the watchface modes 0, 1, and 3 with the Pebble SDK and keep their .pbw, .elf,
 # and stack-usage files under build/pebble/. RD_BUILD_OPT (default -O3),
 # RD_BUILD_PROFILE, RD_BUILD_FONT, RD_BUILD_RENDER, RD_BUILD_DEFINES, and
-# RD_BUILD_LOG pass through to pebble/wscript. The load size of
+# RD_BUILD_LOG pass through to pebble/wscript. The settings page and the
+# phone script are built first, and RD_BUILD_CONFIG_URL makes the phone open a
+# hosted copy of the page instead of the embedded one. The load size of
 # each ELF (text + data + bss, which all live in the 128 KiB app region next
-# to the core allocation) must stay within LOAD_LIMIT bytes.
+# to the core allocation) must stay within LOAD_LIMIT bytes. A measurement
+# build with RD_BUILD_LOG=1 carries about 2.9 KB of logs and may raise the
+# limit with RD_BUILD_LOAD_LIMIT. Production builds keep the default.
 set -eu
-LOAD_LIMIT=20480
+LOAD_LIMIT=${RD_BUILD_LOAD_LIMIT:-20480}
 size_tool=$(command -v arm-none-eabi-size || true)
 if [ -z "$size_tool" ]; then
   size_tool=.local/share/pebble-sdk/SDKs/4.33.1/toolchain/arm-none-eabi/bin/arm-none-eabi-size
 fi
+pnpm run build:settings
 mkdir -p build/pebble
 for mode in 0 1 3; do
   (cd pebble && RD_BUILD_MODE=$mode pebble clean --sdk 4.33.1 && RD_BUILD_MODE=$mode pebble build --sdk 4.33.1)

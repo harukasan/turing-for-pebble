@@ -76,8 +76,10 @@ def build(ctx):
     ctx.env = cached_env
 
     ctx.set_group('bundle')
-    ctx.pbl_bundle(binaries=binaries,
-                   js=ctx.path.ant_glob(['src/pkjs/**/*.js',
-                                         'src/pkjs/**/*.json',
-                                         'src/common/**/*.js']),
-                   js_entry_file='src/pkjs/index.js')
+    # The phone runs only pebble-js-app.js, which scripts/embed-config.mjs
+    # (pnpm run build:settings) writes from src/pkjs/index.js and the
+    # settings page.
+    pkjs = ctx.path.find_node('src/pkjs/generated/pebble-js-app.js')
+    if not pkjs:
+        ctx.fatal('src/pkjs/generated/pebble-js-app.js is missing: run pnpm run build:settings')
+    ctx.pbl_bundle(binaries=binaries, js=[pkjs])

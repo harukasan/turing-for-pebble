@@ -1,16 +1,9 @@
 /** @jsxImportSource react */
 import { useEffect, useId, useState, type CSSProperties } from "react";
-import { type Parameters } from "../../../lib/simulation";
 import { type Engine } from "../../core";
 import { styles as s } from "../styles";
 
-export const bounds: Record<keyof Parameters, [number, number, number]> = {
-  feed: [0.01, 0.1, 0.0001],
-  kill: [0.03, 0.075, 0.0001],
-  da: [0.1, 1, 0.01],
-  db: [0.01, 0.5, 0.01],
-  dt: [0.1, 1, 0.1],
-};
+export { parameterBounds as bounds } from "../../core/modes";
 
 export const engines: [Engine, string][] = [
   ["u8-200", "Wasm A7+B9 / 200 × 228"],

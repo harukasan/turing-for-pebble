@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
             min_radius + random_below(lcg_next(&lcg), radius_range));
   }
   uint8_t *mask = malloc(cm_bytes(width, height));
-  cm_build(mask, width, height, CM_FONT_LECO, 13, 57, 2046, 8, 29, 1);
+  cm_build(mask, width, height, CM_FONT_LECO, 13, 57, 2046, 8, 29, 1, 1);
   rd_mask(state, mask);
   rd_params(state, feeds[preset], kills[preset], RD_Q15_ONE, RD_Q15_ONE / 2,
             RD_Q15_ONE);

@@ -1,5 +1,6 @@
 import type { Parameters } from "../../lib/simulation";
 import type { ClockFont } from "../../lib/clock-fonts";
+import type { PaletteId } from "../../lib/palettes";
 
 export type Engine =
   "u8-200" | "q15-100" | "q15-120" | "float-200" | "float-100" | "float-120";
@@ -10,6 +11,19 @@ export const engineMode = (engine: Engine) =>
   engine.endsWith("200") ? 0 : engine.endsWith("120") ? 3 : 1;
 export const isFloat = (engine: Engine) => engine.startsWith("float");
 export const HALO = 1;
+
+/** Slider range and step of each coefficient, shared by the demo and the
+ * watch settings page. */
+export const parameterBounds: Record<
+  keyof Parameters,
+  [number, number, number]
+> = {
+  feed: [0.01, 0.1, 0.0001],
+  kill: [0.03, 0.075, 0.0001],
+  da: [0.1, 1, 0.01],
+  db: [0.01, 0.5, 0.01],
+  dt: [0.1, 1, 0.1],
+};
 
 export const defaultParameters: Parameters = {
   feed: 0.029,
@@ -22,7 +36,7 @@ export const defaultParameters: Parameters = {
 export type PlayerSettings = {
   params: Parameters;
   speed: number;
-  palette: string;
+  palette: PaletteId;
   quantize: boolean;
   interpolate: boolean;
   clock: boolean;

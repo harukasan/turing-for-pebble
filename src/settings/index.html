@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="theme-color"
+      content="#ffffff"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#333333"
+      media="(prefers-color-scheme: dark)"
+    />
+    <title>Turing Settings</title>
+  </head>
+  <body>
+    <main class="page">
+      <div id="language" class="chips language" role="group"></div>
+      <section class="preview" data-i18n-aria="previewLabel">
+        <div class="bezel">
+          <canvas id="preview" width="200" height="228"></canvas>
+        </div>
+        <p id="progress" class="progress" aria-live="polite"></p>
+      </section>
+      <form id="form" class="form">
+        <fieldset>
+          <legend data-i18n="pattern"></legend>
+          <div id="presets" class="chips"></div>
+          <div id="pattern-sliders" class="sliders"></div>
+        </fieldset>
+        <fieldset>
+          <legend data-i18n="diffusion"></legend>
+          <div id="diffusion-presets" class="chips"></div>
+          <div id="diffusion-sliders" class="sliders"></div>
+        </fieldset>
+        <fieldset>
+          <legend data-i18n="colors"></legend>
+          <div id="palettes" class="palettes"></div>
+          <div id="custom-palette" class="custom-palette" hidden>
+            <div id="custom-count" class="chips"></div>
+            <div id="custom-stops" class="stops"></div>
+            <div id="color-picker" class="colors" hidden></div>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend data-i18n="clock"></legend>
+          <div id="fonts" class="chips"></div>
+          <label class="switch">
+            <span data-i18n="showClock"></span>
+            <input type="checkbox" id="clock" role="switch" />
+          </label>
+          <label class="switch">
+            <span data-i18n="showDate"></span>
+            <input type="checkbox" id="date" role="switch" />
+          </label>
+          <label class="switch">
+            <span data-i18n="avoid"></span>
+            <input type="checkbox" id="avoid" role="switch" />
+          </label>
+        </fieldset>
+        <details class="section">
+          <summary data-i18n="fileSection"></summary>
+          <div class="file-actions">
+            <button type="button" id="export" data-i18n="export"></button>
+            <label class="file-button">
+              <span data-i18n="file"></span>
+              <input
+                type="file"
+                id="import"
+                class="visually-hidden"
+                accept="application/json,.json,text/plain,.txt"
+              />
+            </label>
+          </div>
+          <textarea
+            id="file-text"
+            class="file-text"
+            rows="4"
+            spellcheck="false"
+            data-i18n-aria="jsonLabel"
+            data-i18n-placeholder="jsonPlaceholder"
+          ></textarea>
+          <div class="file-actions">
+            <button
+              type="button"
+              id="import-text"
+              data-i18n="importText"
+            ></button>
+          </div>
+          <p id="file-status" class="hint" aria-live="polite"></p>
+        </details>
+      </form>
+      <footer class="actions">
+        <button type="button" id="cancel" data-i18n="cancel"></button>
+        <button
+          type="button"
+          id="save"
+          class="primary"
+          data-i18n="save"
+        ></button>
+      </footer>
+    </main>
+    <script type="application/json" id="settings">
+      __SETTINGS__
+    </script>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

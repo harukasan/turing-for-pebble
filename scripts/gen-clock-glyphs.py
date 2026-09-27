@@ -13,6 +13,7 @@ from pathlib import Path
 LINES = {'time': ':', 'date': '.'}
 DIGITS = '0123456789'
 BYTES_PER_LINE = 12
+DISPLAY_HEIGHT = 228
 
 data = json.loads(Path('public/fonts/clock-fonts.json').read_text())
 source = data['source']
@@ -68,20 +69,34 @@ out = [
 for name, font in data['fonts'].items():
     out.append(f' *   {source["path"]}/{name}.pbf')
     out.append(f' *     sha256 {font["sha256"]}')
+
+
+def time_alone_top(font_set):
+    """Time line top that centers the ink of the time glyphs on the display."""
+    glyphs = data['fonts'][font_set['time']['font']]['glyphs']
+    line = [glyphs[c] for c in DIGITS + LINES['time']]
+    top = min(g['top_offset'] for g in line)
+    bottom = max(g['top_offset'] + g['height'] for g in line)
+    return (DISPLAY_HEIGHT - (bottom - top)) // 2 - top
+
+
 out += [
     ' *',
-    ' * A watch build defines RD_FONT and compiles the glyphs of that set only.',
+    ' * A build that defines RD_FONT (RD_BUILD_FONT on the watch) compiles the',
+    ' * glyphs of that set only, and other builds compile both sets.',
     ' */',
     '/* clang-format off */',
     '',
-    '/* System font keys and text boxes of each set, for the watch. */',
+    '/* System font keys and text boxes of each set, for the watch, and the',
+    ' * time line top that centers the time alone on the display. */',
     'static const CmLayout CM_LAYOUTS[CM_FONT_COUNT] = {',
 ]
 for font_set in data['sets']:
     time, date = font_set['time'], font_set['date']
     out.append(
         f'    {{"RESOURCE_ID_{time["font"]}", "RESOURCE_ID_{date["font"]}", '
-        f'{time["top"]}, {time["box"]}, {date["top"]}, {date["box"]}}}, /* {font_set["name"]} */'
+        f'{time["top"]}, {time["box"]}, {date["top"]}, {date["box"]}, '
+        f'{time_alone_top(font_set)}}}, /* {font_set["name"]} */'
     )
 out += ['};', '']
 lines = []

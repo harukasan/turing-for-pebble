@@ -10,6 +10,12 @@ import {
 } from '../lib/wasm-simulation.ts';
 import { FloatSimulation } from '../lib/float-simulation.ts';
 import {
+  PALETTES,
+  PALETTE_CUSTOM,
+  PALETTE_COUNT,
+  paletteColor,
+} from '../lib/palettes.ts';
+import {
   CLOCK_FONTS,
   clockPixels,
   fontIndex,
@@ -104,11 +110,19 @@ const times = [
 ];
 for (const font of CLOCK_FONTS)
   for (const width of [100, 200])
-    for (const halo of [0, 2, 3])
+    for (const [halo, showDate] of [
+      [0, true],
+      [2, true],
+      [3, true],
+      [1, false],
+    ])
       for (const date of times) {
         const height = (width * 228) / 200;
         const expected = new Uint8Array(((width + 7) >> 3) * height);
-        clockPixels(date, font, (px, py) => {
+        clockPixels(
+          date,
+          font,
+          (px, py) => {
           for (
             let y = Math.max(0, py - halo);
             y <= Math.min(227, py + halo);
@@ -123,12 +137,22 @@ for (const font of CLOCK_FONTS)
                 gy = Math.floor((y * height) / 228);
               expected[gy * ((width + 7) >> 3) + (gx >> 3)] |= 1 << (gx & 7);
             }
-        });
-        const mask = buildMask(api, width, height, fontIndex(font), date, halo);
+          },
+          showDate,
+        );
+        const mask = buildMask(
+          api,
+          width,
+          height,
+          fontIndex(font),
+          date,
+          halo,
+          showDate,
+        );
         assert.deepEqual(
           mask,
           expected,
-          `${font} ${width} ${halo} ${date.toISOString()}`,
+          `${font} ${width} ${halo} ${showDate} ${date.toISOString()}`,
         );
       }
 
@@ -182,14 +206,66 @@ for (const [engine, width] of [
     }
   const a = { data: new Uint8ClampedArray(200 * 228 * 4) };
   const b = { data: new Uint8ClampedArray(200 * 228 * 4) };
-  wasm.render(a, 'green', true, true);
-  float.render(b, 'green', true, true);
-  let differing = 0;
-  for (let i = 0; i < a.data.length; i += 4)
-    differing += a.data[i] !== b.data[i] || a.data[i + 1] !== b.data[i + 1];
-  assert(differing / (200 * 228) < 0.01, `${differing} pixels differ`);
+  for (const { id } of PALETTES) {
+    wasm.render(a, id, true, true);
+    float.render(b, id, true, true);
+    let differing = 0;
+    for (let i = 0; i < a.data.length; i += 4)
+      differing +=
+        a.data[i] !== b.data[i] ||
+        a.data[i + 1] !== b.data[i + 1] ||
+        a.data[i + 2] !== b.data[i + 2];
+    assert(differing / (200 * 228) < 0.01, `${id}: ${differing} pixels differ`);
+  }
   wasm.dispose();
 }
+
 console.log(
   'Clock masks: core glyphs equal the JSON glyphs for both fonts, mask levels agree and B stays 0 in masked cells',
+);
+
+// Every pixel of the core's nearest rendering is the lib/palettes.ts color
+// of the covering cell's B, for every palette, quantized or not, and the
+// custom palette takes the stops of setPalette.
+{
+  const sim = new WasmSimulation(api, 3, 42);
+  sim.step(params, 300);
+  const out = { data: new Uint8ClampedArray(200 * 228 * 4) };
+  const check = (palette, quantize, custom) => {
+    sim.render(out, palette, quantize, false);
+    for (let y = 0; y < 228; y++)
+      for (let x = 0; x < 200; x++) {
+        const value =
+          sim.get(Math.floor((x * 120) / 200), Math.floor((y * 136) / 228), 1) *
+          VALUE_ONE;
+        const expected = paletteColor(palette, value, quantize, custom);
+        const i = (y * 200 + x) * 4;
+        assert.deepEqual(
+          [out.data[i], out.data[i + 1], out.data[i + 2], out.data[i + 3]],
+          [...expected, 255],
+          `palette ${palette} quantize ${quantize} at ${x},${y}`,
+        );
+      }
+  };
+  for (let palette = 0; palette < PALETTE_CUSTOM; palette++)
+    for (const quantize of [false, true]) check(palette, quantize);
+  check(PALETTE_CUSTOM, true, PALETTES[0].stops);
+  const custom = [
+    [255, 0, 0],
+    [0, 255, 0],
+    [0, 0, 255],
+    [255, 255, 255],
+    [12, 34, 56],
+  ];
+  sim.setPalette(custom);
+  for (const quantize of [false, true]) check(PALETTE_CUSTOM, quantize, custom);
+  assert.throws(() => sim.setPalette([[1, 2, 3]]));
+  assert.throws(() => sim.setPalette(Array(9).fill([1, 2, 3])));
+  check(PALETTE_CUSTOM, true, custom);
+  assert.throws(() => sim.render(out, PALETTE_COUNT, true));
+  assert.throws(() => sim.render(out, 'unknown', true));
+  sim.dispose();
+}
+console.log(
+  `Palettes: ${PALETTE_COUNT - 1} built-in palettes and the custom stops equal lib/palettes.ts on every pixel`,
 );
