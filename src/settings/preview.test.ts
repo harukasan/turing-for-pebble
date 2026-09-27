@@ -78,7 +78,7 @@ test("the preview runs the watch's field", () => {
   assert.equal(hashOf(stripes), golden(0, 1));
   assert.equal(hashOf({ ...stripes, clock: 0 }), golden(undefined, 1));
   const spiral = withPreset(base, presetById("fhn-spiral")!);
-  const vector = "6554,0,8192,410,32768,-9830,32768,-21935,1";
+  const vector = "6554,0,8192,410,32768,-9830,32768,-21936,1";
   assert.equal(hashOf(spiral), golden(0, 1, vector));
   assert.equal(hashOf({ ...spiral, avoid: 0 }), golden(undefined, 1, vector));
 });

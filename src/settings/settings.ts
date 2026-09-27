@@ -17,6 +17,7 @@ import {
   parameterOrder,
   parameterVector,
   parametersFromVector,
+  restingPoint,
   presetParameters,
   vectorValid,
 } from "../../lib/presets.ts";
@@ -163,7 +164,18 @@ export function validate(value: unknown): WatchSettings | null {
   for (const key of FIXED_KEYS)
     if (settings[key] < settingMin(key) || settings[key] > SETTING_MAX[key])
       return null;
-  return settings;
+  return withRest(settings);
+}
+
+/** Settings whose FitzHugh–Nagumo rest is the resting point of their k and
+ * av (restingPoint of lib/presets.ts), as the page and the watch use it.
+ * Settings of another model are returned as they are. */
+export function withRest(settings: WatchSettings): WatchSettings {
+  if (modelOf(settings) !== "fhn") return settings;
+  const at = (key: string) => settings[paramKey("fhn", key)];
+  const rest =
+    Math.round(restingPoint(at("k") / Q15, at("av") / Q15) * Q15) + 0;
+  return { ...settings, [paramKey("fhn", "rest")]: rest };
 }
 
 /** The names of the Gray-Scott coefficients before the model, which a

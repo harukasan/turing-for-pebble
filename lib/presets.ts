@@ -71,6 +71,37 @@ export function parametersFromVector(
   return { model, ...params } as unknown as Parameters;
 }
 
+/** The resting point of FitzHugh–Nagumo, the u of the uniform equilibrium:
+ * the root of u − u³ − u / av + k = 0, where v = u / av. For 0 < av ≤ 1 the
+ * left side decreases in u, so the root is unique, and bisection over
+ * [−2, 2], the stored range, finds it. With av = 0 the v equation forces
+ * u = 0. rest is the initial field, the value held under the digits, and
+ * the target of the pull toward them, so it is always this root rather
+ * than a free parameter. */
+export function restingPoint(k: number, av: number) {
+  if (av <= 0) return 0;
+  const f = (u: number) => u - u * u * u - u / av + k;
+  let low = -2,
+    high = 2;
+  if (f(low) <= 0) return low;
+  if (f(high) >= 0) return high;
+  for (let i = 0; i < 60; i++) {
+    const middle = (low + high) / 2;
+    const value = f(middle);
+    if (value === 0) return middle;
+    if (value > 0) low = middle;
+    else high = middle;
+  }
+  return (low + high) / 2;
+}
+
+/** FitzHugh–Nagumo parameters with rest at the resting point of their k
+ * and av, and any other parameters as they are. */
+export const withRestingPoint = (params: Parameters): Parameters =>
+  params.model === "fhn"
+    ? { ...params, rest: restingPoint(params.k, params.av) }
+    : params;
+
 export const presets: Preset[] = [
   {
     id: "maze",
@@ -133,7 +164,7 @@ export const presets: Preset[] = [
     av: 0.6,
     k: 0,
     dt: 1,
-    rest: 0,
+    rest: restingPoint(0, 0.6),
     init: 0,
   },
   {
@@ -147,7 +178,7 @@ export const presets: Preset[] = [
     av: 0.6,
     k: -0.22,
     dt: 1,
-    rest: -0.2925,
+    rest: restingPoint(-0.22, 0.6),
     init: 0,
   },
   {
@@ -161,7 +192,7 @@ export const presets: Preset[] = [
     av: 1,
     k: -0.3,
     dt: 1,
-    rest: -0.6694,
+    rest: restingPoint(-0.3, 1),
     init: 1,
   },
 ];
@@ -195,7 +226,8 @@ export function parameterVector(params: Parameters): number[] {
   const vector: number[] = parameterOrder[params.model].map((key) =>
     INTEGER_PARAMETERS.has(key)
       ? Math.round(values[key])
-      : Math.round(values[key] * 32768)
+      : // + 0 turns a rounded -0 into 0.
+        Math.round(values[key] * 32768) + 0
   );
   while (vector.length < RD_PARAM_MAX) vector.push(0);
   return vector;

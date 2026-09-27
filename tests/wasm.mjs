@@ -115,7 +115,7 @@ for (const [model, mode] of cases) {
 // The spiral preset starts from the cut wave (init 1) instead of the disks,
 // so its field is checked against the native build with the same vector.
 {
-  const spiral = [6554, 0, 8192, 410, 32768, -9830, 32768, -21935, 1];
+  const spiral = [6554, 0, 8192, 410, 32768, -9830, 32768, -21936, 1];
   const buffer = e.malloc(spiral.length * 4);
   new Int32Array(e.memory.buffer, buffer, spiral.length).set(spiral);
   const vector = 'p=' + spiral.join(',');
@@ -159,7 +159,7 @@ const values = (list) => {
   return vector;
 };
 // fhn-hex of lib/presets.ts.
-const hex = [1311, 32768, 860, 2150, 19661, -7209, 32768, -9585, 0];
+const hex = [1311, 32768, 860, 2150, 19661, -7209, 32768, -9584, 0];
 const linear = e.memory.buffer.byteLength;
 for (let i = 0; i < 300; i++) {
   const mode = i % 4,

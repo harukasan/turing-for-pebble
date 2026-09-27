@@ -33,6 +33,7 @@ import {
   withModel,
   withPreset,
   withVector,
+  withRest,
   fromFileJson,
   toFileJson,
 } from "./settings.ts";
@@ -266,4 +267,16 @@ test("settings files round-trip, take the page's bare JSON, and read version 1",
 test("the color picker offers the 64 watch colors", () => {
   assert.equal(new Set(PEBBLE_COLORS.map((c) => c.join())).size, 64);
   assert(PEBBLE_COLORS.flat().every((c) => [0, 85, 170, 255].includes(c)));
+});
+
+test("FitzHugh–Nagumo settings carry the resting point of their k and av", () => {
+  const hex = withPreset(DEFAULT_SETTINGS, presetById("fhn-hex")!);
+  // A different k moves rest with it, here the rest entry p7 from p5.
+  const moved = withRest({ ...hex, p5: q15(-0.1) });
+  assert.notEqual(moved.p7, hex.p7);
+  assert.deepEqual(withRest(moved), moved);
+  // Imported settings get the resting point, whatever rest they carried.
+  assert.deepEqual(validate({ ...hex, p7: 1000 }), hex);
+  // Gray–Scott settings are left as they are.
+  assert.equal(withRest(DEFAULT_SETTINGS), DEFAULT_SETTINGS);
 });

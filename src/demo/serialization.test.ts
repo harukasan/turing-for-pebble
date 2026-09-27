@@ -163,7 +163,7 @@ test("FitzHugh-Nagumo settings record the model and the folded values", () => {
     av: 19661 / 32768,
     k: (Math.floor((-7209 + 2) / 4) * 4) / 32768,
     dt: 1,
-    rest: (Math.floor((-9585 + 2) / 4) * 4) / 32768,
+    rest: (Math.floor((-9584 + 2) / 4) * 4) / 32768,
     init: 0,
   });
   assert.match(
@@ -178,7 +178,7 @@ test("config.h carries the FitzHugh-Nagumo model and its nine parameters", () =>
   assert.match(header, /#define RD_DEFAULT_MODEL 1\n/);
   assert.match(
     header,
-    /#define RD_DEFAULT_PARAMS 6554, 0, 8192, 410, 32768, -9830, 32768, -21935, 1\n/
+    /#define RD_DEFAULT_PARAMS 6554, 0, 8192, 410, 32768, -9830, 32768, -21936, 1\n/
   );
   // A build of another mode, or folded to the other model, stops at a guard.
   assert.match(

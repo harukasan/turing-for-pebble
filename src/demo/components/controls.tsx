@@ -22,7 +22,6 @@ export const labels: { [M in Model]: Record<SliderKey<M>, string> } = {
     av: "av / v の減衰",
     k: "k / u の偏り",
     dt: "dt / 時間刻み",
-    rest: "rest / u の安静値",
   },
 };
 

@@ -5227,7 +5227,7 @@
         "av": 0.6,
         "k": 0,
         "dt": 1,
-        "rest": 0,
+        "rest": -1.734723475976807e-18,
         "init": 0
       },
       "effectiveParameters": {
@@ -5367,7 +5367,7 @@
         "av": 0.6,
         "k": 0,
         "dt": 1,
-        "rest": 0,
+        "rest": -1.734723475976807e-18,
         "init": 0
       },
       "effectiveParameters": {
@@ -5507,7 +5507,7 @@
         "av": 0.6,
         "k": -0.22,
         "dt": 1,
-        "rest": -0.2925,
+        "rest": -0.292472703550252,
         "init": 0
       },
       "effectiveParameters": {
@@ -5647,7 +5647,7 @@
         "av": 0.6,
         "k": -0.22,
         "dt": 1,
-        "rest": -0.2925,
+        "rest": -0.292472703550252,
         "init": 0
       },
       "effectiveParameters": {
@@ -5787,7 +5787,7 @@
         "av": 1,
         "k": -0.3,
         "dt": 1,
-        "rest": -0.6694,
+        "rest": -0.6694329500821696,
         "init": 1
       },
       "effectiveParameters": {
@@ -5927,7 +5927,7 @@
         "av": 1,
         "k": -0.3,
         "dt": 1,
-        "rest": -0.6694,
+        "rest": -0.6694329500821696,
         "init": 1
       },
       "effectiveParameters": {
@@ -6067,7 +6067,7 @@
         "av": 0.6,
         "k": 0,
         "dt": 1,
-        "rest": 0,
+        "rest": -1.734723475976807e-18,
         "init": 0
       },
       "effectiveParameters": {
@@ -6207,7 +6207,7 @@
         "av": 0.6,
         "k": 0,
         "dt": 1,
-        "rest": 0,
+        "rest": -1.734723475976807e-18,
         "init": 0
       },
       "effectiveParameters": {
@@ -6347,7 +6347,7 @@
         "av": 0.6,
         "k": -0.22,
         "dt": 1,
-        "rest": -0.2925,
+        "rest": -0.292472703550252,
         "init": 0
       },
       "effectiveParameters": {
@@ -6487,7 +6487,7 @@
         "av": 0.6,
         "k": -0.22,
         "dt": 1,
-        "rest": -0.2925,
+        "rest": -0.292472703550252,
         "init": 0
       },
       "effectiveParameters": {
@@ -6627,7 +6627,7 @@
         "av": 1,
         "k": -0.3,
         "dt": 1,
-        "rest": -0.6694,
+        "rest": -0.6694329500821696,
         "init": 1
       },
       "effectiveParameters": {
@@ -6767,7 +6767,7 @@
         "av": 1,
         "k": -0.3,
         "dt": 1,
-        "rest": -0.6694,
+        "rest": -0.6694329500821696,
         "init": 1
       },
       "effectiveParameters": {

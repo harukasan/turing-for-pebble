@@ -5,6 +5,9 @@ import { FloatSimulation } from "./float-simulation.ts";
 import {
   presetById,
   presetParameters,
+  presets,
+  restingPoint,
+  withRestingPoint,
   type FhnParameters,
 } from "./simulation.ts";
 
@@ -118,4 +121,23 @@ void test("masked cells hold u at rest", () => {
 void test("parameters of the other model are rejected", () => {
   const s = new FloatSimulation(50, 42, preset("fhn-stripes"));
   assert.throws(() => s.step(presetParameters(presetById("maze")!)));
+});
+
+test("rest is the resting point of k and av", () => {
+  const residual = (u: number, k: number, av: number) =>
+    u - u * u * u - u / av + k;
+  for (const av of [0.05, 0.3, 0.6, 1])
+    for (const k of [-1, -0.3, -0.22, 0, 0.22, 1]) {
+      const u = restingPoint(k, av);
+      assert(Math.abs(residual(u, k, av)) < 1e-9, `${k} ${av}`);
+      // The root is unique: the left side decreases for 0 < av <= 1.
+      assert(residual(u - 0.01, k, av) > 0 && residual(u + 0.01, k, av) < 0);
+    }
+  assert.equal(restingPoint(0.5, 0), 0);
+  for (const preset of presets)
+    if (preset.model === "fhn")
+      assert.equal(preset.rest, restingPoint(preset.k, preset.av), preset.id);
+  const moved = withRestingPoint({ ...preset("fhn-hex"), k: -0.1 });
+  assert(moved.model === "fhn");
+  assert.equal(moved.rest, restingPoint(-0.1, 0.6));
 });

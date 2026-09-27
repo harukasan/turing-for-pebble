@@ -43,7 +43,12 @@ export type ParameterKey<M extends Model = Model> = KeysOf<
 >;
 
 /** The parameters shown as sliders: every one but the initial condition. */
-export type SliderKey<M extends Model> = Exclude<ParameterKey<M>, "init">;
+/** The parameters shown as sliders: all but the initial condition and
+ * rest, the resting point that k and av determine. */
+export type SliderKey<M extends Model> = Exclude<
+  ParameterKey<M>,
+  "init" | "rest"
+>;
 
 /** Slider range and step of each coefficient of each model, shared by the
  * demo and the watch settings page. */
@@ -65,7 +70,6 @@ export const parameterBounds: {
     av: [0, 1, 0.01],
     k: [-1, 1, 0.01],
     dt: [0.1, 1, 0.1],
-    rest: [-1, 1, 0.0001],
   },
 };
 

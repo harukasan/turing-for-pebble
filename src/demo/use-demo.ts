@@ -3,6 +3,7 @@ import {
   presetById,
   presetParameters,
   presets,
+  withRestingPoint,
   type Parameters,
 } from "../../lib/simulation";
 import {
@@ -255,11 +256,14 @@ export function useDemo(assetBaseUrl: string) {
   function updateParam(key: ParameterKey, value: number) {
     setOptions((current) => ({
       ...current,
-      params: { ...current.params, [key]: value } as Parameters,
+      params: withRestingPoint({
+        ...current.params,
+        [key]: value,
+      } as Parameters),
     }));
     // The FitzHugh-Nagumo initial field is u = rest and v = rest / av, with
-    // disks or the cut wave by init.
-    if (key === "init" || key === "rest" || key === "av") {
+    // disks or the cut wave by init, and rest follows k and av.
+    if (key === "init" || key === "k" || key === "av") {
       clearTimeout(initialReset.current);
       initialReset.current = window.setTimeout(requestReset, 300);
     }

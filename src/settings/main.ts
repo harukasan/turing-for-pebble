@@ -45,6 +45,7 @@ import {
   valueOf,
   withModel,
   withPreset,
+  withRest,
   type WatchSettings,
 } from "./settings.ts";
 
@@ -291,6 +292,8 @@ let rerun = 0;
 /** A change of coefficients, font, or clock runs the preview again after a
  * short pause, a palette change only recolors it. */
 function changed(kind: "field" | "palette") {
+  // rest follows k and av.
+  Object.assign(settings, withRest(settings));
   update();
   if (kind === "palette") {
     view?.recolor({ ...settings });
@@ -357,7 +360,6 @@ const sliders = [
   slider(fhnSliders, "fhn", "av", "av", 2, field),
   slider(fhnSliders, "fhn", "k", "k", 3, field),
   slider(fhnSliders, "fhn", "dt", "Dt", 2, field),
-  slider(fhnSliders, "fhn", "rest", "rest", 4, field),
 ];
 const initial = element("initial");
 const setInit = chips(

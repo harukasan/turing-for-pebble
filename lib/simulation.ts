@@ -32,6 +32,8 @@ export {
   parameterOrder,
   parameterValues,
   parameterVector,
+  restingPoint,
+  withRestingPoint,
   type Preset,
 } from "./presets.ts";
 export class Simulation {

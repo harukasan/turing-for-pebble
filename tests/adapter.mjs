@@ -392,7 +392,7 @@ for (const [model, id] of [
 {
   const q = effective(hex, 3);
   assert.equal(q.k, (Math.floor((-7209 + 2) / 4) * 4) / 32768);
-  assert.equal(q.rest, (Math.floor((-9585 + 2) / 4) * 4) / 32768);
+  assert.equal(q.rest, (Math.floor((-9584 + 2) / 4) * 4) / 32768);
   assert.equal(q.du, (Math.round(1311 / 20) * 20) / 32768);
   assert.equal(q.init, 0);
   assert.equal(q.model, 'fhn');
