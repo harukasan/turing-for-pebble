@@ -1,14 +1,22 @@
 /** @jsxImportSource react */
 import { useId, type PointerEvent } from "react";
 import { PALETTE_IDS, PALETTES } from "../../../lib/palettes";
-import { presets, type Parameters } from "../../../lib/simulation";
-import { isFloat, type ClockFace } from "../../core";
+import { presets } from "../../../lib/simulation";
+import {
+  engineSupportsModel,
+  isFloat,
+  models,
+  type ClockFace,
+  type Model,
+  type ParameterKey,
+} from "../../core";
 import { makeSettings } from "../serialization";
 import { useDemo } from "../use-demo";
 import { Explanation } from "./explanation";
 import {
   bounds,
   engines,
+  labels,
   NumberSlider,
   SwitchControl,
   Selector,
@@ -134,34 +142,48 @@ export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
             <h2 className={s.heading} id="pattern-title">
               パターン
             </h2>
+            <Selector
+              name="model"
+              label="モデル"
+              value={options.params.model}
+              choices={models}
+              onChange={(value) => demo.chooseModel(value as Model)}
+            />
             <div className={s.row}>
-              {presets.map((preset, index) => (
-                <button
-                  key={preset.name}
-                  className={s.button}
-                  type="button"
-                  data-preset={index}
-                  onClick={() => demo.choosePreset(index)}
-                >
-                  {preset.name}
-                </button>
-              ))}
+              {presets
+                .filter((preset) => preset.model === options.params.model)
+                .map((preset) => (
+                  <button
+                    key={preset.id}
+                    className={s.button}
+                    type="button"
+                    data-preset={preset.id}
+                    onClick={() => demo.choosePreset(preset.id)}
+                  >
+                    {preset.name}
+                  </button>
+                ))}
             </div>
-            {(Object.keys(bounds) as (keyof Parameters)[]).map((key) => {
-              const labels: Record<keyof Parameters, string> = {
-                feed: "Feed / A の供給",
-                kill: "Kill / B の除去",
-                da: "Da / A の拡散",
-                db: "Db / B の拡散",
-                dt: "dt / 時間刻み",
-              };
-              const [min, max, step] = bounds[key];
+            {(
+              Object.entries(bounds[options.params.model]) as [
+                ParameterKey,
+                [number, number, number],
+              ][]
+            ).map(([key, [min, max, step]]) => {
+              const values = options.params as unknown as Record<
+                ParameterKey,
+                number
+              >;
+              const names = labels[options.params.model] as Record<
+                ParameterKey,
+                string
+              >;
               return (
                 <NumberSlider
                   key={key}
                   name={key}
-                  label={labels[key]}
-                  value={options.params[key]}
+                  label={names[key]}
+                  value={values[key]}
                   min={min}
                   max={max}
                   step={step}
@@ -169,6 +191,18 @@ export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
                 />
               );
             })}
+            {options.params.model === "fhn" && (
+              <Selector
+                name="init"
+                label="初期条件"
+                value={String(options.params.init)}
+                choices={[
+                  ["0", "円板から育てる"],
+                  ["1", "断ち切った波面"],
+                ]}
+                onChange={(value) => demo.updateParam("init", Number(value))}
+              />
+            )}
           </section>
           <section className={s.panel} aria-labelledby="compute-title">
             <h2 className={s.heading} id="compute-title">
@@ -177,7 +211,13 @@ export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
             <fieldset className={s.radioGroup}>
               <legend className={s.radioLegend}>計算方式</legend>
               {engines.map(([key, label]) => (
-                <label key={key} className={s.radioOption}>
+                <label
+                  key={key}
+                  className={s.radioOption}
+                  aria-disabled={
+                    !engineSupportsModel(key, options.params.model)
+                  }
+                >
                   <input
                     className={s.radioInput}
                     type="radio"
@@ -185,6 +225,7 @@ export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
                     data-option="engine"
                     value={key}
                     checked={options.engine === key}
+                    disabled={!engineSupportsModel(key, options.params.model)}
                     onChange={() => demo.update("engine", key)}
                   />
                   <span>{label}</span>

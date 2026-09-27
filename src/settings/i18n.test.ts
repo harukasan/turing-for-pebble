@@ -12,7 +12,12 @@ test("every language has the same strings and list lengths", () => {
     assert.equal(strings.stopLabels.length, 4);
   }
   for (const lang of LANGS) {
-    assert.equal(STRINGS[lang].presets.length, presets.length);
+    assert.deepEqual(
+      Object.keys(STRINGS[lang].presetNames).sort(),
+      presets.map((preset) => preset.id).sort()
+    );
+    assert.equal(STRINGS[lang].models.length, 2);
+    assert.equal(STRINGS[lang].inits.length, 2);
     assert.equal(STRINGS[lang].widths.length, DIFFUSION_PRESETS.length);
     assert.equal(STRINGS[lang].faces.length, 2);
   }

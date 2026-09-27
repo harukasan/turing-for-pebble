@@ -1,6 +1,6 @@
 # Turing Pattern Watchface for Pebble
 
-A local Gray–Scott pattern explorer and Emery watchface sharing one fixed-point C core. The watchface's pattern, palette, and clock are set from the Pebble app through a settings page with a live preview of the face.
+A local reaction-diffusion pattern explorer and Emery watchface sharing one fixed-point C core, with the Gray–Scott model and, in its 16-bit Q15 modes, the FitzHugh–Nagumo model for Turing stripes and spots and rotating spirals. The watchface's pattern, palette, and clock are set from the Pebble app through a settings page with a live preview of the face.
 
 ```sh
 mise trust

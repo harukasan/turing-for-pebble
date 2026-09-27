@@ -1,6 +1,6 @@
 """Compare the growth of the pattern on the candidate grids.
 
-Usage: python scripts/fill.py [grids|seeds]
+Usage: python scripts/fill.py [grids|seeds] [--presets id,id,...]
 
 Runs tests/fill.c for every configuration, preset, and seed with the LECO
 clock mask installed, writes build/fill/<study>.jsonl, one contact sheet per
@@ -9,9 +9,11 @@ checkpoints, all rendered with interpolation), and prints the first
 checkpoint at which each run is complete. `grids` compares the grids with
 the seeding of rd_init. `seeds` compares disk counts and radius rules on
 the 120 x 136 grid against mode 1. The seeds study reseeds mode 3 in the
-harness, so the core keeps the seeding of rd_init.
+harness, so the core keeps the seeding of rd_init. --presets takes preset
+ids of lib/presets.ts (default maze and thin-line).
 """
 
+import argparse
 import concurrent.futures
 import json
 import subprocess
@@ -38,9 +40,26 @@ STUDIES = {
         '120 192 r4-9': (3, 192, 4, 6),
     },
 }
-STUDY = sys.argv[1] if len(sys.argv) > 1 else 'grids'
+parser = argparse.ArgumentParser()
+parser.add_argument('study', nargs='?', default='grids', choices=list(STUDIES))
+parser.add_argument('--presets', default='maze,thin-line')
+args = parser.parse_args()
+STUDY = args.study
 CONFIGS = STUDIES[STUDY]
-PRESETS = {0: 'maze', 4: 'thin-line'}
+# Preset id -> model number and Q15 parameter vector (scripts/list-presets.mjs).
+ALL_PRESETS = {
+    p['id']: p
+    for p in json.loads(
+        subprocess.check_output(
+            ['node', '--experimental-transform-types', 'scripts/list-presets.mjs'],
+            stderr=subprocess.DEVNULL,
+        )
+    )
+}
+PRESETS = args.presets.split(',')
+unknown = [p for p in PRESETS if p not in ALL_PRESETS]
+if unknown:
+    sys.exit(f'unknown preset ids: {", ".join(unknown)}')
 SEEDS = [42, 1234]
 CHECKPOINTS = [200, 300, 400, 600, 800, 1000, 1250, 1500, 1800]
 # Complete: visible B in nearly every block, and mean B and stripe width
@@ -74,14 +93,16 @@ def prefix(label, preset, seed):
 def run(case):
     label, preset, seed = case
     mode, disks, min_radius, radius_range = CONFIGS[label]
+    model, vector = ALL_PRESETS[preset]['model'], ALL_PRESETS[preset]['q15']
     lines = subprocess.check_output(
-        ['build/fill-run']
-        + [str(v) for v in (mode, preset, seed, disks, min_radius, radius_range)]
+        ['build/fill-run', str(mode), str(model)]
+        + [str(v) for v in vector]
+        + [str(v) for v in (seed, disks, min_radius, radius_range)]
         + [str(prefix(label, preset, seed))]
         + [str(c) for c in CHECKPOINTS],
         text=True,
     )
-    return [json.loads(line) for line in lines.splitlines()]
+    return [{**json.loads(line), 'preset': preset} for line in lines.splitlines()]
 
 
 def complete_at(rows):
@@ -102,7 +123,14 @@ def complete_at(rows):
     return None
 
 
-cases = [(c, p, s) for c in CONFIGS for p in PRESETS for s in SEEDS]
+# FitzHugh-Nagumo (model 1) runs only in the Q15 modes 1 and 3.
+cases = [
+    (c, p, s)
+    for c in CONFIGS
+    for p in PRESETS
+    if ALL_PRESETS[p]['model'] == 0 or CONFIGS[c][0] in (1, 3)
+    for s in SEEDS
+]
 with concurrent.futures.ThreadPoolExecutor() as pool:
     results = dict(zip(cases, pool.map(run, cases)))
 with open(out / f'{STUDY}.jsonl', 'w') as f:
@@ -121,7 +149,7 @@ for preset in PRESETS:
         for row, label in enumerate(CONFIGS):
             top = row * (228 + label_height)
             draw.text((4, top + 100), label, fill='black')
-            for col, r in enumerate(results[(label, preset, seed)]):
+            for col, r in enumerate(results.get((label, preset, seed), [])):
                 left = 110 + col * 200
                 image = Image.open(f'{prefix(label, preset, seed)}-{r["step"]}.ppm')
                 sheet.paste(image, (left, top))
@@ -140,6 +168,6 @@ print('| --- | --- | ---: | ---: | ---: | ---: |')
 for (label, preset, seed), rows in results.items():
     last = rows[-1]
     print(
-        f'| {label} | {PRESETS[preset]} | {seed} | {complete_at(rows) or "-"} '
+        f'| {label} | {preset} | {seed} | {complete_at(rows) or "-"} '
         f'| {last["stripeWidthPx"]:.1f} | {last["hostMsPerStep"]:.2f} |'
     )

@@ -1,19 +1,24 @@
 /*
- * Shared Gray-Scott reaction-diffusion core, numerical definition version 4.
+ * Shared reaction-diffusion core, numerical definition version 5: the
+ * Gray-Scott model in every mode and the FitzHugh-Nagumo model in the Q15
+ * modes.
  *
  * Concentrations are computed in Q24 fixed point (RD_VALUE_ONE is 1.0) and
  * coefficients are Q15 (RD_Q15_ONE is 1.0). Modes 0 and 2 pack both species
  * into one 16-bit word per cell: A as a 7-bit linear code and B as a 9-bit
  * square-root companded code. Modes 1 and 3 store each species as a Q15 word.
- * The Q15 modes step on their codes with 32-bit arithmetic (react_codes),
- * the packed modes decode to Q24 and use 64-bit products (react_cell).
+ * The Q15 modes step on their codes with 32-bit arithmetic (react_codes, and
+ * react_fhn_codes on FitzHugh-Nagumo values x in [-2, 2] stored as the
+ * fraction (x + 2) / 4), the packed modes decode to Q24 and use 64-bit
+ * products (react_cell).
  * Every mode writes with Floyd-Steinberg error diffusion, so the rounding
  * error of each cell is carried into its unwritten neighbors instead of being
  * discarded. The packed codes also dither the rounding threshold so that
  * slow fronts are not pinned by the coarse codes; the Q15 codes are fine
- * enough to round to the nearest code. An optional mask holds B at 0 in its
- * cells and raises the kill rate toward the mask, so the pattern fades out
- * around it. docs/core.md is the numerical contract.
+ * enough to round to the nearest code. An optional mask holds the displayed
+ * species at rest in its cells and damps the pattern toward the mask (a
+ * higher Gray-Scott kill rate, a FitzHugh-Nagumo pull toward rest), so the
+ * pattern fades out around it. docs/core.md is the numerical contract.
  *
  * The step loop is written for an in-order Cortex-M without FPU: one row of
  * Laplacians is computed per pass with the vertical sums shared between
@@ -32,6 +37,34 @@
 #define MODE_PLANES(mode) ((mode) == 1 || (mode) == 3 ? 2 : 1)
 static const uint8_t MODE_WIDTH[MODE_COUNT] = {200, 100, 100, 120};
 
+/* A build that defines RD_MODEL compiles only that model. */
+#ifdef RD_MODEL
+#if RD_MODEL < 0 || RD_MODEL >= RD_MODEL_COUNT
+#error "RD_MODEL must be RD_MODEL_GRAY_SCOTT or RD_MODEL_FHN"
+#endif
+#if defined(RD_MODE) && RD_MODEL == RD_MODEL_FHN && MODE_PLANES(RD_MODE) == 1
+#error "FitzHugh-Nagumo runs only in the Q15 modes 1 and 3"
+#endif
+#endif
+
+/* Indices of the parameter vector of each model. */
+enum { GS_FEED, GS_KILL, GS_DA, GS_DB, GS_DT };
+
+enum {
+  FHN_DU,
+  FHN_DV,
+  FHN_RU,
+  FHN_RV,
+  FHN_AV,
+  FHN_K,
+  FHN_DT,
+  FHN_REST,
+  FHN_INIT
+};
+
+static const uint8_t PARAM_COUNT[RD_MODEL_COUNT] = {RD_GRAY_SCOTT_PARAMS,
+                                                    RD_FHN_PARAMS};
+
 /* 'R', 'D', '1', 0x02: marks an initialized State. */
 #define STATE_MAGIC 0x52443102u
 /* The State is placed on the first 4-byte boundary inside the caller block. */
@@ -43,9 +76,11 @@ static const uint8_t MODE_WIDTH[MODE_COUNT] = {200, 100, 100, 120};
 #define SAVED_ROWS 4
 #define BYTES_PER_PIXEL 4
 
-/* Coefficients applied by rd_init until rd_params is called (Q15). */
-#define DEFAULT_FEED 950
-#define DEFAULT_KILL 1868
+/* Parameters of rd_init_model without a vector: the maze and fhn-stripes
+ * presets of lib/presets.ts, which tests/adapter.mjs compares. */
+static const int DEFAULT_PARAMS[RD_MODEL_COUNT][RD_PARAM_MAX] = {
+    {950, 1868, RD_Q15_ONE, RD_Q15_ONE / 2, RD_Q15_ONE},
+    {1638, RD_Q15_ONE, 492, 1229, 19661, 0, RD_Q15_ONE, 0, 0}};
 
 /* Initial seeding: disks placed by a 32-bit LCG in display coordinates. */
 #define INITIAL_DISKS 24
@@ -84,6 +119,21 @@ static const uint8_t MODE_WIDTH[MODE_COUNT] = {200, 100, 100, 120};
 #define Q15_FULL_A RD_Q15_ONE
 #define Q15_SEED_A (RD_Q15_ONE / 2)
 #define Q15_SEED_B (RD_Q15_ONE / 4)
+
+/* FitzHugh-Nagumo storage: the Q15 code c holds x = 4 c / 2^15 - 2, so a
+ * code minus FHN_ZERO is x in Q13. A seed adds 0.5 to the resting u. */
+#define FHN_ZERO (RD_Q15_ONE / 2)
+#define FHN_Q13_BITS 13
+#define FHN_Q13_ONE (1 << FHN_Q13_BITS)
+#define FHN_SEED_OFFSET (FHN_Q13_ONE / 2)
+/* The broken wave of init 1, in display coordinates: u = 1 in the rows
+ * [WAVE_TOP, WAVE_TOP + WAVE_EXCITED) and v = 1 in the WAVE_REFRACTORY rows
+ * above them, both left of column WAVE_END, so the wave runs down and
+ * curls up at its free ends (lib/fhn-simulation.ts has the same). */
+#define WAVE_TOP 190
+#define WAVE_EXCITED 8
+#define WAVE_REFRACTORY 16
+#define WAVE_END 100
 
 #define MAX_STEPS_PER_CALL 1000000
 
@@ -137,11 +187,14 @@ static const uint8_t MODE_WIDTH[MODE_COUNT] = {200, 100, 100, 120};
 #define ALWAYS_INLINE inline
 #endif
 
-/* Rendering: the B concentration times DISPLAY_GAIN, clamped to 1.0, selects
- * a color between the palette endpoints. Monochrome switches on at
+/* Rendering: the Q24 value of the displayed species minus DISPLAY_OFFSET,
+ * times DISPLAY_GAIN and clamped to [0, 1.0], selects a color between the
+ * palette endpoints: 3 B for Gray-Scott, and u = 4 (s - 1/2) of the stored
+ * fraction s for FitzHugh-Nagumo. Monochrome switches on at
  * MONO_THRESHOLD_PERCENT. Quantized output rounds each channel to a multiple
  * of RGB2_STEP, the RGB2 level spacing. */
-#define DISPLAY_GAIN 3
+static const int32_t DISPLAY_OFFSET[RD_MODEL_COUNT] = {0, RD_VALUE_ONE / 2};
+static const int32_t DISPLAY_GAIN[RD_MODEL_COUNT] = {3, 4};
 #define MONO_THRESHOLD_PERCENT 45
 #define RGB2_STEP 85
 
@@ -226,7 +279,9 @@ static const uint16_t ROOT_TABLE[1 << ROOT_INDEX_BITS] = {
  */
 typedef struct {
   uint32_t magic, seed, step;
-  int width, height, packed, feed, kill, da, db, dt;
+  int width, height, packed, model;
+  /* The parameter vector of the model, zero beyond its length. */
+  int params[RD_PARAM_MAX];
   /* Palette the display lookup table was built for, or NO_PALETTE, and
    * the same for the value table of the packed modes. */
   int lut_palette, value_lut_palette;
@@ -253,14 +308,23 @@ typedef struct {
 } Shares;
 
 typedef struct {
-  int packed, width, unit_dt;
+  int packed, model, width, unit_dt;
   int32_t feed, decay, da, db, dt;
-  /* Q15 modes: round(da / 20) and round(db / 20), so coefficient times the
-   * 20-fold Laplacian sum is the Q30 rate term. */
+  /* Q15 modes: the diffusion coefficient of plane 0 (Gray-Scott da,
+   * FitzHugh-Nagumo dv) and of plane 1 (db, du), each divided by 20 and
+   * rounded, so coefficient times the 20-fold Laplacian sum is the Q30
+   * rate term. */
   int32_t fold_da, fold_db;
   /* feed + kill for each mask level: the kill rises linearly from the
    * State's kill at level RD_MASK_RAMP to RD_MASK_KILL at level 0. */
   int32_t level_decay[RD_MASK_RAMP + 1];
+  /* FitzHugh-Nagumo: the reaction coefficients, k and rest in Q13, and the
+   * pull toward rest of each mask level, rising linearly from 0 at level
+   * RD_MASK_RAMP to RD_MASK_PULL at level 0. */
+  int32_t ru, rv, av, k13, rest13;
+  int32_t level_pull[RD_MASK_RAMP + 1];
+  /* The code the displayed species is held at in a masked cell. */
+  int32_t masked_code;
   /* Hash of seed and step, mixed into every cell's dither. */
   uint32_t step_salt;
   int32_t *restrict residual[SPECIES_COUNT];
@@ -303,6 +367,55 @@ static inline int ctx_packed(const StepContext *ctx) {
 
 static inline int planes(const State *state) {
   return is_packed(state) ? 1 : SPECIES_COUNT;
+}
+
+/* Whether the build runs a model: the one it is folded to (RD_MODEL), and
+ * in a packed watch build (RD_MODE 0 or 2) only Gray-Scott. */
+static int model_supported(int model) {
+#ifdef RD_MODEL
+  return model == RD_MODEL;
+#elif defined(RD_MODE)
+  return MODE_PLANES(RD_MODE) == 1 ? model == RD_MODEL_GRAY_SCOTT
+                                   : model >= 0 && model < RD_MODEL_COUNT;
+#else
+  return model >= 0 && model < RD_MODEL_COUNT;
+#endif
+}
+
+/* The model of a state or step. A build that defines RD_MODEL, or a packed
+ * mode, which runs only Gray-Scott, folds it to a constant. */
+static inline int state_model(const State *state) {
+#if defined(RD_MODEL)
+  (void)state;
+  return RD_MODEL;
+#elif defined(RD_MODE)
+  return MODE_PLANES(RD_MODE) == 1 ? RD_MODEL_GRAY_SCOTT : state->model;
+#else
+  return state->model;
+#endif
+}
+
+static inline int ctx_model(const StepContext *ctx) {
+#if defined(RD_MODEL)
+  (void)ctx;
+  return RD_MODEL;
+#elif defined(RD_MODE)
+  return MODE_PLANES(RD_MODE) == 1 ? RD_MODEL_GRAY_SCOTT : ctx->model;
+#else
+  return ctx->model;
+#endif
+}
+
+/* A Q15 FitzHugh-Nagumo coefficient (k or rest) in Q13, rounded half up
+ * with an arithmetic shift. */
+static inline int32_t fhn_q13(int value) { return (value + 2) >> 2; }
+
+/* The code of the displayed species at rest, which masked cells hold:
+ * B = 0, or u = rest. */
+static unsigned rest_code(const State *state) {
+  return state_model(state) == RD_MODEL_FHN
+             ? (unsigned)(FHN_ZERO + fhn_q13(state->params[FHN_REST]))
+             : 0;
 }
 
 /* Mask bytes: one level per cell. */
@@ -402,15 +515,23 @@ static uint8_t *mask_levels(State *state) {
   return (uint8_t *)(interpolation_row(state) + state->width);
 }
 
-/* Mask updates run at launch and on clock changes, outside the step loop,
- * so optimizing GCC builds, the watch builds among them, compile them for
- * size. -O0 builds keep them unoptimized as the reference of
- * scripts/check-optimization.sh, and clang ignores the GCC attribute. */
+/* Code that runs only at initialization, on new parameters, and on clock
+ * changes, outside the step loop: optimizing GCC builds, the watch builds
+ * among them, compile it for size, and the parameter check is kept as one
+ * copy instead of inlined into each caller. -O0 builds keep it unoptimized
+ * as the reference of scripts/check-optimization.sh, and clang ignores the
+ * GCC attributes. */
 #if defined(__OPTIMIZE__) && defined(__GNUC__) && !defined(__clang__)
-#define MASK_SIZE_OPT __attribute__((optimize("Os")))
+#define SIZE_OPT __attribute__((optimize("Os")))
+#define NOINLINE __attribute__((noinline))
 #else
-#define MASK_SIZE_OPT
+#define SIZE_OPT
+#define NOINLINE
 #endif
+
+/* Mask updates run at launch and on clock changes, outside the step loop,
+ * so they are compiled for size (SIZE_OPT). */
+#define MASK_SIZE_OPT SIZE_OPT
 
 /* Horizontal distance of every cell of grid row r to the nearest masked
  * cell of that row, capped at RD_MASK_RAMP; RD_MASK_RAMP outside the grid.
@@ -638,19 +759,61 @@ static State *checked_state(void *handle) {
   return state && state->magic == STATE_MAGIC ? state : NULL;
 }
 
-int rd_params(void *handle, int feed, int kill, int da, int db, int dt) {
+/* Whether values is a valid parameter vector of the model: count entries,
+ * each within the range of its parameter (core/rd.h). */
+static SIZE_OPT NOINLINE int params_valid(int model, const int *values,
+                                          int count) {
+  if (!values || !model_supported(model) || count != PARAM_COUNT[model]) {
+    return 0;
+  }
+  for (int i = 0; i < count; i++) {
+    int low = 0, high = RD_Q15_ONE;
+    if (model == RD_MODEL_FHN) {
+      if (i == FHN_K || i == FHN_REST) {
+        low = -RD_Q15_ONE;
+      } else if (i == FHN_RU) {
+        high = RD_FHN_RU_MAX;
+      } else if (i == FHN_INIT) {
+        high = 1;
+      }
+    }
+    if (values[i] < low || values[i] > high) {
+      return 0;
+    }
+  }
+  return 1;
+}
+
+SIZE_OPT int rd_set_params(void *handle, const int *values, int count) {
   State *state = checked_state(handle);
-  if (!state || feed < 0 || feed > RD_Q15_ONE || kill < 0 ||
-      kill > RD_Q15_ONE || da < 0 || da > RD_Q15_ONE || db < 0 ||
-      db > RD_Q15_ONE || dt < 0 || dt > RD_Q15_ONE) {
+  if (!state || !params_valid(state_model(state), values, count)) {
     return -1;
   }
-  state->feed = feed;
-  state->kill = kill;
-  state->da = da;
-  state->db = db;
-  state->dt = dt;
+  memcpy(state->params, values, (size_t)count * sizeof(int));
   return 0;
+}
+
+SIZE_OPT int rd_params(void *handle, int feed, int kill, int da, int db,
+                       int dt) {
+  State *state = checked_state(handle);
+  if (!state || state_model(state) != RD_MODEL_GRAY_SCOTT) {
+    return -1;
+  }
+  const int values[RD_GRAY_SCOTT_PARAMS] = {feed, kill, da, db, dt};
+  return rd_set_params(state, values, RD_GRAY_SCOTT_PARAMS);
+}
+
+int rd_model(void *handle) {
+  State *state = checked_state(handle);
+  return state ? state_model(state) : -1;
+}
+
+SIZE_OPT int rd_param_count(int model) {
+  return model >= 0 && model < RD_MODEL_COUNT ? PARAM_COUNT[model] : -1;
+}
+
+SIZE_OPT int rd_check_params(int model, const int *values, int count) {
+  return params_valid(model, values, count) ? 0 : -1;
 }
 
 int rd_palette(void *handle, const uint8_t *rgb, int count) {
@@ -680,26 +843,32 @@ static int wrap_delta(int delta, int size) {
   return delta;
 }
 
-/* Seed a disk given in display coordinates: A = 0.5 and B = 0.25 inside it,
- * except in masked cells. Each grid cell samples the display coordinate it
- * covers. */
-int rd_seed(void *handle, int x, int y, int radius) {
+/* Seed a disk given in display coordinates, except in masked cells: A = 0.5
+ * and B = 0.25 inside it, or u = rest + 0.5 with v unchanged. Each grid
+ * cell samples the display coordinate it covers. */
+SIZE_OPT int rd_seed(void *handle, int x, int y, int radius) {
   State *state = checked_state(handle);
   if (!state || x < 0 || x >= RD_DISPLAY_WIDTH || y < 0 ||
       y >= RD_DISPLAY_HEIGHT || radius < 1 || radius > MAX_SEED_RADIUS) {
     return -1;
   }
-  int packed = is_packed(state);
+  int packed = is_packed(state), fhn = state_model(state) == RD_MODEL_FHN;
+  unsigned seed_u = rest_code(state) + FHN_SEED_OFFSET;
   for (int grid_y = 0; grid_y < state->height; grid_y++) {
     for (int grid_x = 0; grid_x < state->width; grid_x++) {
       int display_x = grid_x * RD_DISPLAY_WIDTH / state->width;
       int display_y = grid_y * RD_DISPLAY_HEIGHT / state->height;
       int dx = wrap_delta(display_x - x, RD_DISPLAY_WIDTH);
       int dy = wrap_delta(display_y - y, RD_DISPLAY_HEIGHT);
-      if (dx * dx + dy * dy <= radius * radius &&
-          !cell_masked(state, grid_x, grid_y)) {
-        store_codes(state, grid_y * state->width + grid_x,
-                    packed ? PACKED_SEED_A : Q15_SEED_A,
+      if (dx * dx + dy * dy > radius * radius ||
+          cell_masked(state, grid_x, grid_y)) {
+        continue;
+      }
+      int cell_index = grid_y * state->width + grid_x;
+      if (fhn) {
+        plane(state, RD_SPECIES_B)[cell_index] = (uint16_t)seed_u;
+      } else {
+        store_codes(state, cell_index, packed ? PACKED_SEED_A : Q15_SEED_A,
                     packed ? PACKED_SEED_B : Q15_SEED_B);
       }
     }
@@ -733,11 +902,58 @@ static void axis_sample(int p, int n, int size, int *index, int *weight) {
   *index = (cell + n) % n;
 }
 
-/* Initialize the block to the equilibrium A = 1, B = 0, then seed
- * INITIAL_DISKS disks at LCG-chosen display positions and radii. */
-void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
+/* The resting field of the model everywhere: A = 1 and B = 0, or u = rest
+ * and v = rest / av (0 if av is 0) with one integer division, both clamped
+ * to the codes. */
+static SIZE_OPT void fill_rest(State *state) {
+  unsigned code_a = is_packed(state) ? PACKED_FULL_A : Q15_FULL_A, code_b = 0;
+  if (state_model(state) == RD_MODEL_FHN) {
+    int32_t av = state->params[FHN_AV];
+    /* v = rest / av, which balances the v equation, or k with av = 0,
+     * where the v equation forces u = 0 and the u equation then gives
+     * v = k. */
+    int32_t v13 = av ? fhn_q13(state->params[FHN_REST]) * RD_Q15_ONE / av
+                     : fhn_q13(state->params[FHN_K]);
+    v13 = v13 < -FHN_ZERO ? -FHN_ZERO : v13 > FHN_ZERO ? FHN_ZERO : v13;
+    code_a = (unsigned)(FHN_ZERO + v13);
+    code_b = rest_code(state);
+  }
+  for (int i = 0; i < state->width * state->height; i++) {
+    store_codes(state, i, code_a, code_b);
+  }
+}
+
+/* The broken wave of init 1 over the resting field: u = 1 in the excited
+ * band and v = 1 in the refractory band above it, each grid cell sampling
+ * the display coordinate it covers. No LCG is used. */
+static SIZE_OPT void seed_wave(State *state) {
+  for (int grid_y = 0; grid_y < state->height; grid_y++) {
+    int display_y = grid_y * RD_DISPLAY_HEIGHT / state->height;
+    int species =
+        display_y >= WAVE_TOP && display_y < WAVE_TOP + WAVE_EXCITED
+            ? RD_SPECIES_B
+        : display_y >= WAVE_TOP - WAVE_REFRACTORY && display_y < WAVE_TOP
+            ? RD_SPECIES_A
+            : -1;
+    for (int grid_x = 0; species >= 0 && grid_x < state->width; grid_x++) {
+      if (grid_x * RD_DISPLAY_WIDTH / state->width < WAVE_END) {
+        plane(state, species)[grid_y * state->width + grid_x] =
+            FHN_ZERO + FHN_Q13_ONE;
+      }
+    }
+  }
+}
+
+/* Initialize the block to the resting field of the model, then seed
+ * INITIAL_DISKS disks at LCG-chosen display positions and radii, or the
+ * broken wave of FitzHugh-Nagumo init 1. Every argument is checked before
+ * the block is written. */
+SIZE_OPT void *rd_init_model(void *memory, size_t bytes, int mode, int model,
+                             uint32_t seed, const int *params, int count) {
   size_t required = rd_bytes(mode);
-  if (!memory || required == 0 || bytes < required) {
+  if (!memory || required == 0 || bytes < required || !model_supported(model) ||
+      (model == RD_MODEL_FHN && MODE_PLANES(mode) == 1) ||
+      (params && !params_valid(model, params, count))) {
     return NULL;
   }
   /* Align up: the State starts at most STATE_ALIGNMENT - 1 bytes into the
@@ -762,10 +978,13 @@ void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
     column_right(state)[x] =
         (uint8_t)(index + 1 == state->width ? 0 : index + 1);
   }
-  rd_params(state, DEFAULT_FEED, DEFAULT_KILL, RD_Q15_ONE, RD_Q15_ONE / 2,
-            RD_Q15_ONE);
-  for (int i = 0; i < state->width * state->height; i++) {
-    store_codes(state, i, is_packed(state) ? PACKED_FULL_A : Q15_FULL_A, 0);
+  state->model = model;
+  memcpy(state->params, params ? params : DEFAULT_PARAMS[model],
+         PARAM_COUNT[model] * sizeof(int));
+  fill_rest(state);
+  if (model == RD_MODEL_FHN && state->params[FHN_INIT] == 1) {
+    seed_wave(state);
+    return state;
   }
   uint32_t lcg = seed;
   for (int i = 0; i < INITIAL_DISKS; i++) {
@@ -776,6 +995,10 @@ void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
     rd_seed(state, x, y, radius);
   }
   return state;
+}
+
+SIZE_OPT void *rd_init(void *memory, size_t bytes, int mode, uint32_t seed) {
+  return rd_init_model(memory, bytes, mode, RD_MODEL_GRAY_SCOTT, seed, NULL, 0);
 }
 
 /* Round a Laplacian sum times LAPLACIAN_SCALE to the nearest Laplacian,
@@ -844,6 +1067,18 @@ static inline void react_cell(int32_t a, int32_t b, int32_t lap_a,
   }
 }
 
+/* The new Q24 value of a Q15 code after a Q30 rate: with dt = 1 the code
+ * times 2^9 plus the rate rounded half up to Q24, else the rate times dt
+ * rounded the same way in 64 bits. */
+static inline int32_t advance_code(unsigned code, int32_t rate, int32_t dt,
+                                   int unit_dt) {
+  if (unit_dt) {
+    return (int32_t)(code << Q15_SHIFT) + ((rate >> 6) + ((rate >> 5) & 1));
+  }
+  return (int32_t)(code << Q15_SHIFT) +
+         (int32_t)(((int64_t)rate * dt + (1 << 20)) >> 21);
+}
+
 /* Update of one cell of the Q15 modes, from its Q15 codes and the
  * 20-fold Laplacian sums of the codes, in 32-bit arithmetic:
  *   rate_a = fold_da * sum_a - A B^2 + feed * (1 - A)         (Q30)
@@ -867,15 +1102,36 @@ static inline void react_codes(unsigned a, unsigned b, int32_t sum_a,
                              &rate_b)) {
     rate_b = INT32_MIN;
   }
-  if (unit_dt) {
-    *next_a = (int32_t)(a << Q15_SHIFT) + ((rate_a >> 6) + ((rate_a >> 5) & 1));
-    *next_b = (int32_t)(b << Q15_SHIFT) + ((rate_b >> 6) + ((rate_b >> 5) & 1));
-  } else {
-    *next_a = (int32_t)(a << Q15_SHIFT) +
-              (int32_t)(((int64_t)rate_a * dt + (1 << 20)) >> 21);
-    *next_b = (int32_t)(b << Q15_SHIFT) +
-              (int32_t)(((int64_t)rate_b * dt + (1 << 20)) >> 21);
-  }
+  *next_a = advance_code(a, rate_a, dt, unit_dt);
+  *next_b = advance_code(b, rate_b, dt, unit_dt);
+}
+
+/* Update of one FitzHugh-Nagumo cell, from its Q15 codes (v on plane 0, u
+ * on plane 1) and the 20-fold Laplacian sums of the codes, in 32-bit
+ * arithmetic on x in Q13 (the code minus FHN_ZERO):
+ *   rate_u = fold_du S_u + ru (u - u^3 - v + k) - pull (u - rest)   (Q30)
+ *   rate_v = fold_dv S_v + rv (u - av v)                            (Q30)
+ * u^2, u^3, and av v are floored to Q13 by arithmetic shifts. A Q15
+ * coefficient times a Q13 value is the Q30 rate of the stored fraction
+ * (x + 2) / 4, the 1/4 of the storage being the step from Q15 to Q13. With
+ * |x| <= 2, ru <= RD_FHN_RU_MAX, and pull <= RD_MASK_PULL (4096) both
+ * rates fit int32, and the bound holds for a pull up to 8192
+ * (docs/core.md has the bounds). The new values are formed as in
+ * react_codes. */
+static inline void react_fhn_codes(unsigned v, unsigned u, int32_t sum_v,
+                                   int32_t sum_u, int32_t pull, int32_t ru,
+                                   int32_t rv, int32_t av, int32_t k13,
+                                   int32_t rest13, int32_t fold_dv,
+                                   int32_t fold_du, int32_t dt, int unit_dt,
+                                   int32_t *next_v, int32_t *next_u) {
+  int32_t u13 = (int32_t)u - FHN_ZERO, v13 = (int32_t)v - FHN_ZERO;
+  int32_t uu = (u13 * u13) >> FHN_Q13_BITS;
+  int32_t uuu = (uu * u13) >> FHN_Q13_BITS;
+  int32_t rate_u =
+      fold_du * sum_u + ru * (u13 - uuu - v13 + k13) - pull * (u13 - rest13);
+  int32_t rate_v = fold_dv * sum_v + rv * (u13 - ((av * v13) >> 15));
+  *next_v = advance_code(v, rate_v, dt, unit_dt);
+  *next_u = advance_code(u, rate_u, dt, unit_dt);
 }
 
 /* The 20-fold nine-point Laplacian sum of a row of Q15 codes, written to
@@ -906,21 +1162,42 @@ static void laplacian_sums(const uint16_t *restrict up,
  * residual rows themselves persist: after the last row they hold the shares
  * for row 0 of the next step. */
 static void begin_step(State *state, StepContext *ctx) {
+  const int *params = state->params;
   ctx->packed = is_packed(state);
+  ctx->model = state_model(state);
   ctx->width = state->width;
-  ctx->feed = state->feed;
-  ctx->decay = state->kill + state->feed;
-  ctx->fold_da = (state->da + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE;
-  ctx->fold_db = (state->db + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE;
-  for (int level = 0; level <= RD_MASK_RAMP; level++) {
-    ctx->level_decay[level] =
-        state->feed + state->kill +
-        (RD_MASK_KILL - state->kill) * (RD_MASK_RAMP - level) / RD_MASK_RAMP;
+  ctx->masked_code = (int32_t)rest_code(state);
+  if (ctx_model(ctx) == RD_MODEL_FHN) {
+    /* Unused by FitzHugh-Nagumo, but react_row loads them for both. */
+    ctx->feed = ctx->decay = 0;
+    ctx->fold_da = (params[FHN_DV] + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE;
+    ctx->fold_db = (params[FHN_DU] + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE;
+    ctx->ru = params[FHN_RU];
+    ctx->rv = params[FHN_RV];
+    ctx->av = params[FHN_AV];
+    ctx->k13 = fhn_q13(params[FHN_K]);
+    ctx->rest13 = fhn_q13(params[FHN_REST]);
+    for (int level = 0; level <= RD_MASK_RAMP; level++) {
+      ctx->level_pull[level] =
+          RD_MASK_PULL * (RD_MASK_RAMP - level) / RD_MASK_RAMP;
+    }
+    ctx->dt = params[FHN_DT];
+  } else {
+    int feed = params[GS_FEED], kill = params[GS_KILL];
+    ctx->feed = feed;
+    ctx->decay = kill + feed;
+    ctx->fold_da = (params[GS_DA] + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE;
+    ctx->fold_db = (params[GS_DB] + LAPLACIAN_SCALE / 2) / LAPLACIAN_SCALE;
+    for (int level = 0; level <= RD_MASK_RAMP; level++) {
+      ctx->level_decay[level] =
+          feed + kill +
+          (RD_MASK_KILL - kill) * (RD_MASK_RAMP - level) / RD_MASK_RAMP;
+    }
+    ctx->da = params[GS_DA];
+    ctx->db = params[GS_DB];
+    ctx->dt = params[GS_DT];
   }
-  ctx->da = state->da;
-  ctx->db = state->db;
-  ctx->dt = state->dt;
-  ctx->unit_dt = state->dt == RD_Q15_ONE;
+  ctx->unit_dt = ctx->dt == RD_Q15_ONE;
   ctx->step_salt = mix32(state->seed ^ mix32(state->step));
   for (int species = 0; species < SPECIES_COUNT; species++) {
     ctx->residual[species] = residual_row(state, species);
@@ -1003,10 +1280,12 @@ static inline unsigned encode_cell(int packed, int species,
   return code;
 }
 
-/* B in a masked cell: held at code 0, which the caller stores, so the cell
- * has no rounding error of its own. The shares it received from the row
- * above and from the cell to its left are dropped, and the below-right
- * share of the cell to its left passes through to the row below. */
+/* The displayed species in a masked cell: held at the model's resting code,
+ * B = 0 for Gray-Scott and u = rest for FitzHugh-Nagumo (masked_code),
+ * which the caller stores, so the cell has no rounding error of its own. The
+ * shares it received from the row above and from the cell to its left are
+ * dropped, and the below-right share of the cell to its left passes through to
+ * the row below. */
 static inline void encode_masked(int32_t *restrict residual, Shares *shares,
                                  int x) {
   if (x > 0) {
@@ -1034,7 +1313,8 @@ static void finish_row(StepContext *ctx) {
  * Q24 values of both species from the old codes and the Laplacian sums
  * into a row of pairs, then encode_row writes one species with its error
  * diffusion. Inlined at both calls in step_codes, so rows away from the
- * mask run without the level lookups. */
+ * mask run without the level lookups (and, for FitzHugh-Nagumo, with the
+ * pull a constant 0). The model is chosen once per row. */
 static ALWAYS_INLINE void
 react_row(StepContext *ctx, const uint16_t *restrict cur_a,
           const uint16_t *restrict cur_b, const int32_t *restrict lap,
@@ -1042,6 +1322,17 @@ react_row(StepContext *ctx, const uint16_t *restrict cur_a,
   const int32_t feed = ctx->feed, decay = ctx->decay, fold_da = ctx->fold_da,
                 fold_db = ctx->fold_db, dt = ctx->dt;
   const int unit_dt = ctx->unit_dt, width = ctx->width;
+  if (ctx_model(ctx) == RD_MODEL_FHN) {
+    const int32_t ru = ctx->ru, rv = ctx->rv, av = ctx->av, k13 = ctx->k13,
+                  rest13 = ctx->rest13;
+    for (int x = 0; x < width; x++) {
+      react_fhn_codes(cur_a[x], cur_b[x], lap[2 * x], lap[2 * x + 1],
+                      levels ? ctx->level_pull[levels[x]] : 0, ru, rv, av, k13,
+                      rest13, fold_da, fold_db, dt, unit_dt, &next[2 * x],
+                      &next[2 * x + 1]);
+    }
+    return;
+  }
   for (int x = 0; x < width; x++) {
     react_codes(cur_a[x], cur_b[x], lap[2 * x], lap[2 * x + 1], feed,
                 levels ? ctx->level_decay[levels[x]] : decay, fold_da, fold_db,
@@ -1050,8 +1341,8 @@ react_row(StepContext *ctx, const uint16_t *restrict cur_a,
 }
 
 /* Encode one species of a row from every second entry of the pair row,
- * holding B at 0 in masked cells (levels is NULL for A and away from the
- * mask). */
+ * holding the displayed species at its resting code in masked cells
+ * (levels is NULL for the other species and away from the mask). */
 static ALWAYS_INLINE void encode_row(StepContext *ctx, int species,
                                      const int32_t *restrict values,
                                      uint16_t *restrict cells,
@@ -1059,10 +1350,11 @@ static ALWAYS_INLINE void encode_row(StepContext *ctx, int species,
   int32_t *restrict residual = ctx->residual[species];
   Shares shares = ctx->shares[species];
   const int width = ctx->width;
+  const uint16_t masked = (uint16_t)ctx->masked_code;
   for (int x = 0; x < width; x++) {
     if (levels && levels[x] == 0) {
       encode_masked(residual, &shares, x);
-      cells[x] = 0;
+      cells[x] = masked;
     } else {
       cells[x] = (uint16_t)encode_cell(0, species, residual, &shares, x,
                                        values[2 * x], 0);
@@ -1272,7 +1564,8 @@ int rd_height(void *handle) {
 
 /* Install a cell mask (NULL clears it): find the band of rows within
  * RD_MASK_RAMP - 1 rows of a masked cell, derive the levels of the band,
- * and set B to 0 in the masked cells right away. */
+ * and set the displayed species to its resting code (B = 0, u = rest) in
+ * the masked cells right away. */
 MASK_SIZE_OPT int rd_mask(void *handle, const uint8_t *mask) {
   State *state = checked_state(handle);
   if (!state || !MASK_SUPPORTED) {
@@ -1280,6 +1573,7 @@ MASK_SIZE_OPT int rd_mask(void *handle, const uint8_t *mask) {
   }
   int width = state->width, height = state->height;
   int stride = (width + 7) / 8, first = -1, last = -1;
+  unsigned resting = rest_code(state);
   state->mask_first = state->mask_end = 0;
   if (!mask) {
     return 0;
@@ -1289,7 +1583,7 @@ MASK_SIZE_OPT int rd_mask(void *handle, const uint8_t *mask) {
       if (mask[y * stride + (x >> 3)] >> (x & 7) & 1) {
         unsigned code_a, code_b;
         load_codes(state, y * width + x, &code_a, &code_b);
-        store_codes(state, y * width + x, code_a, 0);
+        store_codes(state, y * width + x, code_a, resting);
         if (first < 0) {
           first = y;
         }
@@ -1345,16 +1639,23 @@ uint32_t rd_hash(void *handle) {
   return hash;
 }
 
-/* The three color channels of a Q24 B value: intensity is B times
- * DISPLAY_GAIN clamped to 1.0, interpolated between the equally spaced
- * stops of the palette, or a monochrome threshold, and optionally
- * quantized to RGB2 levels. Each channel is the nearest integer to the
- * exact interpolation, halves rounded up, so intensity 0 and 1.0 give the
- * end stops. With two stops this is the former endpoint formula low +
- * ((high - low) * intensity + 2^14) / 2^15. */
+/* The three color channels of a Q24 value of the displayed species: the
+ * intensity, the value minus DISPLAY_OFFSET times DISPLAY_GAIN of the model
+ * clamped to [0, 1.0], interpolated between the equally spaced stops of the
+ * palette, or a monochrome threshold, and optionally quantized to RGB2
+ * levels. Each channel is the nearest integer to the exact interpolation,
+ * halves rounded up, so intensity 0 and 1.0 give the end stops. With two
+ * stops this is the former endpoint formula low + ((high - low) * intensity
+ * + 2^14) / 2^15. */
 static void value_rgb(const State *state, int palette, int quantize,
                       int32_t value, uint8_t rgb[3]) {
-  int intensity = (int)round_shift((int64_t)value * DISPLAY_GAIN, Q15_SHIFT);
+  int model = state_model(state);
+  int intensity = (int)round_shift((int64_t)(value - DISPLAY_OFFSET[model]) *
+                                       DISPLAY_GAIN[model],
+                                   Q15_SHIFT);
+  if (intensity < 0) {
+    intensity = 0;
+  }
   if (intensity > RD_Q15_ONE) {
     intensity = RD_Q15_ONE;
   }

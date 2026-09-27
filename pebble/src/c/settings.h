@@ -1,27 +1,34 @@
 #ifndef SETTINGS_H
 #define SETTINGS_H
 /*
- * Settings sent by the phone: the pattern coefficients, the palette and the
- * stops of the custom palette, the clock font, digit avoidance, the clock,
- * the date line, and the clock face. They persist on the watch, config.h
- * holds the defaults, and docs/behavior.md describes how each change is
- * applied.
+ * Settings sent by the phone: the model and its parameter vector, the
+ * palette and the stops of the custom palette, the clock font, digit
+ * avoidance, the clock, the date line, and the clock face. They persist on
+ * the watch, config.h holds the defaults, and docs/behavior.md describes
+ * how each change is applied.
  */
 #include <stdbool.h>
 #include <stdint.h>
 
 /* The settings, in the order of the message keys of pebble/package.json:
- * the Q15 coefficients of rd_params, the palette (RD_PALETTE_*), the dark
+ * the model (RD_MODEL_*), its Q15 parameter vector of RD_PARAM_MAX entries
+ * (rd_init_model, unused entries 0), the palette (RD_PALETTE_*), the dark
  * and light stops of RD_PALETTE_CUSTOM as 0xRRGGBB, its number of stops (2
  * to 4) and the stops between them, the clock font set (CM_FONT_*),
  * digit avoidance, the clock, and the date line as 0 or 1, and the clock
  * face, 0 digital or 1 analog. */
 enum {
-  SETTING_FEED,
-  SETTING_KILL,
-  SETTING_DA,
-  SETTING_DB,
-  SETTING_DT,
+  SETTING_MODEL,
+  SETTING_P0,
+  SETTING_P1,
+  SETTING_P2,
+  SETTING_P3,
+  SETTING_P4,
+  SETTING_P5,
+  SETTING_P6,
+  SETTING_P7,
+  SETTING_P8,
+  SETTING_P9,
   SETTING_PALETTE,
   SETTING_LOW,
   SETTING_HIGH,

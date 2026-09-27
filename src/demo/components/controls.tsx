@@ -1,9 +1,29 @@
 /** @jsxImportSource react */
 import { useEffect, useId, useState, type CSSProperties } from "react";
-import { type Engine } from "../../core";
+import { type Engine, type Model } from "../../core";
+import { type SliderKey } from "../../core/modes";
 import { styles as s } from "../styles";
 
-export { parameterBounds as bounds } from "../../core/modes";
+export { parameterBounds as bounds, type SliderKey } from "../../core/modes";
+
+export const labels: { [M in Model]: Record<SliderKey<M>, string> } = {
+  "gray-scott": {
+    feed: "Feed / A の供給",
+    kill: "Kill / B の除去",
+    da: "Da / A の拡散",
+    db: "Db / B の拡散",
+    dt: "dt / 時間刻み",
+  },
+  fhn: {
+    du: "Du / u の拡散",
+    dv: "Dv / v の拡散",
+    ru: "ru / u の反応速度",
+    rv: "rv / v の反応速度",
+    av: "av / v の減衰",
+    k: "k / u の偏り",
+    dt: "dt / 時間刻み",
+  },
+};
 
 export const engines: [Engine, string][] = [
   ["u8-200", "Wasm A7+B9 / 200 × 228"],

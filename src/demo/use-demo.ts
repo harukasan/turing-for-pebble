@@ -1,11 +1,21 @@
 import { useEffect, useReducer, useRef, useState } from "react";
-import { presets, type Parameters } from "../../lib/simulation";
+import {
+  presetById,
+  presetParameters,
+  presets,
+  withRestingPoint,
+  type Parameters,
+} from "../../lib/simulation";
 import {
   TuringPlayer,
   defaultParameters,
+  defaultParametersFor,
   defaultPlayerSettings,
+  engineSupportsModel,
   isFloat,
   type Engine,
+  type Model,
+  type ParameterKey,
   type PlayerSettings,
   type PlayerStats,
 } from "../core";
@@ -44,16 +54,38 @@ const initialOptions = (): DemoOptions => ({
 
 const emptyStats: PlayerStats = { steps: 0, stepMs: 0, bytes: null };
 
+/** Options with new parameters, and the watch engine if the current engine
+ * does not run their model. */
+const withModel = (options: DemoOptions, params: Parameters): DemoOptions => ({
+  ...options,
+  params,
+  engine: engineSupportsModel(options.engine, params.model)
+    ? options.engine
+    : "q15-120",
+});
+
 export function useDemo(assetBaseUrl: string) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const playerRef = useRef<TuringPlayer | null>(null);
   const [options, setOptions] = useState(initialOptions);
+  // The latest options, for the browser tool registered once.
+  const latest = useRef(options);
+  latest.current = options;
   const [stats, setStats] = useState(emptyStats);
   const [notice, setNotice] = useState("");
   const [resetVersion, requestReset] = useReducer(
     (value: number) => value + 1,
     0
   );
+  /** A pending reset for a parameter of the initial field, so a dragged
+   * slider restarts the field once it rests instead of on every input. */
+  const initialReset = useRef(0);
+  /** Reset now, dropping a pending reset that would reset the new field
+   * again. */
+  const resetField = () => {
+    clearTimeout(initialReset.current);
+    requestReset();
+  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -103,8 +135,10 @@ export function useDemo(assetBaseUrl: string) {
     else playerRef.current?.pause();
   }, [assetBaseUrl, options.running]);
 
+  // A reset uses the parameters of the same render, so a model change or a
+  // preset that requests a reset loads the matching field.
   useEffect(() => {
-    void playerRef.current?.load(options.engine, options.seed);
+    void playerRef.current?.load(options.engine, options.seed, options.params);
   }, [assetBaseUrl, options.engine, options.seed, resetVersion]);
 
   useEffect(() => {
@@ -126,15 +160,19 @@ export function useDemo(assetBaseUrl: string) {
           {
             name: "configure_turing_pattern",
             description:
-              "Set Feed and Kill in the visible simulation. Optionally reset to the current seed.",
+              "Choose a preset by id, or set Gray-Scott Feed and Kill (which selects the Gray-Scott model), in the visible simulation. A preset resets the field. Optionally reset to the current seed.",
             inputSchema: {
               type: "object",
               properties: {
+                preset: {
+                  type: "string",
+                  enum: presets.map((preset) => preset.id),
+                },
                 feed: { type: "number", minimum: 0.01, maximum: 0.1 },
                 kill: { type: "number", minimum: 0.03, maximum: 0.075 },
                 reset: { type: "boolean" },
               },
-              required: ["feed", "kill"],
+              anyOf: [{ required: ["preset"] }, { required: ["feed", "kill"] }],
               additionalProperties: false,
             },
             annotations: { readOnlyHint: false },
@@ -144,34 +182,56 @@ export function useDemo(assetBaseUrl: string) {
               if (!input || typeof input !== "object")
                 throw new Error("Expected an object");
               const value = input as Record<string, unknown>;
+              const number = (key: string, min: number, max: number) =>
+                typeof value[key] === "number" &&
+                Number.isFinite(value[key]) &&
+                (value[key] as number) >= min &&
+                (value[key] as number) <= max;
+              const preset =
+                typeof value.preset === "string"
+                  ? presetById(value.preset)
+                  : undefined;
+              const coefficients =
+                value.feed !== undefined || value.kill !== undefined;
               if (
                 Object.keys(value).some(
-                  (key) => !["feed", "kill", "reset"].includes(key)
+                  (key) => !["preset", "feed", "kill", "reset"].includes(key)
                 ) ||
-                typeof value.feed !== "number" ||
-                !Number.isFinite(value.feed) ||
-                value.feed < 0.01 ||
-                value.feed > 0.1 ||
-                typeof value.kill !== "number" ||
-                !Number.isFinite(value.kill) ||
-                value.kill < 0.03 ||
-                value.kill > 0.075 ||
+                (value.preset !== undefined && !preset) ||
+                (!preset && !coefficients) ||
+                (coefficients &&
+                  (!number("feed", 0.01, 0.1) ||
+                    !number("kill", 0.03, 0.075) ||
+                    (preset && preset.model !== "gray-scott"))) ||
                 (value.reset !== undefined && typeof value.reset !== "boolean")
               )
                 throw new Error("Invalid parameters");
-              setOptions((current) => ({
-                ...current,
-                params: {
-                  ...current.params,
+              const current = latest.current.params;
+              let params = preset ? presetParameters(preset) : current;
+              if (coefficients) {
+                const gray =
+                  params.model === "gray-scott"
+                    ? params
+                    : defaultParametersFor("gray-scott");
+                params = {
+                  ...gray,
                   feed: value.feed as number,
                   kill: value.kill as number,
-                },
-              }));
-              if (value.reset) requestReset();
+                };
+              }
+              const next = params;
+              setOptions((options) => withModel(options, next));
+              const reset =
+                value.reset === true ||
+                !!preset ||
+                params.model !== current.model;
+              if (reset) resetField();
               return {
-                feed: value.feed,
-                kill: value.kill,
-                reset: value.reset === true,
+                preset: preset?.id,
+                model: params.model,
+                feed: coefficients ? value.feed : undefined,
+                kill: coefficients ? value.kill : undefined,
+                reset,
               };
             },
           },
@@ -188,21 +248,39 @@ export function useDemo(assetBaseUrl: string) {
     setOptions((current) => ({ ...current, [key]: value }));
   }
 
-  function updateParam(key: keyof Parameters, value: number) {
+  /** Coefficients apply to the next step. The FitzHugh-Nagumo resting
+   * value and initial condition shape the initial field, so changing them
+   * resets it. */
+  useEffect(() => () => clearTimeout(initialReset.current), []);
+
+  function updateParam(key: ParameterKey, value: number) {
     setOptions((current) => ({
       ...current,
-      params: { ...current.params, [key]: value },
+      params: withRestingPoint({
+        ...current.params,
+        [key]: value,
+      } as Parameters),
     }));
+    // The FitzHugh-Nagumo initial field is u = rest and v = rest / av, with
+    // disks or the cut wave by init, and rest follows k and av.
+    if (key === "init" || key === "k" || key === "av") {
+      clearTimeout(initialReset.current);
+      initialReset.current = window.setTimeout(requestReset, 300);
+    }
   }
 
-  function choosePreset(index: number) {
-    const preset = presets[index];
+  /** Switch to another model with its default parameters and reset. */
+  function chooseModel(model: Model) {
+    if (model === latest.current.params.model) return;
+    setOptions((current) => withModel(current, defaultParametersFor(model)));
+    resetField();
+  }
+
+  function choosePreset(id: string) {
+    const preset = presetById(id);
     if (!preset) return;
-    setOptions((current) => ({
-      ...current,
-      params: { ...defaultParameters, feed: preset.feed, kill: preset.kill },
-    }));
-    requestReset();
+    setOptions((current) => withModel(current, presetParameters(preset)));
+    resetField();
   }
 
   const settingsInput: SettingsInput = {
@@ -262,8 +340,9 @@ export function useDemo(assetBaseUrl: string) {
     settingsInput,
     update,
     updateParam,
+    chooseModel,
     choosePreset,
-    requestReset,
+    requestReset: resetField,
     download,
   };
 }

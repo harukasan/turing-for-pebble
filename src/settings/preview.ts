@@ -16,6 +16,7 @@ import {
   WasmSimulation,
   type CoreAPI,
 } from "../../lib/wasm-simulation.ts";
+import type { Parameters } from "../../lib/simulation.ts";
 import { HALO } from "../core/modes.ts";
 import { customStops, toParameters, type WatchSettings } from "./settings.ts";
 
@@ -34,16 +35,25 @@ const SLICE_MS = 30;
 export class PreviewField {
   private sim: WasmSimulation | null = null;
   private settings: WatchSettings | null = null;
+  /** The parameters the field was started with. A recolor keeps them, so
+   * settings of another model wait for the next start. */
+  private params: Parameters | null = null;
 
   constructor(private readonly api: CoreAPI) {}
 
-  /** A new field from the seed with the coefficients, custom stops, and
-   * clock mask of the settings, as the watch starts one. */
+  /** A new field of the settings' model from the seed with its
+   * parameters, custom stops, and clock mask, as the watch starts one. */
   start(settings: WatchSettings, date: Date) {
     this.sim?.dispose();
-    const sim = new WasmSimulation(this.api, PREVIEW_MODE, PREVIEW_SEED);
+    const sim = new WasmSimulation(
+      this.api,
+      PREVIEW_MODE,
+      PREVIEW_SEED,
+      toParameters(settings)
+    );
     this.sim = sim;
     this.settings = settings;
+    this.params = toParameters(settings);
     sim.setPalette(customStops(settings));
     const showDate = settings.date === 1;
     sim.setMask(
@@ -91,8 +101,7 @@ export class PreviewField {
   }
 
   step(count: number) {
-    if (this.sim && this.settings)
-      this.sim.step(toParameters(this.settings), count);
+    if (this.sim && this.params) this.sim.step(this.params, count);
   }
 
   /** New palette settings, without touching the field. */

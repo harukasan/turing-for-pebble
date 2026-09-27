@@ -32,8 +32,22 @@ const en = {
   colors: "Colors",
   clock: "Clock",
   fileSection: "Export and Import Settings",
-  /** The presets of lib/simulation.ts, in order. */
-  presets: ["Maze", "Coral", "Mitosis", "Spots", "Thin lines"],
+  /** The models of src/core/modes.ts, in order. */
+  models: ["Gray–Scott", "FitzHugh–Nagumo"],
+  /** The presets of lib/presets.ts, by id. */
+  presetNames: {
+    maze: "Maze",
+    coral: "Coral",
+    mitosis: "Mitosis",
+    spots: "Spots",
+    "thin-line": "Thin lines",
+    "fhn-stripes": "Stripes",
+    "fhn-hex": "Hex spots",
+    "fhn-spiral": "Spiral",
+  } as Record<string, string>,
+  initial: "Initial condition",
+  /** The initial conditions of FitzHugh–Nagumo, init 0 and 1. */
+  inits: ["Disks", "Cut wave"],
   /** The stripe widths of DIFFUSION_PRESETS, in order. */
   widths: ["Thick", "Medium", "Thin"],
   custom: "Custom",
@@ -91,7 +105,19 @@ const ja: Strings = {
   colors: "配色",
   clock: "時計",
   fileSection: "設定の書き出し/読み込み",
-  presets: ["迷路", "珊瑚", "細胞分裂", "斑点", "細線"],
+  models: ["Gray–Scott", "FitzHugh–Nagumo"],
+  presetNames: {
+    maze: "迷路",
+    coral: "珊瑚",
+    mitosis: "細胞分裂",
+    spots: "斑点",
+    "thin-line": "細線",
+    "fhn-stripes": "縞",
+    "fhn-hex": "六方斑点",
+    "fhn-spiral": "らせん",
+  },
+  initial: "初期条件",
+  inits: ["円板", "断ち切った波面"],
   widths: ["太い", "やや細い", "細い"],
   custom: "カスタム",
   palettes: { green: "ライム", blue: "シアン", mono: "白黒" },

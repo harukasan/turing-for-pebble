@@ -52,16 +52,38 @@
 #define RD_MINUTE_STEPS_AVOID 300
 #define RD_MINUTE_STEPS_PLAIN 16
 
-/* Settings defaults: the Q15 feed, kill, diffusion rates of A and B, and
- * time step, the palette (RD_PALETTE_*), the dark and light stops of the
- * custom palette as 0xRRGGBB, its number of stops and the middle stops at
- * a third and two thirds of the way from dark to light, the clock font
- * set, digit avoidance, the clock, the date line, and the clock face. */
-#define RD_DEFAULT_FEED 950
-#define RD_DEFAULT_KILL 1868
-#define RD_DEFAULT_DA 22938
-#define RD_DEFAULT_DB 11469
-#define RD_DEFAULT_DT 32768
+/* Settings defaults: the model (RD_MODEL_* of core/rd.h) and its Q15
+ * parameter vector, 0 Gray-Scott (feed, kill, da, db, dt) or 1
+ * FitzHugh-Nagumo (du, dv, ru, rv, av, k, dt, rest, init), which runs only
+ * in modes 1 and 3, then the palette (RD_PALETTE_*), the dark and light
+ * stops of the custom palette as 0xRRGGBB, its number of stops and the
+ * middle stops at a third and two thirds of the way from dark to light, the
+ * clock font set, digit avoidance, the clock, the date line, and the clock
+ * face. The build
+ * includes both models unless RD_MODEL (RD_BUILD_MODEL) folds the core to
+ * one, and the settings accept only the models of the build. */
+/* A build folded to FitzHugh-Nagumo starts with the fhn-stripes preset of
+ * lib/presets.ts, and every other build with the Gray-Scott maze. */
+#ifndef RD_DEFAULT_MODEL
+#if defined(RD_MODEL) && RD_MODEL == 1
+#define RD_DEFAULT_MODEL 1
+#else
+#define RD_DEFAULT_MODEL 0
+#endif
+#endif
+#ifndef RD_DEFAULT_PARAMS
+#if RD_DEFAULT_MODEL == 1
+#define RD_DEFAULT_PARAMS 1638, 32768, 492, 1229, 19661, 0, 32768, 0, 0
+#else
+#define RD_DEFAULT_PARAMS 950, 1868, 22938, 11469, 32768
+#endif
+#endif
+#if RD_DEFAULT_MODEL == 1 && RD_MODE != 1 && RD_MODE != 3
+#error "FitzHugh-Nagumo (RD_DEFAULT_MODEL 1) runs only in modes 1 and 3"
+#endif
+#if defined(RD_MODEL) && RD_MODEL != RD_DEFAULT_MODEL
+#error "RD_DEFAULT_MODEL must be the model the build is folded to (RD_MODEL)"
+#endif
 #define RD_DEFAULT_PALETTE 0
 #define RD_DEFAULT_LOW 0x001e12
 #define RD_DEFAULT_HIGH 0xd2ff55
