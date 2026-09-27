@@ -27,7 +27,7 @@ For the cell-by-cell comparison with the original Float32 implementation, see [F
 
 Core allocation is 147,723 B for mode 0, 63,207 B for mode 1, and 88,647 B for mode 3 ([Shared C core](core.md) has the breakdown). The watch also allocates the clock mask bitmap (2,040 B in mode 3) outside the core. Load sizes at `-O3` are 17.1 KB (mode 0), 18.4 KB (mode 1), and 19.1 KB (mode 3) with the watch settings, and `scripts/build-pebble.sh` fails above 20,480 B, because code, static data, the core allocation, and the OS's own allocations share the 128 KiB app region. `public/reports/comparison.json` records the ELF section sizes, the compiler stack reports (bounded static frames and no recursion, summed as an application-only bound that excludes the OS and library stack), and the physical measurement. The minimum free heap on the watch is 18,136 B with the watch settings, above the 16 KiB target. It was measured at commit 7db03a3 with a logging build of 21,688 B and the default settings. Before the palette stops and the settings, a logging build of 18,190 B left 21,904 B. The settings add an AppMessage inbox, 128 B when measured and 176 B since the custom palette takes up to four colors and the date can be hidden, a 16-byte outbox, and 28 B of core control, and a production build loads 2.9 KB less than the logging build, so its free heap is larger.
 
-The analog face allocates nothing new on the watch: it reuses the 2,040 B clock mask, and its sine table (722 B) is constant data. Its load size has not been measured with the SDK. As an estimate only, an Arm GNU Toolchain 13.2 build of `core.c` and `main.c` for the Cortex-M3 at `-O3` with section garbage collection, against a host stand-in for the SDK header and without the SDK's libraries, measured 14,438 B for the digital mode 3 and 16,146 B for the analog one (18,158 B with `RD_LOG=1`). Adding that difference of about 1.7 KB to the measured 15.6 KB gives about 17.3 KB for `mode-3-analog`. Its log build comes to about 19.3 KB by the same differences, or about 19.8 KB when the measured log cost of about 2.3 KB is used instead, within the 20,480 B limit either way. The analog watch build leaves out the time-line glyphs, which it does not draw, for this reason. `mise run build-pebble` checks the real sizes.
+The analog face allocates nothing new on the watch: it reuses the 2,040 B clock mask, and its sine table (722 B) is constant data. The face is a watch setting, so modes 0, 1, and 3 hold both faces, and their production builds load 20,100 B, 21,712 B, and 22,348 B. Mode 3 grew by 3,280 B over the 19,068 B of the digital settings build and now exceeds the 20,480 B load limit, which its builds pass with `RD_BUILD_LOAD_LIMIT` until the size is reduced. `mode-3-analog`, which fixes the analog face and leaves out the time-line glyphs, loads 20,588 B. The analog face of `core/clock_mask.c` and the sweep and fallback drawing of `main.c` are compiled for size, which took the logging build of mode 3 from 26,880 B to 25,632 B. Of the remaining growth, the sine table takes 722 B, the system font fallback of the hands about 430 B, and the capsule rasterizer and its callers most of the rest. The minimum free heap falls by the same amount (below).
 
 ## Physical Pebble Time 2 measurements
 
@@ -44,41 +44,41 @@ The analog face allocates nothing new on the watch: it reuses the 2,040 B clock 
 
 The startup, step, frame, and heap rows are from the settings build at commit 7db03a3 with the default settings. The step phases, the backlight window, and the display ceiling were measured at commit 53a4a19, before the settings, whose step loop and renderer are unchanged. The hardware clock was valid throughout (`clock_invalid=0`).
 
-## Analog face on the watch (not yet measured)
+## Analog face on the watch
 
-The analog face (`mode-3-analog`) has not been measured on the physical Pebble Time 2. The rows below stay empty until that run. Host timings do not rank watch costs and emulator timing never qualifies hardware, so neither fills them.
+The analog face was measured once on the physical Pebble Time 2 on 2026-09-27, from the logging build of mode 3 at commit ca8ac29 (25,632 B load) with the face setting analog saved from the iPhone's settings page. The other settings were palette 6, Da 0.8 and Db 0.4, LECO, and avoidance and the date on. The run of about 50 s started about 20 s before a minute boundary and was not interrupted (`interrupted=0 clock_invalid=0`). It is one run, so the step time and heap are not yet repeated.
 
-| Item                                    | Target or reference                                              | Measured |
-| --------------------------------------- | ---------------------------------------------------------------- | -------- |
-| Load size (`mode-3-analog`)             | at most 20,480 B, estimated about 17.3 KB (above)                |          |
-| Mask build at launch (`mask_ms`)        | estimated 8 to 12 ms                                             |          |
-| Step                                    | the digital face measured 13.9 ms and 55.4 steps per second      |          |
-| Startup                                 | 30 s, about 1,500 steps or more                                  |          |
-| Minimum free heap (`heap_min`)          | at least 16,384 B, the digital face measured 21,904 B            |          |
-| Sweep mask rebuilds (`RD sweep`)        | at most 26                                                       |          |
-| Longest sweep rebuild (`mask_max_ms`)   | estimated 8 to 12 ms                                             |          |
-| Steps during a sweep (`RD sweep` steps) | at most about 55 in 1 s at the digital step rate                 |          |
-| Longest slice (`compute_max_ms`)        | about 40 ms or less (one rebuild and the steps of a 30 ms slice) |          |
-| Minute refill                           | 300 steps, under about 6.5 s                                     |          |
-| `clock_invalid`                         | 0                                                                |          |
+| Item                                    | Target or reference                                              | Measured                                             |
+| --------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------- |
+| Load size (`mode-3`, both faces)        | at most 20,480 B                                                 | 22,348 B production, 25,632 B logging (exceeded)     |
+| Mask build at launch (`mask_ms`)        | estimated 8 to 12 ms                                             | 8 ms                                                 |
+| Step                                    | the digital face measured 13.7 ms and 56.0 steps per second      | 14.9 ms (14,875 µs), 50.4 steps per second           |
+| Startup                                 | 30 s, about 1,500 steps or more                                  | 30.2 s, 1,522 steps, 582 frames                      |
+| Minimum free heap (`heap_min`)          | at least 16,384 B, the digital face measured 18,136 B            | 14,136 B (below the target)                          |
+| Sweep mask rebuilds (`RD sweep`)        | at most 26                                                       | 16                                                   |
+| Longest sweep rebuild (`mask_max_ms`)   | estimated 8 to 12 ms                                             | 8 ms                                                 |
+| Steps during a sweep (`RD sweep` steps) | at most about 55 in 1 s at the digital step rate                 | 44 in 1,043 ms                                       |
+| Longest slice (`compute_max_ms`)        | about 40 ms or less (one rebuild and the steps of a 30 ms slice) | 55 ms by the end of the startup (longest step 35 ms) |
+| Minute refill                           | 300 steps, under about 6.5 s                                     | not measured, the minute change fell in the startup  |
+| `clock_invalid`                         | 0                                                                | 0                                                    |
 
-The masked band of the analog face covers about 102 of the 136 grid rows on average (44 for the digits), and those rows take the mask-level path of the step, so the step may be a few percent slower than with the digits.
+The step is about 9% slower than the digital face's 13.7 ms, more than the few percent expected from the masked band, which covers about 102 of the 136 grid rows on average against 44 for the digits, and those rows take the mask-level path of the step. The minimum free heap is 4,000 B below the 18,136 B of the digital logging build of 21,688 B, close to the 3,944 B of added load, so the heap follows the code size. A production build loads 3,284 B less than the logging build, which would leave about 17.4 KB, but that has not been measured. A sweep logged 2 s after launch moved no hand (0 rebuilds and 55 steps in 1,035 ms): a minute tick that did not change the time. `docs/hardware-measurements.json` holds the entry.
 
-To measure, build with the logs and install the analog face through the phone's developer connection, starting about 20 s before a minute boundary so that the run of about 50 s contains one sweep:
+To measure again, build with the logs, install mode 3 through the phone's developer connection, save the analog face on the settings page, and reinstall starting about 20 s before a minute boundary so that the run of about 50 s contains one sweep:
 
 ```sh
-RD_BUILD_LOG=1 mise run build-pebble                             # builds mode-3-analog with RD_BUILD_FACE=1
-PEBBLE_PHONE=<ip> sh scripts/emulator.sh device-install 3-analog # installs it and streams the logs
+RD_BUILD_LOG=1 RD_BUILD_LOAD_LIMIT=28672 mise run build-pebble
+PEBBLE_PHONE=<ip> sh scripts/emulator.sh device-install 3   # installs mode 3 and streams the logs
 ```
 
-A single variant can also be built by hand with `cd pebble && RD_BUILD_MODE=3 RD_BUILD_FACE=1 RD_BUILD_LOG=1 mise exec -- pebble build --sdk 4.33.1`, which leaves `pebble/build/pebble.pbw`. Read the log lines as follows:
+`mode-3-analog` fixes the analog face without the setting. Read the log lines as follows:
 
-- `RD init mode=3 font=0 face=1 core_bytes=… heap_min=… mask_ms=…`: `face=1` confirms the analog build, and `mask_ms` is the time of one `cm_build_analog` and `rd_mask` at launch.
+- `RD init mode=3 font=0 face=1 core_bytes=… heap_min=… mask_ms=…`: `face=1` confirms the analog face, and `mask_ms` is the time of one `cm_build_analog` and `rd_mask` at launch.
 - The four `RD startup` lines at the end of the 30 s startup (and of any refill it owes): `steps`, `rate_x10` (steps per second times 10), `avg_step_us`, and `max_step_ms` against the digital 13.9 ms and 55.4 steps per second, `heap_min` against 16,384 B, and `interrupted=0 clock_invalid=0` for a valid run. A minute change during the startup sweeps within it.
 - `RD sweep rebuilds=… mask_max_ms=… ms=… steps=…` once per sweep: the mask rebuilds of the sweep, the longest of them, the sweep duration (about 1,000 ms, less when a focus loss cut it short), and the steps run during it.
 - `RD mode=3 step=… heap_min=… compute_max_ms=… draw_max_ms=… clock_invalid=…` every 256 steps: `compute_max_ms` is the longest slice including rebuilds.
 
-Record the results in this table and as a new entry with `"face": "analog"` in `docs/hardware-measurements.json`, then regenerate `public/reports/comparison.json` with `scripts/build-report.py`.
+Record the results in this table and as a new entry with `"face": "analog"` and the `build` in `docs/hardware-measurements.json`, then regenerate `public/reports/comparison.json` with `scripts/build-report.py` from production builds.
 
 ## Decisions taken from the measurements
 

@@ -50,12 +50,12 @@ The local URL is normally `http://127.0.0.1:5173/`. No deployment is required. T
 
 `mise run lint` runs every check and fails on any lint error or unformatted file. `mise run format` rewrites all sources with the project formatters. Both aggregate the per-language tasks below, which can also be run alone.
 
-| Task                    | Tool                                                 | Scope                                       |
-| ----------------------- | ---------------------------------------------------- | ------------------------------------------- |
-| `lint-js` / `format-js` | ESLint and Prettier                                  | Web and PebbleKit JS, CSS, Markdown         |
-| `lint-c` / `format-c`   | clang-format (system) and `cc -Wall -Wextra -Werror` | `core/`, `pebble/src/c/`, `tests/*.c`       |
-| `lint-py` / `format-py` | ruff 0.16.8 (mise)                                   | `scripts/*.py`                              |
-| `lint-sh` / `format-sh` | shellcheck 0.11.0 and shfmt 3.14.1 (mise)            | `scripts/*.sh`                              |
+| Task                    | Tool                                                 | Scope                                 |
+| ----------------------- | ---------------------------------------------------- | ------------------------------------- |
+| `lint-js` / `format-js` | ESLint and Prettier                                  | Web and PebbleKit JS, CSS, Markdown   |
+| `lint-c` / `format-c`   | clang-format (system) and `cc -Wall -Wextra -Werror` | `core/`, `pebble/src/c/`, `tests/*.c` |
+| `lint-py` / `format-py` | ruff 0.16.8 (mise)                                   | `scripts/*.py`                        |
+| `lint-sh` / `format-sh` | shellcheck 0.11.0 and shfmt 3.14.1 (mise)            | `scripts/*.sh`                        |
 
 `lint-c` runs `scripts/lint-c.sh`: a clang-format check, then `cc -fsyntax-only -Wall -Wextra -Werror` over `tests/core.c`, `tests/precision.c`, `tests/bench.c`, `tests/fill.c`, `core/rd.c` and `core/clock_mask.c` with `tests/compare.c`, and `pebble/src/c/core.c` with `RD_MODE` 0 to 3, both font sets and both faces as the default build compiles them, and `RD_FONT` 0 and 1 with `RD_FACE` 0 and 1 under C99 to mirror the watch build. `main.c` and `settings.c` need the SDK include tree, so they are only checked by `mise run build-pebble`, which compiles with the SDK's `-Werror`. Every other C build (`test-core`, `build-wasm`, `scripts/compare.py`) also passes `-Wall -Wextra`.
 

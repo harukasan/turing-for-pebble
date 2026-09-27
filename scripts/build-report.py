@@ -10,14 +10,34 @@ r['arm'] = []
 hardware = json.loads(Path('docs/hardware-measurements.json').read_text())[
     'measurements'
 ]
-# The watchfaces of build-pebble.sh: output name, mode, and clock face.
+# The watchfaces of build-pebble.sh: output name, mode, and clock faces,
+# both selected by the face setting or the analog face fixed.
 variants = [
-    ('0', 0, 'digital'),
-    ('1', 1, 'digital'),
-    ('3', 3, 'digital'),
+    ('0', 0, 'both'),
+    ('1', 1, 'both'),
+    ('3', 3, 'both'),
     ('3-analog', 3, 'analog'),
 ]
-for name, mode, face in variants:
+
+
+def newest(name, mode, face):
+    """The newest physical-watch measurement of a build with a face shown,
+    if any. Entries without a build were measured with build-pebble.sh's
+    build of their mode, and entries without a face with the digital
+    face."""
+    return next(
+        (
+            m
+            for m in reversed(hardware)
+            if m['mode'] == mode
+            and m.get('build', str(mode)) == name
+            and m.get('face', 'digital') == face
+        ),
+        None,
+    )
+
+
+for name, mode, faces in variants:
     core_bytes = next(c['coreBytes'] for c in r['comparisons'] if c['mode'] == mode)
     values = (
         subprocess.check_output(
@@ -27,16 +47,12 @@ for name, mode, face in variants:
         .split()
     )
     text, data, bss = map(int, values[:3])
-    # The newest physical-watch measurement of this mode and face, if any.
-    # Entries without a face were measured with the digital face.
-    physical = next(
-        (
-            m
-            for m in reversed(hardware)
-            if m['mode'] == mode and m.get('face', 'digital') == face
-        ),
-        None,
-    )
+    by_face = {
+        face: newest(name, mode, face)
+        for face in (('digital', 'analog') if faces == 'both' else (faces,))
+    }
+    # The physical* fields describe the face a build shows by default.
+    physical = next(iter(by_face.values()))
     stack = {}
     for f in Path(f'build/pebble/stack-{name}').glob('*.su'):
         for line in f.read_text().splitlines():
@@ -47,7 +63,7 @@ for name, mode, face in variants:
     r['arm'].append(
         {
             'mode': mode,
-            'face': face,
+            'faces': faces,
             'textBytes': text,
             'dataBytes': data,
             'bssBytes': bss,
@@ -85,6 +101,7 @@ for name, mode, face in variants:
             if physical is None
             else physical['minimumFreeHeapBytes'],
             'physicalMeasurement': physical,
+            'physicalMeasurementsByFace': by_face,
         }
     )
 r['fontVerification'] = [
