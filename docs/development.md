@@ -150,7 +150,7 @@ The glyphs in `public/fonts/clock-fonts.json` and `core/clock_glyphs.h` were ext
 
 The font sets are listed in `SETS` of `scripts/extract-fonts.py`. Only the digits and the separator of each line are kept. `extract-fonts.py /path/to/PebbleOS --list 'BITHAM_*'` prints the height and the printable characters of the matching PBFs; BITHAM_18_LIGHT_SUBSET and BITHAM_34_LIGHT_SUBSET contain no digits.
 
-Source: [coredevices/PebbleOS](https://github.com/coredevices/PebbleOS/tree/119cb96e3f47be0f61191c0b90a502bb01f2d9bc). License: Apache-2.0, copied to `public/fonts/LICENSE`. Per-file SHA-256 values and the source revision are embedded in the JSON. Glyph dimensions, bearings, advances, and monochrome pixels are preserved. The extractor requires a local checkout of that revision and its official `pbf_extract.py`:
+Source: [coredevices/PebbleOS](https://github.com/coredevices/PebbleOS/tree/119cb96e3f47be0f61191c0b90a502bb01f2d9bc). License: Apache License 2.0, copied to `public/fonts/LICENSE`. Per-file SHA-256 values and the source revision are embedded in the JSON. Glyph dimensions, bearings, advances, and monochrome pixels are preserved. The extractor requires a local checkout of that revision and its official `pbf_extract.py`:
 
 ```sh
 mise exec -- python scripts/extract-fonts.py /path/to/PebbleOS

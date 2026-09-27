@@ -1,6 +1,6 @@
 # Credits
 
-This project is MIT licensed, see [LICENSE](LICENSE). It includes the third-party works below, grouped by the build that ships them. The license texts are in [licenses/](licenses/) and [public/fonts/LICENSE](public/fonts/LICENSE).
+This project is under the MIT License, see [LICENSE](LICENSE). It includes the third-party works below, grouped by the build that ships them. The license names are the full names of the SPDX License List 3.29.0. The license texts are in [licenses/](licenses/) and [public/fonts/LICENSE](public/fonts/LICENSE).
 
 ## Watchface
 
@@ -11,13 +11,13 @@ The Pebble build (`pebble/build/pebble.pbw`) contains the watch program and the 
   - Apache License 2.0, see [public/fonts/LICENSE](public/fonts/LICENSE).
 - **viridis, magma, plasma, and inferno** from [mpl-colormaps](https://github.com/BIDS/colormap) by Nathaniel Smith and Stefan van der Walt.
   - Used in `lib/palettes.ts` and the generated `core/palettes.h`, sampled from matplotlib's tables.
-  - CC0, see [licenses/palettes.txt](licenses/palettes.txt).
+  - Creative Commons Zero v1.0 Universal, see [licenses/palettes.txt](licenses/palettes.txt).
 - **turbo** by Anton Mikhailov, Copyright 2019 Google LLC.
   - Used in the same files as the colormaps above.
   - Apache License 2.0, see [licenses/palettes.txt](licenses/palettes.txt).
 - **cividis** by Jamie R. Nuñez, Christopher R. Anderton, and Ryan S. Renslow, Copyright 2017 Battelle Memorial Institute.
   - Used in the same files as the colormaps above.
-  - BSD-style license, see [licenses/palettes.txt](licenses/palettes.txt).
+  - A BSD-style license of Battelle Memorial Institute that is not on the SPDX License List, see [licenses/palettes.txt](licenses/palettes.txt).
 - **[fflate](https://github.com/101arrowz/fflate)** by Arjun Barrett.
   - Used in the settings page to unpack its gzipped Wasm core and clock glyphs.
   - MIT License, see [licenses/fflate.txt](licenses/fflate.txt).
