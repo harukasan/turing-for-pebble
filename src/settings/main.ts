@@ -375,6 +375,15 @@ const showCustom = customPicker(
   () => changed("palette")
 );
 
+const setFace = chips(
+  element("faces"),
+  "face",
+  () => t().faces,
+  (index) => {
+    settings.face = index;
+    changed("field");
+  }
+);
 const setFont = chips(
   element("fonts"),
   "font",
@@ -386,6 +395,14 @@ const setFont = chips(
 );
 const clock = element<HTMLInputElement>("clock");
 const avoid = element<HTMLInputElement>("avoid");
+const avoidLabel = element("avoid-label");
+/** Name the avoidance switch by what the face shows. */
+const showAvoidLabel = () =>
+  (avoidLabel.textContent = t().avoid(
+    settings.face === 1,
+    settings.date === 1
+  ));
+text(showAvoidLabel);
 const dateSwitch = element<HTMLInputElement>("date");
 dateSwitch.addEventListener("change", () => {
   settings.date = Number(dateSwitch.checked);
@@ -417,10 +434,12 @@ function update() {
     );
   setStops(settings.stops - 2);
   showCustom();
+  setFace(settings.face);
   setFont(settings.font);
   clock.checked = settings.clock === 1;
   avoid.checked = settings.avoid === 1;
   avoid.disabled = !clock.checked;
+  showAvoidLabel();
   dateSwitch.checked = settings.date === 1;
   dateSwitch.disabled = !clock.checked;
 }

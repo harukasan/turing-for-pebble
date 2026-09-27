@@ -16,14 +16,14 @@
 #pragma GCC optimize("Os")
 #endif
 
-/* Version 2 added the number of custom stops and the two middle stops, and
- * version 3 the date line. */
-#define SETTINGS_VERSION 3
+/* Version 2 added the number of custom stops and the two middle stops,
+ * version 3 the date line, and version 4 the clock face. */
+#define SETTINGS_VERSION 4
 #define SETTINGS_PERSIST_KEY 1
-/* The phone sends fifteen integers: dict_calc_buffer_size for fifteen
- * 4-byte values is 1 + 15 * (7 + 4) = 166 bytes. Nothing is sent to the
+/* The phone sends sixteen integers: dict_calc_buffer_size for sixteen
+ * 4-byte values is 1 + 16 * (7 + 4) = 177 bytes. Nothing is sent to the
  * phone. */
-#define SETTINGS_INBOX_BYTES 176
+#define SETTINGS_INBOX_BYTES 184
 #define SETTINGS_OUTBOX_BYTES 16
 #define RGB_MAX 0xffffff
 
@@ -32,7 +32,8 @@ static uint32_t *const KEYS[SETTING_COUNT] = {
     &MESSAGE_KEY_DB,    &MESSAGE_KEY_DT,    &MESSAGE_KEY_PALETTE,
     &MESSAGE_KEY_LOW,   &MESSAGE_KEY_HIGH,  &MESSAGE_KEY_STOPS,
     &MESSAGE_KEY_MID1,  &MESSAGE_KEY_MID2,  &MESSAGE_KEY_FONT,
-    &MESSAGE_KEY_AVOID, &MESSAGE_KEY_CLOCK, &MESSAGE_KEY_DATE};
+    &MESSAGE_KEY_AVOID, &MESSAGE_KEY_CLOCK, &MESSAGE_KEY_DATE,
+    &MESSAGE_KEY_FACE};
 
 /* Every setting is an integer from 0, or 2 for the number of stops, to its
  * maximum. */
@@ -41,7 +42,8 @@ static const int32_t MAXIMUM[SETTING_COUNT] = {
     RD_Q15_ONE, RD_Q15_ONE, RD_PALETTE_COUNT - 1,
     RGB_MAX,    RGB_MAX,    4,
     RGB_MAX,    RGB_MAX,    CM_FONT_COUNT - 1,
-    1,          1,          1};
+    1,          1,          1,
+    1};
 
 static const uint8_t CHANGE[SETTING_COUNT] = {
     SETTINGS_CHANGED_PATTERN, SETTINGS_CHANGED_PATTERN,
@@ -51,7 +53,7 @@ static const uint8_t CHANGE[SETTING_COUNT] = {
     SETTINGS_CHANGED_PALETTE, SETTINGS_CHANGED_PALETTE,
     SETTINGS_CHANGED_PALETTE, SETTINGS_CHANGED_FONT,
     SETTINGS_CHANGED_MASK,    SETTINGS_CHANGED_MASK,
-    SETTINGS_CHANGED_LAYOUT};
+    SETTINGS_CHANGED_LAYOUT,  SETTINGS_CHANGED_LAYOUT};
 
 /* The persist blob. */
 typedef struct {
@@ -103,9 +105,10 @@ static void log_settings(char source) {
           (unsigned long)v[SETTING_HIGH], (long)v[SETTING_FONT],
           (long)v[SETTING_AVOID], (long)v[SETTING_CLOCK]);
   APP_LOG(APP_LOG_LEVEL_INFO,
-          "RD settings stops=%ld mid1=%06lx mid2=%06lx date=%ld",
+          "RD settings stops=%ld mid1=%06lx mid2=%06lx date=%ld face=%ld",
           (long)v[SETTING_STOPS], (unsigned long)v[SETTING_MID1],
-          (unsigned long)v[SETTING_MID2], (long)v[SETTING_DATE]);
+          (unsigned long)v[SETTING_MID2], (long)v[SETTING_DATE],
+          (long)v[SETTING_FACE]);
 }
 
 static void dropped(AppMessageResult reason, void *context) {
@@ -164,7 +167,7 @@ void settings_load(void) {
       {RD_DEFAULT_FEED, RD_DEFAULT_KILL, RD_DEFAULT_DA, RD_DEFAULT_DB,
        RD_DEFAULT_DT, RD_DEFAULT_PALETTE, RD_DEFAULT_LOW, RD_DEFAULT_HIGH,
        RD_DEFAULT_STOPS, RD_DEFAULT_MID1, RD_DEFAULT_MID2, RD_DEFAULT_FONT,
-       RD_DEFAULT_AVOID, RD_DEFAULT_CLOCK, RD_DEFAULT_DATE}};
+       RD_DEFAULT_AVOID, RD_DEFAULT_CLOCK, RD_DEFAULT_DATE, RD_DEFAULT_FACE}};
   current = defaults;
   log_settings('d');
 }
@@ -193,5 +196,13 @@ int settings_font(void) {
 #else
   int font = (int)current.value[SETTING_FONT];
   return cm_font_available(font) ? font : RD_DEFAULT_FONT;
+#endif
+}
+
+bool settings_analog(void) {
+#ifdef RD_FACE
+  return RD_FACE;
+#else
+  return current.value[SETTING_FACE] != 0;
 #endif
 }

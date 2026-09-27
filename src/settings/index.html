@@ -46,7 +46,24 @@
         </fieldset>
         <fieldset>
           <legend data-i18n="clock"></legend>
-          <div id="fonts" class="chips"></div>
+          <div class="choice">
+            <span id="face-label" data-i18n="faceLabel"></span>
+            <div
+              id="faces"
+              class="chips"
+              role="radiogroup"
+              aria-labelledby="face-label"
+            ></div>
+          </div>
+          <div class="choice">
+            <span id="font-label" data-i18n="fontLabel"></span>
+            <div
+              id="fonts"
+              class="chips"
+              role="radiogroup"
+              aria-labelledby="font-label"
+            ></div>
+          </div>
           <label class="switch">
             <span data-i18n="showClock"></span>
             <input type="checkbox" id="clock" role="switch" />
@@ -56,7 +73,7 @@
             <input type="checkbox" id="date" role="switch" />
           </label>
           <label class="switch">
-            <span data-i18n="avoid"></span>
+            <span id="avoid-label"></span>
             <input type="checkbox" id="avoid" role="switch" />
           </label>
         </fieldset>

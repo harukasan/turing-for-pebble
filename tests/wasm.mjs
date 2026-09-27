@@ -49,6 +49,40 @@ for (const mode of [0, 1, 2, 3])
     console.log(`mode ${mode}, font ${font}, masked: native/Wasm ${native}`);
   }
 
+// Analog face masks built and installed in Wasm give the native field.
+for (const mode of [0, 1, 2, 3])
+  for (const font of [0, 1]) {
+    const args = [font, 360, 600, 2046, 8, 29, 1];
+    const n = e.rd_bytes(mode),
+      p = e.malloc(n),
+      s = e.rd_init(p, n, mode, 42);
+    const m = e.malloc(e.cm_bytes(e.rd_width(s), e.rd_height(s)));
+    assert.equal(
+      e.cm_build_analog(m, e.rd_width(s), e.rd_height(s), ...args, 1),
+      0,
+    );
+    assert.equal(e.rd_mask(s, m), 0);
+    e.free(m);
+    e.rd_step(s, 200);
+    const native = Number(
+      execFileSync(
+        'build/core-test',
+        [mode, 200, 'analog', ...args].map(String),
+        { encoding: 'utf8' },
+      ).trim(),
+    );
+    assert.equal(e.rd_hash(s) >>> 0, native);
+    e.free(p);
+    console.log(`mode ${mode}, font ${font}, analog: native/Wasm ${native}`);
+  }
+
+// The sweep and hand angles agree with the native tests.
+assert.equal(e.cm_hour_angle(11, 59), 1438);
+assert.equal(e.cm_minute_angle(59), 1416);
+assert.equal(e.cm_sweep_angle(1416, 0, 1000, 1000), 0);
+assert.equal(e.cm_sweep_angle(10, 1430, 0, 1000), 10);
+assert.equal(e.cm_sweep_angle(0, 0, 0, 0), -1);
+
 // Interpolated rows of every grid match the native build.
 for (let mode = 0; mode < 4; mode++) {
   const n = e.rd_bytes(mode),
@@ -85,6 +119,16 @@ for (let i = 0; i < 300; i++) {
   assert(row);
   const pixels = new Uint8Array(e.memory.buffer, row, 800);
   for (let x = 0; x < 200; x++) assert.equal(pixels[x * 4 + 3], 255);
+  if (i === 150) {
+    // An analog mask, built and installed as the Web does, fits too.
+    const w = e.rd_width(s),
+      h = e.rd_height(s),
+      m = e.malloc(e.cm_bytes(w, h));
+    assert(m);
+    assert.equal(e.cm_build_analog(m, w, h, 0, 360, 600, 2046, 8, 29, 1, 1), 0);
+    assert.equal(e.rd_mask(s, m), 0);
+    e.free(m);
+  }
   e.free(p);
   assert.equal(e.memory.buffer.byteLength, linear);
 }

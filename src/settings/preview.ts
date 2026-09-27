@@ -1,9 +1,16 @@
 /** A preview of the watchface for a set of watch settings: the shared C
  * core as WebAssembly in the watch's mode, seed, and rendering, run for the
- * steps of the watch's startup animation, with the clock drawn from the
- * same glyphs as the watch. */
+ * steps of the watch's startup animation, with the digital clock drawn from
+ * the same glyphs as the watch or the analog face from the core's bitmap. */
+import {
+  analogPixels,
+  drawAnalog,
+  hourAngle,
+  minuteAngle,
+} from "../../lib/clock-face.ts";
 import { CLOCK_FONTS, drawClock, loadFonts } from "../../lib/clock-fonts.ts";
 import {
+  buildAnalogMask,
   buildMask,
   loadCore,
   WasmSimulation,
@@ -31,25 +38,51 @@ export class PreviewField {
   constructor(private readonly api: CoreAPI) {}
 
   /** A new field from the seed with the coefficients, custom stops, and
-   * digit mask of the settings, as the watch starts one. */
+   * clock mask of the settings, as the watch starts one. */
   start(settings: WatchSettings, date: Date) {
     this.sim?.dispose();
     const sim = new WasmSimulation(this.api, PREVIEW_MODE, PREVIEW_SEED);
     this.sim = sim;
     this.settings = settings;
     sim.setPalette(customStops(settings));
+    const showDate = settings.date === 1;
     sim.setMask(
-      settings.clock && settings.avoid
-        ? buildMask(
-            this.api,
-            sim.width,
-            sim.height,
-            settings.font,
-            date,
-            HALO,
-            settings.date === 1
-          )
-        : null
+      !(settings.clock && settings.avoid)
+        ? null
+        : settings.face
+          ? buildAnalogMask(
+              this.api,
+              sim.width,
+              sim.height,
+              settings.font,
+              hourAngle(date.getHours(), date.getMinutes()),
+              minuteAngle(date.getMinutes()),
+              date,
+              HALO,
+              showDate
+            )
+          : buildMask(
+              this.api,
+              sim.width,
+              sim.height,
+              settings.font,
+              date,
+              HALO,
+              showDate
+            )
+    );
+  }
+
+  /** The pixels of the analog face at a time for the settings, as the
+   * watch draws it. */
+  analog(settings: WatchSettings, date: Date) {
+    return analogPixels(
+      this.api,
+      settings.font,
+      hourAngle(date.getHours(), date.getMinutes()),
+      minuteAngle(date.getMinutes()),
+      date,
+      settings.date === 1
     );
   }
 
@@ -91,9 +124,11 @@ export class PreviewView {
   private settings: WatchSettings | null = null;
   private frame = 0;
   private started = 0;
-  /** The time the digit mask was built for, which the drawn clock shows
-   * too, so the digits and their empty cells match. */
+  /** The time the clock mask was built for, which the drawn clock shows
+   * too, so the digits or hands and their empty cells match. */
   private clockTime = new Date();
+  /** The analog face's pixels for the current run, or null. */
+  private face: Uint8Array | null = null;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly pixels: ImageData;
 
@@ -119,6 +154,9 @@ export class PreviewView {
     this.settings = settings;
     this.clockTime = new Date();
     this.field.start(settings, this.clockTime);
+    this.face = settings.face
+      ? this.field.analog(settings, this.clockTime)
+      : null;
     this.started = performance.now();
     this.frame = requestAnimationFrame(this.tick);
   }
@@ -153,7 +191,8 @@ export class PreviewView {
     if (!this.field || !this.settings) return;
     this.field.render(this.pixels);
     this.ctx.putImageData(this.pixels, 0, 0);
-    if (this.settings.clock)
+    if (this.settings.clock && this.face) drawAnalog(this.ctx, this.face);
+    else if (this.settings.clock)
       drawClock(
         this.ctx,
         this.clockTime,

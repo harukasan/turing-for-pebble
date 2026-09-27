@@ -16,6 +16,7 @@ const input: SettingsInput = {
   interpolate: true,
   clock: true,
   font: "leco",
+  face: "digital",
   avoid: true,
   steps: 123,
 };
@@ -30,6 +31,7 @@ test("settings keep the watch build identity and are not a field snapshot", () =
   assert.equal(settings.steps, 123);
   assert.equal(settings.minuteSteps, 300);
   assert.equal(settings.avoidDigits, true);
+  assert.equal(settings.face, "digital");
   assert.equal("field" in settings, false);
   assert.deepEqual(settings.effective, {
     feed: Math.round(0.029 * 32768) / 32768,
@@ -77,6 +79,7 @@ test("config.h carries the demo's settings as the watch defaults", () => {
       font: "bitham",
       avoid: false,
       clock: false,
+      face: "analog",
     })
   );
   assert.equal(header.get("RD_MODE"), "1");
@@ -98,6 +101,14 @@ test("config.h carries the demo's settings as the watch defaults", () => {
   assert.equal(header.get("RD_DEFAULT_FONT"), "1");
   assert.equal(header.get("RD_DEFAULT_AVOID"), "0");
   assert.equal(header.get("RD_DEFAULT_CLOCK"), "0");
+  assert.equal(header.get("RD_DEFAULT_FACE"), "1");
+});
+
+test("the analog face is part of the build identity", () => {
+  const analog = { ...input, face: "analog" as const };
+  assert.equal(makeSettings(analog).face, "analog");
+  assert.equal(defines(makeHeader(analog)).get("RD_DEFAULT_FACE"), "1");
+  assert.equal(defines(makeHeader(input)).get("RD_DEFAULT_FACE"), "0");
 });
 
 test("Float32 settings use requested coefficients without Q15 rounding", () => {

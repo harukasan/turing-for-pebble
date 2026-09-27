@@ -2,7 +2,7 @@
 import { useId, type PointerEvent } from "react";
 import { PALETTE_IDS, PALETTES } from "../../../lib/palettes";
 import { presets, type Parameters } from "../../../lib/simulation";
-import { isFloat } from "../../core";
+import { isFloat, type ClockFace } from "../../core";
 import { makeSettings } from "../serialization";
 import { useDemo } from "../use-demo";
 import { Explanation } from "./explanation";
@@ -17,6 +17,16 @@ import {
 import { styles as s } from "../styles";
 
 type MountOptions = { assetBaseUrl?: string };
+
+const pad = (value: number) => String(value).padStart(2, "0");
+/** A minute of the day as HH:MM. */
+const clockLabel = (minutes: number) =>
+  `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+/** The current minute of the day. */
+const currentMinute = () => {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+};
 
 export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
   const demo = useDemo(assetBaseUrl);
@@ -239,9 +249,40 @@ export function DemoPage({ assetBaseUrl = "/" }: MountOptions) {
                 demo.update("font", value as "leco" | "bitham")
               }
             />
+            <Selector
+              name="face"
+              label="文字盤"
+              value={options.face}
+              choices={[
+                ["digital", "デジタル"],
+                ["analog", "アナログ"],
+              ]}
+              onChange={(value) => demo.update("face", value as ClockFace)}
+            />
+            <SwitchControl
+              name="liveTime"
+              label="現在時刻"
+              checked={options.time === null}
+              onChange={(value) =>
+                demo.update("time", value ? null : currentMinute())
+              }
+            />
+            {options.time !== null && (
+              <NumberSlider
+                name="time"
+                label={`時刻 ${clockLabel(options.time)}`}
+                value={options.time}
+                min={0}
+                max={1439}
+                step={1}
+                onChange={(value) => demo.update("time", value)}
+              />
+            )}
             <SwitchControl
               name="avoid"
-              label="数字を避ける"
+              label={
+                options.face === "analog" ? "針と日付を避ける" : "数字を避ける"
+              }
               checked={options.avoid}
               disabled={!options.clock}
               onChange={(value) => demo.update("avoid", value)}

@@ -102,7 +102,7 @@ for (const key of SETTING_KEYS) {
 assert.equal(p.sent.length, 2 + SETTING_KEYS.length);
 assert.deepEqual(
   p.sent.at(-1),
-  message({ ...DEFAULT_SETTINGS, clock: SETTING_MAX.clock })
+  message({ ...DEFAULT_SETTINGS, face: SETTING_MAX.face })
 );
 
 // The number of stops starts at 2.
@@ -123,10 +123,18 @@ delete legacy.stops;
 delete legacy.mid1;
 delete legacy.mid2;
 delete legacy.date;
+delete legacy.face;
 old.storage.set("settings", JSON.stringify(legacy));
 old.listeners.ready();
 assert.deepEqual(old.sent, [
-  message({ ...legacy, stops: 2, mid1: 0x110000, mid2: 0xffee00, date: 1 }),
+  message({
+    ...legacy,
+    stops: 2,
+    mid1: 0x110000,
+    mid2: 0xffee00,
+    date: 1,
+    face: 0,
+  }),
 ]);
 
 // At launch the stored copy is sent again.
@@ -134,7 +142,7 @@ const stored = p.storage;
 const q = phone();
 for (const [key, value] of stored) q.storage.set(key, value);
 q.listeners.ready();
-assert.deepEqual(q.sent, [message({ ...DEFAULT_SETTINGS, clock: 1 })]);
+assert.deepEqual(q.sent, [message({ ...DEFAULT_SETTINGS, face: 1 })]);
 
 // With RD_BUILD_CONFIG_URL the hosted page gets the settings in its query.
 const hosted = phone(

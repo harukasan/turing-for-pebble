@@ -2,9 +2,19 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { PALETTE_CUSTOM } from "../../lib/palettes.ts";
-import { loadCore } from "../../lib/wasm-simulation.ts";
+import {
+  buildAnalogMask,
+  loadCore,
+  WasmSimulation,
+} from "../../lib/wasm-simulation.ts";
+import { hourAngle, minuteAngle } from "../../lib/clock-face.ts";
+import { HALO } from "../core/modes.ts";
 import { PreviewField, PREVIEW_MODE, PREVIEW_SEED } from "./preview.ts";
-import { DEFAULT_SETTINGS, type WatchSettings } from "./settings.ts";
+import {
+  DEFAULT_SETTINGS,
+  toParameters,
+  type WatchSettings,
+} from "./settings.ts";
 
 const root = new URL("../../", import.meta.url);
 // Node's fetch reads no files: serve the core from the repository.
@@ -49,6 +59,37 @@ test("the preview runs the watch's field", () => {
   assert.equal(run({ ...base, font: 1 }).hash(), golden(1));
   assert.equal(run({ ...base, clock: 0 }).hash(), golden());
   assert.equal(run({ ...base, avoid: 0 }).hash(), golden());
+});
+
+test("the analog face masks the hands of the time and the date", () => {
+  const analog = (showDate: boolean) => {
+    const sim = new WasmSimulation(core, PREVIEW_MODE, PREVIEW_SEED);
+    sim.setMask(
+      buildAnalogMask(
+        core,
+        sim.width,
+        sim.height,
+        0,
+        hourAngle(13, 57),
+        minuteAngle(57),
+        date,
+        HALO,
+        showDate
+      )
+    );
+    sim.step(toParameters(base), 1000);
+    const hash = sim.hash();
+    sim.dispose();
+    return hash;
+  };
+  const face = { ...base, face: 1 };
+  assert.equal(run(face).hash(), analog(true));
+  assert.equal(run({ ...face, date: 0 }).hash(), analog(false));
+  assert.notEqual(analog(true), analog(false));
+  assert.notEqual(run(face).hash(), golden(0));
+  assert.equal(run({ ...face, avoid: 0 }).hash(), golden());
+  const pixels = new PreviewField(core).analog(face, date);
+  assert.equal(pixels.length, 25 * 228);
 });
 
 test("recoloring keeps the field and custom stops draw like the palette", () => {

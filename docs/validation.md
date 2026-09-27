@@ -5,14 +5,15 @@ Mode 3 (120 × 136 Q15 cells shown with interpolated rendering) is the productio
 ## Checks
 
 - Native C row-buffer updates match a full-screen oracle for all four modes (0 to 3), with and without a clock mask. The oracle keeps its own encoder and the documented error diffusion on a plain residual row.
-- Native and Wasm field hashes match at steps 0, 1, and 100 with seed 42 for every mode, after 200 masked steps with each font, and for the interpolated rows of every mode. Every build matches `tests/golden-hashes.txt` at `-O0` and `-O3`.
+- Native and Wasm field hashes match at steps 0, 1, and 100 with seed 42 for every mode, after 200 masked steps with each font and with each face, and for the interpolated rows of every mode. Every build matches `tests/golden-hashes.txt` at `-O0` and `-O3`, including the analog face masks of modes 0, 1, and 3.
+- The analog face is tested for invalid arguments without writing, drawing equal to the halo 0 mask for both fonts, the capsule scan against the exact distance test for every angle of both hands, the geometry of all 720 times (hands within columns 18 to 182 and rows 22 to 186, an empty gap above the date rows), left-right and top-bottom mirror symmetry, the halo and grid splat at widths 100, 120, and 200, the sweep ends, direction, and wrap through 1439 to 0, and, in the adapters, the analog mask against the JS splat of the face bitmap and B = 0 under the hands in the Wasm and Float32 engines.
 - Equilibrium, periodic seeding, coefficient endpoints, rounding ties, the saturation edge of the B rate, the integer square root over its whole domain, floor codes, the dithered threshold range, error diffusion mass conservation, the interpolation reference, the clock mask levels and glyph pixels, invalid arguments, undersized allocation, alignment, and sentinel boundaries are tested.
 - AddressSanitizer, UndefinedBehaviorSanitizer, and LeakSanitizer passed. LeakSanitizer requires execution outside a ptrace-based sandbox.
 - Every palette channel is the nearest integer to the exact interpolation between its stops, lime, cyan, and monochrome keep the colors of the earlier renderer, the custom palette takes the stops of `rd_palette` and drops a stale lookup table, and every pixel of the Wasm rendering equals the `lib/palettes.ts` color for each built-in palette and custom stops.
 - 300 allocation and reset cycles retain fixed Wasm linear memory. The TypeScript adapters are tested with real Wasm for loading, mode recreation, parameter conversion, stepping, seeding, masks, rendering, and disposal, and the core's compiled glyphs equal the JSON glyphs the preview draws.
 - The original Float32 reference tests, TypeScript checking, the production Web build, and the repository-wide `mise run lint` pass.
 - The standalone React demo and reusable player were exercised in headless Chromium for loading, playback, mode switching, presets, switches, and keyboard seeding. Manual visual review and download interactions remain open.
-- The Emery `.pbw` files of modes 0, 1, and 3 build within the load limit and install in the emulator.
+- The Emery `.pbw` files of modes 0, 1, and 3 and `mode-3-analog` build and install in the emulator. With both faces their production builds fit the 20,480 B load limit, and their logging builds exceed it (Memory, below).
 - The watch settings codec matches the message keys and the `config.h` defaults, the settings page's preview reproduces the golden field hashes with each font's mask and without a mask, and the phone script relays exactly the values the page accepts and embeds the stored settings in the page (`tests/embed-config.mjs`). The page was exercised in headless Chromium for presets, sliders, palettes, custom stops, the clock switches, and saving.
 - In the emulator, the watch read its defaults at the first launch and its stored settings after a reinstall. A palette-only message redrew without a restart, new coefficients and a removed digit mask restarted the field with a new startup summary, a font change applied Bitham, and messages with a palette of 10, a feed of 40,000, or a stop above 0xffffff were rejected. `pebble emu-app-config` opened the embedded page with the stored settings, and saving a preset and a palette there reached the watch through the phone script. Uncorrected emulator screenshots (`--no-correction`) show the quantized colors of the chosen palette, the same colors as the preview.
 - On an iPhone, the Pebble app opened the embedded settings page from its `data:` URL with the preview running. Saved settings reached the Pebble Time 2, which restarted its startup animation with the new pattern and colors. The number fields beside the sliders no longer zoom the page since their text is 16px. The page uses the Pebble app's orange. The app's web view shows black past the ends of a bouncing page whatever the page background, so a fixed plate of the page background, three screens tall, covers that area, and the iPhone then showed the page background when bouncing past its ends. An earlier attempt scrolled the page inside its own container, which the keyboard shifted past its bounds. With the page scrolling as a whole, opening the keyboard on the bottom text field leaves the scroll range intact. In the app, 書き出す copied the settings file's text without leaving the page, and pasting it back restored the settings. A four-color custom palette saved from the iPhone showed the same colors on the watch as in the preview. With the date hidden from the iPhone, the watch showed the time alone centered on the display.
@@ -56,6 +57,8 @@ Both runs finished the intended 30 s startup and retained 4,224 B more than the 
 
 On 2026-09-27, a Pebble Time 2 ran two mode 3 logging builds from the size-reduction worktree with Pebble SDK 4.33.1. Both used the calculated-share core and identical temporary instrumentation that called `rd_mask` 100 times on the same clock bitmap five seconds after launch. The only code difference was compiling the four mask functions with `-O3` or `-Os`. The `-O3` build loaded 20,208 B and measured 254 ms for 100 calls. The `-Os` build loaded 19,380 B and measured 270 ms. The observed 16 ms difference is 0.16 ms per call, about 6% of the baseline mask time. This was one run of each diagnostic build, so the difference has not been separated from run-to-run variation. Mask rebuilding occurs at launch and on clock changes, outside the step loop. The instrumentation was removed after measurement. The production size numbers above exclude logs and instrumentation.
 
+The analog face allocates nothing new on the watch: it reuses the 2,040 B clock mask, and its sine table (722 B) is constant data. The face is a watch setting, so modes 0, 1, and 3 hold both faces. Merged with the size reduction above, their production builds load 20,128 B, 18,880 B, and 19,516 B, within the 20,480 B limit, and `mode-3-analog`, which fixes the analog face and leaves out the time-line glyphs, loads 17,756 B. The face adds 3,280 B to mode 3, and the logging build of mode 3 loads 22,800 B against 19,168 B for the digital face alone. The analog face of `core/clock_mask.c` and the sweep and fallback drawing of `main.c` are compiled for size. Of the growth, the sine table takes 722 B, the system font fallback of the hands about 430 B, and the capsule rasterizer and its callers most of the rest. The minimum free heap falls by about the added load (below).
+
 ## Physical Pebble Time 2 measurements
 
 | Item                               | Production build (mode 3)                                                                                                                             |
@@ -70,6 +73,44 @@ On 2026-09-27, a Pebble Time 2 ran two mode 3 logging builds from the size-reduc
 | Display ceiling (`RD_FRAME_BENCH`) | about 27 frames per second: 136 frames in 5 s with the normal draw and 134 with an empty draw, so the OS and display update set about 37 ms per frame |
 
 The startup, step, frame, and heap rows are from the settings build at commit 7db03a3 with the default settings. The step phases, the backlight window, and the display ceiling were measured at commit 53a4a19, before the settings, whose step loop and renderer are unchanged. The hardware clock was valid throughout (`clock_invalid=0`).
+
+## Analog face on the watch
+
+A second run on 2026-09-27, after the size reduction, used the logging build of mode 3 at commit 59366ec (22,800 B load) with the face setting analog and the date hidden, and the settings Feed 0.035, Kill 0.065, Da 1.0, Db 0.5, palette 6, and LECO. It kept a minimum free heap of 16,968 B, 584 B above the 16,384 B target. The startup ran 1,659 steps in 31.0 s at 14,453 µs per step (53.5 steps per second, longest step 39 ms). A sweep during the startup made 16 mask rebuilds of at most 8 ms in 1,000 ms with 46 steps, and the longest slice was 54 ms. The run was not interrupted and the clock stayed valid. The log connection missed the `RD init` line. The table below is the first run, before the size reduction.
+
+The analog face was measured once on the physical Pebble Time 2 on 2026-09-27, from the logging build of mode 3 at commit ca8ac29 (25,632 B load) with the face setting analog saved from the iPhone's settings page. The other settings were palette 6, Da 0.8 and Db 0.4, LECO, and avoidance and the date on. The run of about 50 s started about 20 s before a minute boundary and was not interrupted (`interrupted=0 clock_invalid=0`). It is one run, so the step time and heap are not yet repeated. It predates the size reduction of commit 826050e, and its build and heap figures are those of commit ca8ac29.
+
+| Item                                    | Target or reference                                              | Measured                                             |
+| --------------------------------------- | ---------------------------------------------------------------- | ---------------------------------------------------- |
+| Load size (`mode-3`, both faces)        | at most 20,480 B                                                 | 22,348 B production, 25,632 B logging (exceeded)     |
+| Mask build at launch (`mask_ms`)        | estimated 8 to 12 ms                                             | 8 ms                                                 |
+| Step                                    | the digital face measured 13.7 ms and 56.0 steps per second      | 14.9 ms (14,875 µs), 50.4 steps per second           |
+| Startup                                 | 30 s, about 1,500 steps or more                                  | 30.2 s, 1,522 steps, 582 frames                      |
+| Minimum free heap (`heap_min`)          | at least 16,384 B, the digital face measured 18,136 B            | 14,136 B (below the target)                          |
+| Sweep mask rebuilds (`RD sweep`)        | at most 26                                                       | 16                                                   |
+| Longest sweep rebuild (`mask_max_ms`)   | estimated 8 to 12 ms                                             | 8 ms                                                 |
+| Steps during a sweep (`RD sweep` steps) | at most about 55 in 1 s at the digital step rate                 | 44 in 1,043 ms                                       |
+| Longest slice (`compute_max_ms`)        | about 40 ms or less (one rebuild and the steps of a 30 ms slice) | 55 ms by the end of the startup (longest step 35 ms) |
+| Minute refill                           | 300 steps, under about 6.5 s                                     | not measured, the minute change fell in the startup  |
+| `clock_invalid`                         | 0                                                                | 0                                                    |
+
+The step is about 9% slower than the digital face's 13.7 ms, more than the few percent expected from the masked band, which covers about 102 of the 136 grid rows on average against 44 for the digits, and those rows take the mask-level path of the step. The minimum free heap is 4,000 B below the 18,136 B of the digital logging build of 21,688 B, close to the 3,944 B of added load, so the heap follows the code size. A production build loads 3,284 B less than the logging build, which would leave about 17.4 KB, but that has not been measured. With the size reduction the logging build of mode 3 loads 22,800 B, 2,832 B less than the measured one, and the second run above kept 16,968 B, above the target. A sweep logged 2 s after launch moved no hand (0 rebuilds and 55 steps in 1,035 ms): a minute tick that did not change the time. `docs/hardware-measurements.json` holds the entry.
+
+To measure again, build with the logs, install mode 3 through the phone's developer connection, save the analog face on the settings page, and reinstall starting about 20 s before a minute boundary so that the run of about 50 s contains one sweep:
+
+```sh
+RD_BUILD_LOG=1 RD_BUILD_LOAD_LIMIT=24576 mise run build-pebble
+PEBBLE_PHONE=<ip> sh scripts/emulator.sh device-install 3   # installs mode 3 and streams the logs
+```
+
+`mode-3-analog` fixes the analog face without the setting. Read the log lines as follows:
+
+- `RD init mode=3 font=0 face=1 core_bytes=… heap_min=… mask_ms=…`: `face=1` confirms the analog face, and `mask_ms` is the time of one `cm_build_analog` and `rd_mask` at launch.
+- The four `RD startup` lines at the end of the 30 s startup (and of any refill it owes): `steps`, `rate_x10` (steps per second times 10), `avg_step_us`, and `max_step_ms` against the digital 13.9 ms and 55.4 steps per second, `heap_min` against 16,384 B, and `interrupted=0 clock_invalid=0` for a valid run. A minute change during the startup sweeps within it.
+- `RD sweep rebuilds=… mask_max_ms=… ms=… steps=…` once per sweep: the mask rebuilds of the sweep, the longest of them, the sweep duration (about 1,000 ms, less when a focus loss cut it short), and the steps run during it.
+- `RD mode=3 step=… heap_min=… compute_max_ms=… draw_max_ms=… clock_invalid=…` every 256 steps: `compute_max_ms` is the longest slice including rebuilds.
+
+Record the results in this table and as a new entry with `"face": "analog"` and the `build` in `docs/hardware-measurements.json`, then regenerate `public/reports/comparison.json` with `scripts/build-report.py` from production builds.
 
 ## Decisions taken from the measurements
 
@@ -88,3 +129,7 @@ The emulator RTC implementation in the inspected official PebbleOS source (`src/
 
 ![Mode 3 with the LECO clock](../public/reports/emery-mode-3-leco.png)
 ![Mode 3 with the Bitham clock](../public/reports/emery-mode-3-bitham.png)
+
+![Mode 3 with the analog face](../public/reports/emery-mode-3-analog.png)
+
+The analog face was taken from the production `mode-3` build with the face setting analog, sent through `pebble emu-app-config`, at 15:46 2026.09.27 after the 30 s startup. Its white pixels equal the halo 0 bitmap of `cm_build_analog` for the hands at 452 and 1104 and the LECO date exactly (1,556 pixels, zero missing or extra). Of the 965 pixels of the 1-pixel halo, 937 are black and 28 show the palette's first color step, 27 on row 224 under the date and one at the minute hand's tip, where interpolation reaches an unmasked cell.

@@ -8,6 +8,8 @@ import {
   gridHeight,
   isFloat,
   HALO,
+  SWEEP_MS,
+  type ClockFace,
   type Engine,
 } from "../core/modes.ts";
 
@@ -23,6 +25,7 @@ export type SettingsInput = {
   interpolate: boolean;
   clock: boolean;
   font: ClockFont;
+  face: ClockFace;
   avoid: boolean;
   steps: number;
 };
@@ -37,6 +40,7 @@ export function makeSettings(input: SettingsInput) {
     interpolate,
     clock,
     font,
+    face,
     avoid,
     steps,
   } = input;
@@ -69,6 +73,7 @@ export function makeSettings(input: SettingsInput) {
     interpolate,
     clock,
     font,
+    face,
     avoidDigits: clock && avoid,
     halo: HALO,
     minuteSteps:
@@ -84,7 +89,8 @@ export function makeHeader(input: SettingsInput) {
     throw new Error("Float32 cannot produce Pebble config.h");
   const q = effective(input.params);
   const q15 = (value: number) => Math.round(Number(value) * 32768);
-  const { engine, seed, palette, interpolate, clock, font, avoid } = input;
+  const { engine, seed, palette, interpolate, clock, font, face, avoid } =
+    input;
   const index = paletteIndex(palette);
   const stops = PALETTES[index].stops.length
     ? PALETTES[index].stops
@@ -115,6 +121,7 @@ export function makeHeader(input: SettingsInput) {
 #define RD_STARTUP_MS 30000
 #endif
 #define RD_STARTUP_STEPS_MAX 2500
+#define RD_SWEEP_MS ${SWEEP_MS}
 #ifndef RD_AVOID
 #define RD_AVOID (RD_MODE != 0)
 #endif
@@ -136,5 +143,6 @@ export function makeHeader(input: SettingsInput) {
 #define RD_DEFAULT_AVOID ${Number(avoid)}
 #define RD_DEFAULT_CLOCK ${Number(clock)}
 #define RD_DEFAULT_DATE 1
+#define RD_DEFAULT_FACE ${face === "analog" ? 1 : 0}
 `;
 }

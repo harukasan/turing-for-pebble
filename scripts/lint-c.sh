@@ -12,6 +12,8 @@ cc -std=c11 -Wall -Wextra -Werror -fsyntax-only core/rd.c core/clock_mask.c test
 for mode in 0 1 2 3; do
   cc -std=c99 -Wall -Wextra -Werror -DRD_MODE="$mode" -fsyntax-only pebble/src/c/core.c
   for font in 0 1; do
-    cc -std=c99 -Wall -Wextra -Werror -DRD_MODE="$mode" -DRD_FONT="$font" -fsyntax-only pebble/src/c/core.c
+    for face in 0 1; do
+      cc -std=c99 -Wall -Wextra -Werror -DRD_MODE="$mode" -DRD_FONT="$font" -DRD_FACE="$face" -fsyntax-only pebble/src/c/core.c
+    done
   done
 done

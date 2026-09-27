@@ -32,7 +32,8 @@
       "FONT",
       "AVOID",
       "CLOCK",
-      "DATE"
+      "DATE",
+      "FACE"
     ],
     "resources": {
       "media": []

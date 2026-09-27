@@ -27,6 +27,8 @@ function playerSettings(options: DemoOptions): PlayerSettings {
     interpolate: options.interpolate,
     clock: options.clock,
     font: options.font,
+    face: options.face,
+    time: options.time,
     avoid: options.avoid,
   };
 }
@@ -91,6 +93,8 @@ export function useDemo(assetBaseUrl: string) {
     options.interpolate,
     options.clock,
     options.font,
+    options.face,
+    options.time,
     options.avoid,
   ]);
 
@@ -210,6 +214,7 @@ export function useDemo(assetBaseUrl: string) {
     interpolate: options.interpolate,
     clock: options.clock,
     font: options.font,
+    face: options.face,
     avoid: options.avoid,
     steps: stats.steps,
   };

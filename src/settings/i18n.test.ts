@@ -14,6 +14,7 @@ test("every language has the same strings and list lengths", () => {
   for (const lang of LANGS) {
     assert.equal(STRINGS[lang].presets.length, presets.length);
     assert.equal(STRINGS[lang].widths.length, DIFFUSION_PRESETS.length);
+    assert.equal(STRINGS[lang].faces.length, 2);
   }
 });
 
@@ -31,6 +32,15 @@ test("every data-i18n name of the page is a plain string", () => {
         `${lang}.${name}`
       );
   assert(!/[぀-ヿ一-鿿]/.test(html), "no fixed Japanese");
+});
+
+test("the Japanese avoidance switch names what the face shows", () => {
+  const { avoid } = STRINGS.ja;
+  assert.equal(avoid(false, true), "数字を避ける");
+  assert.equal(avoid(false, false), "数字を避ける");
+  assert.equal(avoid(true, true), "針と日付を避ける");
+  assert.equal(avoid(true, false), "針を避ける");
+  assert.equal(STRINGS.en.avoid(true, true), STRINGS.en.avoid(false, true));
 });
 
 test("the phone's language picks Japanese or English", () => {

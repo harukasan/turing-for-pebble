@@ -21,11 +21,13 @@ export const SETTING_KEYS = [
   "avoid",
   "clock",
   "date",
+  "face",
 ] as const;
 export type SettingKey = (typeof SETTING_KEYS)[number];
 /** Q15 coefficients, the palette index, the dark and light custom stops as
  * 0xRRGGBB, the number of custom stops (2 to 4) and the middle stops, the
- * clock font index, and avoidance, the clock, and the date as 0 or 1. */
+ * clock font index, avoidance, the clock, and the date as 0 or 1, and the
+ * clock face, 0 digital or 1 analog. */
 export type WatchSettings = Record<SettingKey, number>;
 
 const Q15 = 32768;
@@ -50,6 +52,7 @@ export const SETTING_MAX: WatchSettings = {
   avoid: 1,
   clock: 1,
   date: 1,
+  face: 1,
 };
 
 /** The RD_DEFAULT_* values of pebble/src/c/config.h. */
@@ -69,6 +72,7 @@ export const DEFAULT_SETTINGS: WatchSettings = {
   avoid: 1,
   clock: 1,
   date: 1,
+  face: 0,
 };
 
 export function validate(value: unknown): WatchSettings | null {

@@ -34,6 +34,7 @@ var SETTINGS = [
   ["avoid", 1],
   ["clock", 1],
   ["date", 1],
+  ["face", 1],
 ];
 
 /* The settings of a value if every one is an integer in range, in key
@@ -55,7 +56,8 @@ function settingsOf(value) {
 /* Settings stored before the custom palette had more than two stops lack
  * the number of stops and the middle stops: two stops, and middles that
  * are only used once the page adds stops. Those stored before the date
- * could be hidden show it. */
+ * could be hidden show it, and those stored before the analog face show
+ * the digital one. */
 function load() {
   try {
     var value = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -66,6 +68,9 @@ function load() {
     }
     if (value && typeof value === "object" && !("date" in value)) {
       value.date = 1;
+    }
+    if (value && typeof value === "object" && !("face" in value)) {
+      value.face = 0;
     }
     return settingsOf(value);
   } catch (e) {

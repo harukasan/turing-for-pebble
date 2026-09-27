@@ -31,6 +31,11 @@
 /* Clock font sets: a build that defines RD_FONT (0 LECO, 1 Bitham, the
  * CM_FONT_* of core/clock_mask.h) with RD_BUILD_FONT compiles the glyphs of
  * that set only and ignores the font setting. Otherwise both are compiled. */
+/* Clock faces: a build that defines RD_FACE (0 digital HH:MM, 1 analog
+ * hands) with RD_BUILD_FACE compiles that face only and ignores the face
+ * setting. Otherwise both are compiled. */
+/* Duration of the sweep of the analog hands to a new minute. */
+#define RD_SWEEP_MS 1000
 /* Digit avoidance holds B at 0 in the cells under the clock digits, widened
  * by RD_HALO pixels, and raises the kill rate toward them so the pattern
  * fades out around the digits. RD_AVOID 0 leaves the mask area out of the
@@ -51,7 +56,7 @@
  * time step, the palette (RD_PALETTE_*), the dark and light stops of the
  * custom palette as 0xRRGGBB, its number of stops and the middle stops at
  * a third and two thirds of the way from dark to light, the clock font
- * set, digit avoidance, the clock, and the date line. */
+ * set, digit avoidance, the clock, the date line, and the clock face. */
 #define RD_DEFAULT_FEED 950
 #define RD_DEFAULT_KILL 1868
 #define RD_DEFAULT_DA 22938
@@ -67,3 +72,4 @@
 #define RD_DEFAULT_AVOID 1
 #define RD_DEFAULT_CLOCK 1
 #define RD_DEFAULT_DATE 1
+#define RD_DEFAULT_FACE 0
