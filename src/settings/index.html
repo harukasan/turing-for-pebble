@@ -30,17 +30,31 @@
           <div id="models" class="chips segmented models"></div>
           <div id="presets-gray-scott" class="chips"></div>
           <div id="presets-fhn" class="chips" hidden></div>
-          <div id="pattern-sliders" class="sliders"></div>
-          <div id="fhn-sliders" class="sliders" hidden></div>
-          <div id="initial" class="initial" hidden>
-            <span data-i18n="initial"></span>
-            <div id="init" class="chips"></div>
+          <div id="params-gray-scott" class="params">
+            <section class="group">
+              <h3 data-i18n="reaction"></h3>
+              <div id="gray-scott-reaction" class="sliders"></div>
+            </section>
+            <section class="group">
+              <h3 data-i18n="diffusion"></h3>
+              <div id="diffusion-presets" class="chips"></div>
+              <div id="gray-scott-diffusion" class="sliders"></div>
+            </section>
           </div>
-        </fieldset>
-        <fieldset id="diffusion">
-          <legend data-i18n="diffusion"></legend>
-          <div id="diffusion-presets" class="chips"></div>
-          <div id="diffusion-sliders" class="sliders"></div>
+          <div id="params-fhn" class="params" hidden>
+            <section class="group">
+              <h3 data-i18n="reaction"></h3>
+              <div id="fhn-reaction" class="sliders"></div>
+            </section>
+            <section class="group">
+              <h3 data-i18n="diffusion"></h3>
+              <div id="fhn-diffusion" class="sliders"></div>
+            </section>
+            <section class="group">
+              <h3 data-i18n="initial"></h3>
+              <div id="init" class="chips"></div>
+            </section>
+          </div>
         </fieldset>
         <fieldset>
           <legend data-i18n="colors"></legend>
